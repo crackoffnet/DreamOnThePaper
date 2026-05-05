@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, RefreshCw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { EmailDeliveryForm } from "@/components/EmailDeliveryForm";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
+import { SharePanel } from "@/components/SharePanel";
 import type { GenerateResponse, WallpaperInput, WallpaperMeta } from "@/lib/types";
 import { labels } from "@/lib/wallpaper";
 
@@ -22,6 +24,7 @@ export function ResultPreview() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState("");
+  const [orderToken, setOrderToken] = useState("");
 
   useEffect(() => {
     const imageUrl = localStorage.getItem("dreamWallpaper") || "";
@@ -31,6 +34,7 @@ export function ResultPreview() {
     const meta = parseJson<WallpaperMeta>(localStorage.getItem("dreamWallpaperMeta"));
 
     setResult({ imageUrl, input, meta });
+    setOrderToken(localStorage.getItem("dreamOrderToken") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => window.clearTimeout(timer);
   }, []);
@@ -48,7 +52,7 @@ export function ResultPreview() {
       const response = await fetch("/api/generate-wallpaper", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.input),
+        body: JSON.stringify({ ...result.input, orderToken }),
       });
       const data = (await response.json()) as Partial<GenerateResponse> & {
         error?: string;
@@ -159,6 +163,10 @@ export function ResultPreview() {
             <SlidersHorizontal aria-hidden className="h-4 w-4" />
             Try Different Style
           </Link>
+        </div>
+        <div className="mt-4 grid gap-3">
+          <SharePanel imageUrl={result.imageUrl} />
+          <EmailDeliveryForm imageUrl={result.imageUrl} orderToken={orderToken} />
         </div>
       </div>
 

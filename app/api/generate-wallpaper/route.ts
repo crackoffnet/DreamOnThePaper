@@ -1,30 +1,19 @@
 import { NextResponse } from "next/server";
 import { createMockWallpaperSvg } from "@/lib/mock";
-import type {
-  DeviceType,
-  QuoteTone,
-  RatioType,
-  ThemeType,
-  WallpaperInput,
-  WallpaperStyle,
-} from "@/lib/types";
 import {
-  buildWallpaperPrompt,
-  defaultWallpaperInput,
-  devices,
-  getWallpaperMeta,
-  isValidRatioForDevice,
-  quoteTones,
-  ratioOptions,
-  styles,
-  themes,
-} from "@/lib/wallpaper";
-
-const MAX_FIELD_LENGTH = 360;
-const MIN_MEANINGFUL_CHARS = 12;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 4;
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+  containsAbusiveInput,
+  generateWallpaperSchema,
+  hasMeaningfulInput,
+} from "@/lib/schemas";
+import {
+  assertSameOrigin,
+  checkRateLimit,
+  jsonError,
+  safeLog,
+} from "@/lib/security";
+import { verifyOrderToken } from "@/lib/payment";
+import type { WallpaperInput } from "@/lib/types";
+import { buildWallpaperPrompt, getWallpaperMeta } from "@/lib/wallpaper";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -32,30 +21,73 @@ type OpenAIImageResponse = {
 
 export async function POST(request: Request) {
   try {
-    const rateLimit = checkRateLimit(getClientIp(request));
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests. Please wait a moment and try again." },
-        { status: 429 },
-      );
+    if (!assertSameOrigin(request)) {
+      return jsonError("Request origin is not allowed.", 403);
+    }
+
+    if (!checkRateLimit(request, "generate-wallpaper", 4)) {
+      return jsonError("Too many requests. Please wait a moment and try again.", 429);
     }
 
     const body = await request.json().catch(() => null);
-    const validation = validateWallpaperInput(body);
-    if (!validation.ok) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+    const parsed = generateWallpaperSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return jsonError("Please check your wallpaper answers and try again.");
     }
 
-    const input = validation.input;
+    if (parsed.data.website) {
+      return jsonError("Unable to create your wallpaper. Please try again.");
+    }
+
+    if (!hasMeaningfulInput(parsed.data)) {
+      return jsonError("Please add a little more detail first.");
+    }
+
+    const joined = [
+      parsed.data.goals,
+      parsed.data.lifestyle,
+      parsed.data.career,
+      parsed.data.personalLife,
+      parsed.data.health,
+      parsed.data.place,
+      parsed.data.feelingWords,
+      parsed.data.reminder,
+    ].join(" ");
+
+    if (containsAbusiveInput(joined)) {
+      return jsonError("Please keep the wallpaper request safe and respectful.");
+    }
+
+    const order = parsed.data.orderToken
+      ? await verifyOrderToken(parsed.data.orderToken)
+      : null;
+
+    if (!order && process.env.NODE_ENV === "production") {
+      return jsonError("Please confirm payment before generating.", 402);
+    }
+
+    const input: WallpaperInput = {
+      device: parsed.data.device,
+      ratio: parsed.data.ratio,
+      theme: parsed.data.theme,
+      style: parsed.data.style,
+      goals: parsed.data.goals,
+      lifestyle: parsed.data.lifestyle,
+      career: parsed.data.career,
+      personalLife: parsed.data.personalLife,
+      health: parsed.data.health,
+      place: parsed.data.place,
+      feelingWords: parsed.data.feelingWords,
+      reminder: parsed.data.reminder,
+      quoteTone: parsed.data.quoteTone,
+    };
     const meta = getWallpaperMeta(input);
     const prompt = buildWallpaperPrompt(input);
 
     if (!process.env.OPENAI_API_KEY) {
       if (process.env.NODE_ENV === "production") {
-        return NextResponse.json(
-          { error: "Image generation is not configured yet." },
-          { status: 503 },
-        );
+        return jsonError("Image generation is not configured yet.", 503);
       }
 
       return NextResponse.json({
@@ -83,13 +115,10 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error("OpenAI image generation failed", response.status);
-      }
-
-      return NextResponse.json(
-        { error: "We could not create your wallpaper right now. Please try again." },
-        { status: 502 },
+      safeLog("OpenAI image generation failed", response.status);
+      return jsonError(
+        "We could not create your wallpaper right now. Please try again.",
+        502,
       );
     }
 
@@ -100,144 +129,15 @@ export async function POST(request: Request) {
       : image?.url;
 
     if (!imageUrl) {
-      return NextResponse.json(
-        { error: "The image service did not return a wallpaper. Please try again." },
-        { status: 502 },
+      return jsonError(
+        "The image service did not return a wallpaper. Please try again.",
+        502,
       );
     }
 
     return NextResponse.json({ imageUrl, meta, mock: false });
   } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.error("Wallpaper generation error", error);
-    }
-
-    return NextResponse.json(
-      { error: "Unable to create your wallpaper. Please try again." },
-      { status: 500 },
-    );
+    safeLog("Wallpaper generation error", error);
+    return jsonError("Unable to create your wallpaper. Please try again.", 500);
   }
-}
-
-function validateWallpaperInput(value: unknown):
-  | { ok: true; input: WallpaperInput }
-  | { ok: false; error: string } {
-  if (!value || typeof value !== "object") {
-    return { ok: false, error: "Please complete the wallpaper form." };
-  }
-
-  const raw = value as Partial<Record<keyof WallpaperInput, unknown>>;
-  const device = enumValue(raw.device, devices, defaultWallpaperInput.device);
-  const ratio = enumValue(
-    raw.ratio,
-    ratioOptions[device],
-    ratioOptions[device][0],
-  );
-
-  const input: WallpaperInput = {
-    device,
-    ratio,
-    theme: enumValue(raw.theme, themes, defaultWallpaperInput.theme),
-    style: enumValue(raw.style, styles, defaultWallpaperInput.style),
-    goals: cleanText(raw.goals),
-    lifestyle: cleanText(raw.lifestyle),
-    career: cleanText(raw.career),
-    personalLife: cleanText(raw.personalLife),
-    health: cleanText(raw.health),
-    place: cleanText(raw.place),
-    feelingWords: cleanText(raw.feelingWords),
-    reminder: cleanText(raw.reminder),
-    quoteTone: enumValue(raw.quoteTone, quoteTones, defaultWallpaperInput.quoteTone),
-  };
-
-  if (!isValidRatioForDevice(input.device, input.ratio)) {
-    return { ok: false, error: "Please choose a valid size for your device." };
-  }
-
-  const meaningfulText = [
-    input.goals,
-    input.lifestyle,
-    input.career,
-    input.personalLife,
-    input.health,
-    input.place,
-    input.feelingWords,
-    input.reminder,
-  ].join(" ");
-
-  if (meaningfulText.replace(/\s/g, "").length < MIN_MEANINGFUL_CHARS) {
-    return { ok: false, error: "Please add a little more detail first." };
-  }
-
-  if (containsAbusiveInput(meaningfulText)) {
-    return {
-      ok: false,
-      error: "Please keep the wallpaper request safe and respectful.",
-    };
-  }
-
-  return { ok: true, input };
-}
-
-function enumValue<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  fallback: T,
-): T {
-  return typeof value === "string" && allowed.includes(value as T)
-    ? (value as T)
-    : fallback;
-}
-
-function cleanText(value: unknown) {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, MAX_FIELD_LENGTH);
-}
-
-function containsAbusiveInput(value: string) {
-  const lower = value.toLowerCase();
-  const blocked = [
-    "kill ",
-    "murder",
-    "terrorist",
-    "sexualize",
-    "nude child",
-    "child nude",
-    "self harm",
-    "suicide",
-  ];
-
-  return blocked.some((term) => lower.includes(term));
-}
-
-function getClientIp(request: Request) {
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "anonymous"
-  );
-}
-
-function checkRateLimit(key: string) {
-  const now = Date.now();
-  const current = rateLimitStore.get(key);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true };
-  }
-
-  if (current.count >= RATE_LIMIT_MAX) {
-    return { allowed: false };
-  }
-
-  current.count += 1;
-  return { allowed: true };
 }

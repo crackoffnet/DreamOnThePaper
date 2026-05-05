@@ -8,9 +8,9 @@ import type {
   WallpaperStyle,
 } from "@/lib/types";
 
-export const devices: DeviceType[] = ["mobile", "desktop", "tablet"];
-export const themes: ThemeType[] = ["light", "dark"];
-export const styles: WallpaperStyle[] = [
+export const devices = ["mobile", "desktop", "tablet"] as const satisfies readonly DeviceType[];
+export const themes = ["light", "dark"] as const satisfies readonly ThemeType[];
+export const styles = [
   "soft-luxury",
   "minimal",
   "dreamy",
@@ -19,19 +19,19 @@ export const styles: WallpaperStyle[] = [
   "wealth-business",
   "family-home",
   "fitness-health",
-];
-export const quoteTones: QuoteTone[] = [
+] as const satisfies readonly WallpaperStyle[];
+export const quoteTones = [
   "soft-emotional",
   "powerful-confident",
   "spiritual-calm",
   "none",
-];
+] as const satisfies readonly QuoteTone[];
 
-export const ratioOptions: Record<DeviceType, RatioType[]> = {
+export const ratioOptions = {
   mobile: ["iphone-17-pro-max", "iphone", "android"],
   desktop: ["desktop-16-9", "desktop-16-10", "desktop-4k"],
   tablet: ["ipad", "tablet-vertical"],
-};
+} as const satisfies Record<DeviceType, readonly RatioType[]>;
 
 export const labels = {
   devices: {
@@ -139,5 +139,5 @@ No logos. No copyrighted characters. No distorted faces. No tiny unreadable text
 }
 
 export function isValidRatioForDevice(device: DeviceType, ratio: RatioType) {
-  return ratioOptions[device].includes(ratio);
+  return (ratioOptions[device] as readonly RatioType[]).includes(ratio);
 }

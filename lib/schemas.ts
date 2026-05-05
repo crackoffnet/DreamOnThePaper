@@ -1,0 +1,102 @@
+import { z } from "zod";
+import { packageIds } from "@/lib/plans";
+import {
+  devices,
+  isValidRatioForDevice,
+  quoteTones,
+  ratioOptions,
+  styles,
+  themes,
+} from "@/lib/wallpaper";
+
+const textField = z
+  .string()
+  .max(360)
+  .transform((value) =>
+    value
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
+export const wallpaperInputSchema = z
+  .object({
+    device: z.enum(devices),
+    ratio: z.union([
+      z.enum(ratioOptions.mobile),
+      z.enum(ratioOptions.desktop),
+      z.enum(ratioOptions.tablet),
+    ]),
+    theme: z.enum(themes),
+    style: z.enum(styles),
+    goals: textField,
+    lifestyle: textField,
+    career: textField,
+    personalLife: textField,
+    health: textField,
+    place: textField,
+    feelingWords: textField,
+    reminder: textField,
+    quoteTone: z.enum(quoteTones),
+    website: z.string().max(0).optional().or(z.literal("")),
+  })
+  .refine((input) => isValidRatioForDevice(input.device, input.ratio), {
+    message: "Please choose a valid size for your device.",
+    path: ["ratio"],
+  });
+
+export const checkoutSchema = z.object({
+  packageId: z.enum(packageIds),
+  wallpaperInput: wallpaperInputSchema,
+  website: z.string().max(0).optional().or(z.literal("")),
+});
+
+export const orderTokenSchema = z.object({
+  orderToken: z.string().min(24).max(4096),
+});
+
+export const generateWallpaperSchema = wallpaperInputSchema.extend({
+  orderToken: z.string().min(24).max(4096).optional(),
+});
+
+export const verifyPaymentSchema = z.object({
+  sessionId: z.string().min(8).max(300),
+});
+
+export const emailWallpaperSchema = z.object({
+  email: z.string().email().max(254),
+  imageUrl: z.string().min(40).max(8_000_000),
+  orderToken: z.string().min(24).max(4096).optional(),
+  website: z.string().max(0).optional().or(z.literal("")),
+});
+
+export function hasMeaningfulInput(input: z.infer<typeof wallpaperInputSchema>) {
+  const joined = [
+    input.goals,
+    input.lifestyle,
+    input.career,
+    input.personalLife,
+    input.health,
+    input.place,
+    input.feelingWords,
+    input.reminder,
+  ].join(" ");
+
+  return joined.replace(/\s/g, "").length >= 12;
+}
+
+export function containsAbusiveInput(value: string) {
+  const lower = value.toLowerCase();
+  const blocked = [
+    "kill ",
+    "murder",
+    "terrorist",
+    "sexualize",
+    "nude child",
+    "child nude",
+    "self harm",
+    "suicide",
+  ];
+
+  return blocked.some((term) => lower.includes(term));
+}

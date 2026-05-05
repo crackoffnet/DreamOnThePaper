@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
+import { ProgressSteps } from "@/components/ProgressSteps";
 import type {
   DeviceType,
   GenerateResponse,
@@ -91,6 +92,7 @@ export function WallpaperWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WallpaperInput>(defaultWallpaperInput);
+  const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
@@ -126,23 +128,12 @@ export function WallpaperWizard() {
     setIsGenerating(true);
 
     try {
-      const response = await fetch("/api/generate-wallpaper", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = (await response.json()) as Partial<GenerateResponse> & {
-        error?: string;
-      };
-
-      if (!response.ok || !data.imageUrl || !data.meta) {
-        throw new Error(data.error || "Unable to create your wallpaper.");
+      if (website) {
+        throw new Error("Unable to continue. Please try again.");
       }
 
-      localStorage.setItem("dreamWallpaper", data.imageUrl);
       localStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
-      localStorage.setItem("dreamWallpaperMeta", JSON.stringify(data.meta));
-      router.push("/thank-you");
+      router.push("/checkout");
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -173,16 +164,17 @@ export function WallpaperWizard() {
           </div>
         </div>
 
-        <div className="mb-5 grid grid-cols-7 gap-1">
-          {stepTitles.map((title, index) => (
-            <div
-              key={title}
-              className={`h-1.5 rounded-full ${
-                index <= step ? "bg-gold" : "bg-cocoa/10"
-              }`}
-            />
-          ))}
+        <div className="mb-5">
+          <ProgressSteps steps={stepTitles} currentStep={step} />
         </div>
+        <input
+          className="hidden"
+          tabIndex={-1}
+          autoComplete="off"
+          value={website}
+          onChange={(event) => setWebsite(event.target.value)}
+          aria-hidden="true"
+        />
 
         {step === 0 ? (
           <DeviceSelector value={form.device} onChange={setDevice} />
@@ -248,7 +240,7 @@ export function WallpaperWizard() {
             <div className="rounded-2xl border border-cocoa/10 bg-white/60 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
                 <Sparkles aria-hidden className="h-4 w-4 text-gold" />
-                Ready to generate
+                Ready for secure checkout
               </div>
               <div className="grid gap-2 text-sm text-taupe sm:grid-cols-2">
                 <p>Device: {labels.devices[form.device]}</p>
@@ -297,7 +289,7 @@ export function WallpaperWizard() {
               ) : (
                 <Sparkles aria-hidden className="h-4 w-4" />
               )}
-              Generate
+              Choose Package
             </button>
           )}
         </div>
