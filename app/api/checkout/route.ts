@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-export const runtime = "edge";
-
 const plans = {
   single: {
     name: "Dream On The Paper - Single Wallpaper",

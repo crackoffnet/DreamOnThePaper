@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createMockWallpaperSvg } from "@/lib/mock";
 import type { VisionFormData } from "@/lib/types";
 
-export const runtime = "edge";
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<VisionFormData>;
