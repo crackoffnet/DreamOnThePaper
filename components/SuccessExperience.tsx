@@ -65,7 +65,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           !generationResponse.ok ||
           generated?.success === false ||
           !imageUrl ||
-          !generated.meta
+          !generated?.meta
         ) {
           throw new Error(
             generated?.message ||

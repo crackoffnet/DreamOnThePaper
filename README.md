@@ -106,10 +106,30 @@ ORDER_TOKEN_SECRET=
 ## Commands
 
 ```bash
+npm run generate:examples
 npm run build
 npm run preview
 npm run deploy
 ```
+
+## Static Example Wallpapers
+
+Homepage examples are static files served from `public/examples`. They are not generated on page visit and do not call OpenAI during rendering.
+
+Run this manually only when you want to regenerate the curated example assets:
+
+```bash
+OPENAI_API_KEY=... npm run generate:examples
+```
+
+The script writes:
+
+- `public/examples/soft-luxury.jpg`
+- `public/examples/wealth-business.jpg`
+- `public/examples/nature-reset.jpg`
+- `public/examples/fitness-health.jpg`
+- `public/examples/family-home.jpg`
+- `public/examples/freedom-travel.jpg`
 
 ## Future R2 Storage Step
 
