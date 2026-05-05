@@ -2,13 +2,15 @@
   "name": "dream-on-the-paper",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "upload": "opennextjs-cloudflare build && wrangler versions upload",
+    "preview": "opennextjs-cloudflare build && wrangler dev"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.6",

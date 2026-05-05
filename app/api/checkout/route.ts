@@ -18,10 +18,7 @@ export async function POST(request: Request) {
   try {
     const { plan } = (await request.json()) as { plan?: keyof typeof plans };
     const selectedPlan = plan && plans[plan] ? plans[plan] : plans.single;
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      request.headers.get("origin") ||
-      "http://localhost:3000";
+    const baseUrl = getSiteUrl();
 
     if (!process.env.STRIPE_SECRET_KEY) {
       return NextResponse.json({
@@ -70,4 +67,9 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function getSiteUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL || "https://dreamonthepaper.com")
+    .replace(/\/+$/, "");
 }

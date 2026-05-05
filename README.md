@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open the local URL printed by Next.js.
 
 ## Environment
 
@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local`.
 ```bash
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
+NEXT_PUBLIC_SITE_URL=https://dreamonthepaper.com
 STRIPE_SINGLE_PRICE_ID=
 STRIPE_BUNDLE_PRICE_ID=
 ```

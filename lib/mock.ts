@@ -57,9 +57,12 @@ function escapeSvg(value: string) {
 }
 
 function toBase64(value: string) {
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(value).toString("base64");
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
   }
 
-  return btoa(unescape(encodeURIComponent(value)));
+  return btoa(binary);
 }
