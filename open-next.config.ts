@@ -1,5 +1,3 @@
-import { defineConfig } from "@opennextjs/cloudflare";
+import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 
-export default defineConfig({
-  // minimal config for MVP
-});
+export default defineCloudflareConfig();
