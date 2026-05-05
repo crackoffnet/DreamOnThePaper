@@ -1,26 +1,53 @@
-export type QuoteStyle = "soft" | "powerful" | "spiritual";
-export type DeviceType = "mobile" | "desktop";
+export type DeviceType = "mobile" | "desktop" | "tablet";
+export type RatioType =
+  | "iphone-17-pro-max"
+  | "iphone"
+  | "android"
+  | "desktop-16-9"
+  | "desktop-16-10"
+  | "desktop-4k"
+  | "ipad"
+  | "tablet-vertical";
 export type ThemeType = "light" | "dark";
-export type WallpaperStyle = "minimalist" | "luxury" | "dreamy" | "nature";
+export type WallpaperStyle =
+  | "soft-luxury"
+  | "minimal"
+  | "dreamy"
+  | "nature"
+  | "feminine"
+  | "wealth-business"
+  | "family-home"
+  | "fitness-health";
+export type QuoteTone = "soft-emotional" | "powerful-confident" | "spiritual-calm" | "none";
 
-export type VisionFormData = {
+export type WallpaperInput = {
+  device: DeviceType;
+  ratio: RatioType;
+  theme: ThemeType;
+  style: WallpaperStyle;
   goals: string;
   lifestyle: string;
   career: string;
-  relationships: string;
-  feeling: string;
-  travel: string;
+  personalLife: string;
   health: string;
-  keywords: string;
-  quoteStyle: QuoteStyle;
+  place: string;
+  feelingWords: string;
   reminder: string;
+  quoteTone: QuoteTone;
+};
+
+export type WallpaperMeta = {
   device: DeviceType;
+  ratio: RatioType;
   theme: ThemeType;
   style: WallpaperStyle;
+  quoteTone: QuoteTone;
+  imageSize: "1024x1024" | "1024x1536" | "1536x1024";
+  aspectRatio: string;
 };
 
 export type GenerateResponse = {
   imageUrl: string;
-  prompt: string;
+  meta: WallpaperMeta;
   mock: boolean;
 };

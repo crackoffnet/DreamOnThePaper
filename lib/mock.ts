@@ -1,23 +1,26 @@
-import type { VisionFormData } from "@/lib/types";
+import type { WallpaperInput } from "@/lib/types";
+import { labels } from "@/lib/wallpaper";
 
-export function createMockWallpaperSvg(data: VisionFormData) {
+export function createMockWallpaperSvg(data: WallpaperInput) {
   const themeDark = data.theme === "dark";
-  const width = data.device === "mobile" ? 1080 : 1920;
-  const height = data.device === "mobile" ? 1920 : 1080;
+  const width = data.device === "desktop" ? 1920 : 1080;
+  const height = data.device === "desktop" ? 1080 : 1920;
   const bg = themeDark ? "#27231f" : "#fbf8f2";
   const panel = themeDark ? "#39322b" : "#fffaf1";
   const text = themeDark ? "#f8efe2" : "#292621";
   const muted = themeDark ? "#c8b9a3" : "#776b5f";
   const accent = "#b59662";
   const quote =
-    data.reminder ||
-    (data.quoteStyle === "powerful"
+    data.quoteTone === "none"
+      ? ""
+      : data.reminder ||
+    (data.quoteTone === "powerful-confident"
       ? "I am becoming the life I choose."
-      : data.quoteStyle === "spiritual"
+      : data.quoteTone === "spiritual-calm"
         ? "What is meant for me is already unfolding."
         : "Softly, steadily, I return to my vision.");
 
-  const keywords = (data.keywords || "clarity, abundance, peace")
+  const keywords = (data.feelingWords || "clarity, abundance, peace")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
@@ -39,8 +42,8 @@ export function createMockWallpaperSvg(data: VisionFormData) {
       <rect x="${width * 0.09}" y="${height * 0.12}" width="${width * 0.82}" height="${height * 0.66}" rx="${width * 0.035}" fill="${panel}" opacity="0.82"/>
       <path d="M ${width * 0.18} ${height * 0.42} C ${width * 0.3} ${height * 0.22}, ${width * 0.5} ${height * 0.6}, ${width * 0.66} ${height * 0.34} S ${width * 0.86} ${height * 0.36}, ${width * 0.78} ${height * 0.54}" stroke="${accent}" stroke-width="${width * 0.006}" stroke-linecap="round" opacity="0.64"/>
       <text x="${width / 2}" y="${height * 0.34}" fill="${text}" font-size="${width * 0.052}" font-family="Inter, Arial, sans-serif" font-weight="600" text-anchor="middle">Dream On The Paper</text>
-      <text x="${width / 2}" y="${height * 0.46}" fill="${text}" font-size="${width * 0.033}" font-family="Georgia, serif" text-anchor="middle">${escapeSvg(quote)}</text>
-      <text x="${width / 2}" y="${height * 0.56}" fill="${muted}" font-size="${width * 0.018}" font-family="Inter, Arial, sans-serif" text-anchor="middle">${escapeSvg(data.feeling || "calm focus, clear direction, quiet confidence")}</text>
+      ${quote ? `<text x="${width / 2}" y="${height * 0.46}" fill="${text}" font-size="${width * 0.033}" font-family="Georgia, serif" text-anchor="middle">${escapeSvg(quote)}</text>` : ""}
+      <text x="${width / 2}" y="${height * 0.56}" fill="${muted}" font-size="${width * 0.018}" font-family="Inter, Arial, sans-serif" text-anchor="middle">${escapeSvg(labels.styles[data.style])}</text>
       ${tags}
     </svg>
   `;
