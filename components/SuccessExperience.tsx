@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
+import { imageUrlFromPayload, setEphemeralImage } from "@/lib/client-images";
 import type { GenerateResponse, WallpaperInput } from "@/lib/types";
 
 type Step = "verifying" | "generating" | "done" | "error";
@@ -43,10 +44,10 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           throw new Error(verified.error || "Unable to verify payment.");
         }
 
-        localStorage.setItem("dreamOrderToken", verified.orderToken);
-        localStorage.setItem("dreamPackageId", verified.packageId || "single");
+        sessionStorage.setItem("dreamOrderToken", verified.orderToken);
+        sessionStorage.setItem("dreamPackageId", verified.packageId || "single");
         if (verified.customerEmail) {
-          localStorage.setItem("dreamCustomerEmail", verified.customerEmail);
+          sessionStorage.setItem("dreamCustomerEmail", verified.customerEmail);
         }
         setOrderToken(verified.orderToken);
 
@@ -57,16 +58,24 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...input, orderToken: verified.orderToken }),
         });
-        const generated = (await generationResponse.json()) as
-          | (Partial<GenerateResponse> & { error?: string })
-          | undefined;
+        const generated = (await generationResponse.json()) as GenerateResponse | undefined;
+        const imageUrl = generated ? await imageUrlFromPayload(generated) : "";
 
-        if (!generationResponse.ok || !generated?.imageUrl || !generated.meta) {
-          throw new Error(generated?.error || "Unable to generate wallpaper.");
+        if (
+          !generationResponse.ok ||
+          generated?.success === false ||
+          !imageUrl ||
+          !generated.meta
+        ) {
+          throw new Error(
+            generated?.message ||
+              generated?.error ||
+              "Unable to generate wallpaper.",
+          );
         }
 
-        localStorage.setItem("dreamWallpaper", generated.imageUrl);
-        localStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
+        setEphemeralImage("finalImageUrl", imageUrl);
+        sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
         setStep("done");
         setMessage("Your full-resolution wallpaper is ready.");
       } catch (successError) {
@@ -137,7 +146,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
 
 function getStoredInput() {
   try {
-    const stored = localStorage.getItem("dreamWallpaperInput");
+    const stored = sessionStorage.getItem("dreamWallpaperInput");
     return stored ? (JSON.parse(stored) as WallpaperInput) : null;
   } catch {
     return null;

@@ -1,9 +1,37 @@
+import { getSiteUrl } from "@/lib/security";
+
 type StoredWallpaper = {
-  imageUrl: string;
+  bytes?: Uint8Array;
+  contentType?: string;
+  imageUrl?: string;
   createdAt: number;
 };
 
 const devWallpaperStore = new Map<string, StoredWallpaper>();
+const STORE_TTL_MS = 1000 * 60 * 60 * 6;
+
+export function saveGeneratedImageFromBase64(
+  content: string,
+  contentType = "image/png",
+) {
+  const id = crypto.randomUUID();
+  devWallpaperStore.set(id, {
+    bytes: base64ToBytes(content),
+    contentType,
+    createdAt: Date.now(),
+  });
+
+  return `/api/wallpaper-image/${id}`;
+}
+
+export function saveGeneratedImageFromDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:(image\/(?:png|svg\+xml|jpeg));base64,(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return saveGeneratedImageFromBase64(match[2], match[1]);
+}
 
 export async function saveWallpaperForDelivery(imageUrl: string) {
   const id = crypto.randomUUID();
@@ -16,12 +44,27 @@ export async function saveWallpaperForDelivery(imageUrl: string) {
 
   return {
     id,
-    url: imageUrl.startsWith("data:") ? null : imageUrl,
+    url: imageUrl.startsWith("data:")
+      ? null
+      : imageUrl.startsWith("/")
+        ? `${getSiteUrl()}${imageUrl}`
+        : imageUrl,
   };
 }
 
 export async function getStoredWallpaper(id: string) {
-  return devWallpaperStore.get(id) || null;
+  const stored = devWallpaperStore.get(id);
+
+  if (!stored) {
+    return null;
+  }
+
+  if (Date.now() - stored.createdAt > STORE_TTL_MS) {
+    devWallpaperStore.delete(id);
+    return null;
+  }
+
+  return stored;
 }
 
 export function isTrustedGeneratedImage(value: string) {
@@ -34,8 +77,19 @@ export function isTrustedGeneratedImage(value: string) {
   }
 
   try {
+    if (value.startsWith("/api/wallpaper-image/")) {
+      return true;
+    }
+
     const url = new URL(value);
-    return url.protocol === "https:" && url.hostname.endsWith("openai.com");
+    const siteUrl = new URL(getSiteUrl());
+    const isOwnTemporaryImage =
+      url.origin === siteUrl.origin && url.pathname.startsWith("/api/wallpaper-image/");
+
+    return (
+      isOwnTemporaryImage ||
+      (url.protocol === "https:" && url.hostname.endsWith("openai.com"))
+    );
   } catch {
     return false;
   }
@@ -55,4 +109,15 @@ export function dataUrlToAttachment(value: string) {
         ? "dream-on-the-paper-wallpaper.png"
         : "dream-on-the-paper-wallpaper.svg",
   };
+}
+
+function base64ToBytes(content: string) {
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
 }

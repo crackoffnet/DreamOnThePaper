@@ -8,7 +8,6 @@ import {
 import {
   assertSameOrigin,
   checkRateLimit,
-  jsonError,
   safeLog,
 } from "@/lib/security";
 import type { WallpaperInput } from "@/lib/types";
@@ -17,6 +16,10 @@ import {
   getPreviewImageSize,
   getWallpaperMeta,
 } from "@/lib/wallpaper";
+import {
+  saveGeneratedImageFromBase64,
+  saveGeneratedImageFromDataUrl,
+} from "@/lib/storage";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -25,31 +28,31 @@ type OpenAIImageResponse = {
 export async function POST(request: Request) {
   try {
     if (!assertSameOrigin(request)) {
-      return jsonError("Request origin is not allowed.", 403);
+      return previewError("Request origin is not allowed.", 403);
     }
 
     if (!checkRateLimit(request, "generate-preview", 6)) {
-      return jsonError("Too many preview requests. Please wait a moment.", 429);
+      return previewError("Too many preview requests. Please wait a moment.", 429);
     }
 
     const body = await request.json().catch(() => null);
     if (hasOversizedCustomDimensions(body)) {
-      return jsonError("Custom size cannot exceed 3840px on either side.");
+      return previewError("Custom size cannot exceed 3840px on either side.");
     }
 
     const parsed = wallpaperInputSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
-      return jsonError("Please check your wallpaper answers and try again.");
+      return previewError("Please check your wallpaper answers and try again.");
     }
 
     if (!hasMeaningfulInput(parsed.data)) {
-      return jsonError("Please add a little more detail first.");
+      return previewError("Please add a little more detail first.");
     }
 
     const joined = Object.values(parsed.data).join(" ");
     if (containsAbusiveInput(joined)) {
-      return jsonError("Please keep the wallpaper request safe and respectful.");
+      return previewError("Please keep the wallpaper request safe and respectful.");
     }
 
     const input = parsed.data as WallpaperInput;
@@ -58,11 +61,20 @@ export async function POST(request: Request) {
 
     if (!process.env.OPENAI_API_KEY) {
       if (process.env.NODE_ENV === "production") {
-        return jsonError("Preview generation is not configured yet.", 503);
+        return previewError("Preview generation is not configured yet.", 503);
+      }
+
+      const mockImageUrl = saveGeneratedImageFromDataUrl(
+        createMockWallpaperSvg(input, { preview: true }),
+      );
+
+      if (!mockImageUrl) {
+        return previewError("Preview generation failed", 500);
       }
 
       return NextResponse.json({
-        imageUrl: createMockWallpaperSvg(input, { preview: true }),
+        success: true,
+        imageUrl: mockImageUrl,
         meta,
         preview: true,
         mock: true,
@@ -88,24 +100,41 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       safeLog("OpenAI preview generation failed", response.status);
-      return jsonError("We could not create your preview right now.", 502);
+      return previewError("Preview generation failed", 502);
     }
 
     const result = (await response.json()) as OpenAIImageResponse;
     const image = result.data?.[0];
     const imageUrl = image?.b64_json
-      ? `data:image/png;base64,${image.b64_json}`
+      ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
       : image?.url;
 
     if (!imageUrl) {
-      return jsonError("The image service did not return a preview.", 502);
+      return previewError("Preview generation failed", 502);
     }
 
-    return NextResponse.json({ imageUrl, meta, preview: true, mock: false });
+    return NextResponse.json({
+      success: true,
+      imageUrl,
+      meta,
+      preview: true,
+      mock: false,
+    });
   } catch (error) {
     safeLog("Preview generation error", error);
-    return jsonError("Unable to create your preview. Please try again.", 500);
+    return previewError("Preview generation failed", 500);
   }
+}
+
+function previewError(message: string, status = 400) {
+  return NextResponse.json(
+    {
+      success: false,
+      message,
+      error: message,
+    },
+    { status },
+  );
 }
 
 function hasOversizedCustomDimensions(body: unknown) {

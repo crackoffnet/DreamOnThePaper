@@ -50,7 +50,12 @@ export type WallpaperMeta = {
 };
 
 export type GenerateResponse = {
-  imageUrl: string;
-  meta: WallpaperMeta;
-  mock: boolean;
+  success?: boolean;
+  imageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  meta?: WallpaperMeta;
+  mock?: boolean;
+  message?: string;
+  error?: string;
 };

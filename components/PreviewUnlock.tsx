@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
+import { getEphemeralImage } from "@/lib/client-images";
 import type { PackageId } from "@/lib/plans";
 import { packageIds, packages } from "@/lib/plans";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
@@ -33,9 +34,9 @@ export function PreviewUnlock() {
 
   useEffect(() => {
     setPreview({
-      imageUrl: localStorage.getItem("dreamPreviewWallpaper") || "",
-      input: parseJson<WallpaperInput>(localStorage.getItem("dreamWallpaperInput")),
-      meta: parseJson<WallpaperMeta>(localStorage.getItem("dreamPreviewMeta")),
+      imageUrl: getEphemeralImage("previewImageUrl"),
+      input: parseJson<WallpaperInput>(sessionStorage.getItem("dreamWallpaperInput")),
+      meta: parseJson<WallpaperMeta>(sessionStorage.getItem("dreamPreviewMeta")),
     });
   }, []);
 

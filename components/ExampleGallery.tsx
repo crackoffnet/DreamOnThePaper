@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   BriefcaseBusiness,
   Dumbbell,
@@ -12,37 +13,37 @@ const examples = [
     title: "Soft Luxury",
     quote: "I move with ease toward what is mine.",
     icon: Heart,
-    art: "bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.92),transparent_9rem),radial-gradient(circle_at_72%_30%,rgba(181,150,98,0.42),transparent_10rem),linear-gradient(145deg,#fff8ed_0%,#eadcc8_50%,#bfa16c_100%)]",
+    image: "/examples/soft-luxury.jpg",
   },
   {
     title: "Wealth / Business",
     quote: "Clear work. Calm money. Better rooms.",
     icon: BriefcaseBusiness,
-    art: "bg-[radial-gradient(circle_at_70%_18%,rgba(255,255,255,0.78),transparent_8rem),linear-gradient(135deg,#f5efe4_0%,#d8c8aa_48%,#6f675d_100%)]",
+    image: "/examples/wealth.jpg",
   },
   {
     title: "Nature Reset",
     quote: "I grow where I place my attention.",
     icon: Leaf,
-    art: "bg-[radial-gradient(circle_at_34%_20%,rgba(250,248,239,0.85),transparent_9rem),linear-gradient(145deg,#f8f1e2_0%,#cdd5bf_52%,#71836e_100%)]",
+    image: "/examples/nature.jpg",
   },
   {
     title: "Fitness / Health",
     quote: "Strong body, soft mind, steady energy.",
     icon: Dumbbell,
-    art: "bg-[radial-gradient(circle_at_72%_24%,rgba(255,255,255,0.72),transparent_8rem),linear-gradient(145deg,#fbf8f2_0%,#ded8cc_46%,#a98f63_100%)]",
+    image: "/examples/fitness.jpg",
   },
   {
     title: "Family / Home",
     quote: "We are building something that lasts.",
     icon: Home,
-    art: "bg-[radial-gradient(circle_at_35%_22%,rgba(255,255,255,0.8),transparent_9rem),linear-gradient(145deg,#fff6e8_0%,#e1c7a3_48%,#8c765b_100%)]",
+    image: "/examples/family.jpg",
   },
   {
     title: "Freedom / Travel",
     quote: "My life moves freely across the world.",
     icon: Plane,
-    art: "bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.78),transparent_8rem),linear-gradient(145deg,#f9f3e8_0%,#c9d1cf_46%,#8d9a9a_100%)]",
+    image: "/examples/travel.jpg",
   },
 ];
 
@@ -65,10 +66,17 @@ export function ExampleGallery() {
               className="group min-w-[72vw] snap-center sm:min-w-0"
             >
               <div
-                className={`relative aspect-[5/4] overflow-hidden rounded-2xl ${example.art} shadow-sm transition duration-300 group-hover:scale-[1.012]`}
+                className="relative aspect-[5/4] overflow-hidden rounded-2xl bg-linen shadow-sm transition duration-300 group-hover:scale-[1.012]"
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-ink/44" />
-                <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.22)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.16)_1px,transparent_1px)] [background-size:42px_42px]" />
+                <Image
+                  src={example.image}
+                  alt={`${example.title} wallpaper example`}
+                  fill
+                  sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 72vw"
+                  className="object-cover transition duration-500 group-hover:scale-105 group-hover:blur-0"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-ink/5 via-ink/5 to-ink/55 transition duration-300 group-hover:from-transparent" />
+                <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] transition duration-300 group-hover:bg-transparent group-hover:backdrop-blur-0" />
                 <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/40 bg-white/42 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cocoa backdrop-blur-md">
                   <example.icon aria-hidden className="h-3 w-3 text-gold" />
                   {example.title}

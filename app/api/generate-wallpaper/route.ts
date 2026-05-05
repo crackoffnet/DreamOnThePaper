@@ -18,6 +18,10 @@ import {
   getFinalImageSize,
   getWallpaperMeta,
 } from "@/lib/wallpaper";
+import {
+  saveGeneratedImageFromBase64,
+  saveGeneratedImageFromDataUrl,
+} from "@/lib/storage";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -100,8 +104,15 @@ export async function POST(request: Request) {
         return jsonError("Image generation is not configured yet.", 503);
       }
 
+      const mockImageUrl = saveGeneratedImageFromDataUrl(createMockWallpaperSvg(input));
+
+      if (!mockImageUrl) {
+        return jsonError("Unable to create your wallpaper. Please try again.", 500);
+      }
+
       return NextResponse.json({
-        imageUrl: createMockWallpaperSvg(input),
+        success: true,
+        imageUrl: mockImageUrl,
         meta,
         mock: true,
       });
@@ -135,7 +146,7 @@ export async function POST(request: Request) {
     const result = (await response.json()) as OpenAIImageResponse;
     const image = result.data?.[0];
     const imageUrl = image?.b64_json
-      ? `data:image/png;base64,${image.b64_json}`
+      ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
       : image?.url;
 
     if (!imageUrl) {
@@ -145,7 +156,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ imageUrl, meta, mock: false });
+    return NextResponse.json({ success: true, imageUrl, meta, mock: false });
   } catch (error) {
     safeLog("Wallpaper generation error", error);
     return jsonError("Unable to create your wallpaper. Please try again.", 500);

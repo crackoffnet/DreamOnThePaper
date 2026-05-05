@@ -14,7 +14,7 @@ export function Pricing() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("dreamWallpaperInput");
+      const stored = sessionStorage.getItem("dreamWallpaperInput");
       setWallpaperInput(stored ? (JSON.parse(stored) as WallpaperInput) : null);
     } catch {
       setWallpaperInput(null);

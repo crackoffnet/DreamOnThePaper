@@ -6,6 +6,11 @@ import { ArrowLeft, ArrowRight, HelpCircle, Loader2, Sparkles } from "lucide-rea
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { ProgressSteps } from "@/components/ProgressSteps";
+import {
+  imageUrlFromPayload,
+  removeEphemeralImage,
+  setEphemeralImage,
+} from "@/lib/client-images";
 import type {
   DeviceType,
   GenerateResponse,
@@ -153,22 +158,23 @@ export function WallpaperWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, website }),
       });
-      const data = (await response.json()) as Partial<GenerateResponse> & {
-        error?: string;
+      const data = (await response.json()) as GenerateResponse & {
         preview?: boolean;
-        meta?: WallpaperMeta;
       };
+      const imageUrl = await imageUrlFromPayload(data);
 
-      if (!response.ok || !data.imageUrl || !data.meta) {
-        throw new Error(data.error || "Unable to create your preview.");
+      if (!response.ok || data.success === false || !imageUrl || !data.meta) {
+        throw new Error(
+          data.message || data.error || "Unable to create your preview.",
+        );
       }
 
-      localStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
-      localStorage.setItem("dreamPreviewWallpaper", data.imageUrl);
-      localStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
-      localStorage.removeItem("dreamWallpaper");
-      localStorage.removeItem("dreamWallpaperMeta");
-      localStorage.removeItem("dreamOrderToken");
+      sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
+      sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
+      setEphemeralImage("previewImageUrl", imageUrl);
+      removeEphemeralImage("finalImageUrl");
+      sessionStorage.removeItem("dreamWallpaperMeta");
+      sessionStorage.removeItem("dreamOrderToken");
       router.push("/preview");
     } catch (generationError) {
       setError(

@@ -6,6 +6,11 @@ import { Download, RefreshCw, SlidersHorizontal, Sparkles } from "lucide-react";
 import { EmailDeliveryForm } from "@/components/EmailDeliveryForm";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
+import {
+  getEphemeralImage,
+  imageUrlFromPayload,
+  setEphemeralImage,
+} from "@/lib/client-images";
 import type { GenerateResponse, WallpaperInput, WallpaperMeta } from "@/lib/types";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
@@ -27,14 +32,14 @@ export function ResultPreview() {
   const [orderToken, setOrderToken] = useState("");
 
   useEffect(() => {
-    const imageUrl = localStorage.getItem("dreamWallpaper") || "";
+    const imageUrl = getEphemeralImage("finalImageUrl");
     const input = parseJson<WallpaperInput>(
-      localStorage.getItem("dreamWallpaperInput"),
+      sessionStorage.getItem("dreamWallpaperInput"),
     );
-    const meta = parseJson<WallpaperMeta>(localStorage.getItem("dreamWallpaperMeta"));
+    const meta = parseJson<WallpaperMeta>(sessionStorage.getItem("dreamWallpaperMeta"));
 
     setResult({ imageUrl, input, meta });
-    setOrderToken(localStorage.getItem("dreamOrderToken") || "");
+    setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => window.clearTimeout(timer);
   }, []);
@@ -54,19 +59,20 @@ export function ResultPreview() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...result.input, orderToken }),
       });
-      const data = (await response.json()) as Partial<GenerateResponse> & {
-        error?: string;
-      };
+      const data = (await response.json()) as GenerateResponse;
+      const imageUrl = await imageUrlFromPayload(data);
 
-      if (!response.ok || !data.imageUrl || !data.meta) {
-        throw new Error(data.error || "Unable to create another version.");
+      if (!response.ok || data.success === false || !imageUrl || !data.meta) {
+        throw new Error(
+          data.message || data.error || "Unable to create another version.",
+        );
       }
 
-      localStorage.setItem("dreamWallpaper", data.imageUrl);
-      localStorage.setItem("dreamWallpaperMeta", JSON.stringify(data.meta));
+      setEphemeralImage("finalImageUrl", imageUrl);
+      sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(data.meta));
       setResult((current) => ({
         ...current,
-        imageUrl: data.imageUrl || "",
+        imageUrl,
         meta: data.meta || current.meta,
       }));
     } catch (regenerateError) {
