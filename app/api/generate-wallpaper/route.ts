@@ -13,7 +13,11 @@ import {
 } from "@/lib/security";
 import { verifyOrderToken } from "@/lib/payment";
 import type { WallpaperInput } from "@/lib/types";
-import { buildWallpaperPrompt, getWallpaperMeta } from "@/lib/wallpaper";
+import {
+  buildWallpaperPrompt,
+  getFinalImageSize,
+  getWallpaperMeta,
+} from "@/lib/wallpaper";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -30,6 +34,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
+    if (hasOversizedCustomDimensions(body)) {
+      return jsonError("Custom size cannot exceed 3840px on either side.");
+    }
+
     const parsed = generateWallpaperSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -81,6 +89,8 @@ export async function POST(request: Request) {
       feelingWords: parsed.data.feelingWords,
       reminder: parsed.data.reminder,
       quoteTone: parsed.data.quoteTone,
+      customWidth: parsed.data.customWidth,
+      customHeight: parsed.data.customHeight,
     };
     const meta = getWallpaperMeta(input);
     const prompt = buildWallpaperPrompt(input);
@@ -106,7 +116,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
         prompt,
-        size: meta.imageSize,
+        size: getFinalImageSize(input),
         quality: "high",
         output_format: "png",
         moderation: "auto",
@@ -140,4 +150,16 @@ export async function POST(request: Request) {
     safeLog("Wallpaper generation error", error);
     return jsonError("Unable to create your wallpaper. Please try again.", 500);
   }
+}
+
+function hasOversizedCustomDimensions(body: unknown) {
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+
+  const customBody = body as { customWidth?: unknown; customHeight?: unknown };
+  return (
+    (typeof customBody.customWidth === "number" && customBody.customWidth > 3840) ||
+    (typeof customBody.customHeight === "number" && customBody.customHeight > 3840)
+  );
 }

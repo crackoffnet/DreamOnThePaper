@@ -26,6 +26,7 @@ export const wallpaperInputSchema = z
       z.enum(ratioOptions.mobile),
       z.enum(ratioOptions.desktop),
       z.enum(ratioOptions.tablet),
+      z.enum(ratioOptions.custom),
     ]),
     theme: z.enum(themes),
     style: z.enum(styles),
@@ -38,11 +39,34 @@ export const wallpaperInputSchema = z
     feelingWords: textField,
     reminder: textField,
     quoteTone: z.enum(quoteTones),
+    customWidth: z.number().int().min(512).max(3840).optional(),
+    customHeight: z.number().int().min(512).max(3840).optional(),
     website: z.string().max(0).optional().or(z.literal("")),
   })
-  .refine((input) => isValidRatioForDevice(input.device, input.ratio), {
-    message: "Please choose a valid size for your device.",
-    path: ["ratio"],
+  .superRefine((input, context) => {
+    if (!isValidRatioForDevice(input.device, input.ratio)) {
+      context.addIssue({
+        code: "custom",
+        message: "Please choose a valid size for your device.",
+        path: ["ratio"],
+      });
+    }
+
+    if (input.device !== "custom") {
+      return;
+    }
+
+    if (
+      input.ratio !== "custom" ||
+      typeof input.customWidth !== "number" ||
+      typeof input.customHeight !== "number"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Please enter a custom width and height between 512 and 3840px.",
+        path: ["customWidth"],
+      });
+    }
   });
 
 export const checkoutSchema = z.object({

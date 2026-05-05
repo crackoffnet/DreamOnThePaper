@@ -38,6 +38,12 @@ export async function POST(request: Request) {
       device: parsed.data.wallpaperInput.device,
       ratio: parsed.data.wallpaperInput.ratio,
       style: parsed.data.wallpaperInput.style,
+      customWidth: parsed.data.wallpaperInput.customWidth
+        ? String(parsed.data.wallpaperInput.customWidth)
+        : "",
+      customHeight: parsed.data.wallpaperInput.customHeight
+        ? String(parsed.data.wallpaperInput.customHeight)
+        : "",
     });
 
     return NextResponse.json(result);

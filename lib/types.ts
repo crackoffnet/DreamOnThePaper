@@ -1,4 +1,4 @@
-export type DeviceType = "mobile" | "desktop" | "tablet";
+export type DeviceType = "mobile" | "desktop" | "tablet" | "custom";
 export type RatioType =
   | "iphone-17-pro-max"
   | "iphone"
@@ -7,7 +7,8 @@ export type RatioType =
   | "desktop-16-10"
   | "desktop-4k"
   | "ipad"
-  | "tablet-vertical";
+  | "tablet-vertical"
+  | "custom";
 export type ThemeType = "light" | "dark";
 export type WallpaperStyle =
   | "soft-luxury"
@@ -34,6 +35,8 @@ export type WallpaperInput = {
   feelingWords: string;
   reminder: string;
   quoteTone: QuoteTone;
+  customWidth?: number;
+  customHeight?: number;
 };
 
 export type WallpaperMeta = {

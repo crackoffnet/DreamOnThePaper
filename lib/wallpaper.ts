@@ -8,7 +8,7 @@ import type {
   WallpaperStyle,
 } from "@/lib/types";
 
-export const devices = ["mobile", "desktop", "tablet"] as const satisfies readonly DeviceType[];
+export const devices = ["mobile", "desktop", "tablet", "custom"] as const satisfies readonly DeviceType[];
 export const themes = ["light", "dark"] as const satisfies readonly ThemeType[];
 export const styles = [
   "soft-luxury",
@@ -31,6 +31,7 @@ export const ratioOptions = {
   mobile: ["iphone-17-pro-max", "iphone", "android"],
   desktop: ["desktop-16-9", "desktop-16-10", "desktop-4k"],
   tablet: ["ipad", "tablet-vertical"],
+  custom: ["custom"],
 } as const satisfies Record<DeviceType, readonly RatioType[]>;
 
 export const labels = {
@@ -38,6 +39,7 @@ export const labels = {
     mobile: "Mobile wallpaper",
     desktop: "Desktop wallpaper",
     tablet: "Tablet wallpaper",
+    custom: "Custom size",
   },
   ratios: {
     "iphone-17-pro-max": "iPhone 17 Pro Max / 9:19.5",
@@ -48,6 +50,7 @@ export const labels = {
     "desktop-4k": "4K desktop",
     ipad: "iPad / 4:3",
     "tablet-vertical": "Vertical tablet",
+    custom: "Custom size (max 4K)",
   },
   themes: {
     light: "Light",
@@ -83,6 +86,7 @@ const ratioMeta: Record<
   "desktop-4k": { aspectRatio: "16 / 9", imageSize: "3840x2160" },
   ipad: { aspectRatio: "4 / 3", imageSize: "1536x1152" },
   "tablet-vertical": { aspectRatio: "3 / 4", imageSize: "1152x1536" },
+  custom: { aspectRatio: "2 / 3", imageSize: "1200x1800" },
 };
 
 const previewImageSizes: Record<RatioType, string> = {
@@ -94,7 +98,30 @@ const previewImageSizes: Record<RatioType, string> = {
   "desktop-4k": "1280x720",
   ipad: "1024x768",
   "tablet-vertical": "768x1024",
+  custom: "768x1152",
 };
+
+const supportedPreviewSizes = [
+  "1024x1024",
+  "1024x1536",
+  "1536x1024",
+  "1280x720",
+  "1280x800",
+  "768x1024",
+  "1024x768",
+  "768x1360",
+  "704x1520",
+];
+
+const supportedFinalSizes = [
+  "1024x1024",
+  "1024x1536",
+  "1536x1024",
+  "2048x2048",
+  "2048x1152",
+  "3840x2160",
+  "2160x3840",
+];
 
 export const defaultWallpaperInput: WallpaperInput = {
   device: "mobile",
@@ -110,9 +137,23 @@ export const defaultWallpaperInput: WallpaperInput = {
   feelingWords: "",
   reminder: "",
   quoteTone: "soft-emotional",
+  customWidth: 1200,
+  customHeight: 1800,
 };
 
 export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
+  if (isCustomWallpaper(input)) {
+    return {
+      device: input.device,
+      ratio: input.ratio,
+      theme: input.theme,
+      style: input.style,
+      quoteTone: input.quoteTone,
+      aspectRatio: `${input.customWidth} / ${input.customHeight}`,
+      imageSize: `${input.customWidth}x${input.customHeight}`,
+    };
+  }
+
   return {
     device: input.device,
     ratio: input.ratio,
@@ -124,7 +165,43 @@ export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
 }
 
 export function getPreviewImageSize(input: WallpaperInput) {
+  if (isCustomWallpaper(input)) {
+    return findClosestSupportedSize(
+      input.customWidth,
+      input.customHeight,
+      supportedPreviewSizes,
+    );
+  }
+
   return previewImageSizes[input.ratio];
+}
+
+export function getFinalImageSize(input: WallpaperInput) {
+  if (isCustomWallpaper(input)) {
+    return findClosestSupportedSize(
+      input.customWidth,
+      input.customHeight,
+      supportedFinalSizes,
+    );
+  }
+
+  return getWallpaperMeta(input).imageSize;
+}
+
+export function getResolutionLabel(input: WallpaperInput) {
+  if (isCustomWallpaper(input)) {
+    return `Custom - ${input.customWidth} x ${input.customHeight}`;
+  }
+
+  return labels.ratios[input.ratio];
+}
+
+export function getAspectRatioLabel(input: WallpaperInput) {
+  if (!isCustomWallpaper(input)) {
+    return labels.ratios[input.ratio];
+  }
+
+  return `${reduceRatio(input.customWidth, input.customHeight)} custom`;
 }
 
 export function buildPreviewWallpaperPrompt(input: WallpaperInput) {
@@ -135,7 +212,8 @@ export function buildPreviewWallpaperPrompt(input: WallpaperInput) {
 
   return `Create a fast low-resolution preview of a personalized vision board wallpaper.
 Device: ${labels.devices[input.device]}
-Aspect ratio: ${labels.ratios[input.ratio]}
+Aspect ratio: ${getAspectRatioLabel(input)}
+Resolution target: ${getResolutionLabel(input)}
 Theme: ${labels.themes[input.theme]}
 Style: ${labels.styles[input.style]}
 Mood: calm, elegant, aspirational.
@@ -154,7 +232,8 @@ export function buildFinalWallpaperPrompt(input: WallpaperInput) {
 
   return `Create a premium, elegant, minimal vision board wallpaper.
 Device: ${labels.devices[input.device]}
-Aspect ratio: ${labels.ratios[input.ratio]}
+Aspect ratio: ${getAspectRatioLabel(input)}
+Resolution target: ${getResolutionLabel(input)}
 Style: ${labels.styles[input.style]}
 Theme: ${labels.themes[input.theme]}, warm neutral tones, cream, beige, muted gold, and refined contrast.
 Composition: clean, spacious, not cluttered, wallpaper-friendly, with negative space for app icons and desktop folders.
@@ -175,4 +254,50 @@ export const buildWallpaperPrompt = buildFinalWallpaperPrompt;
 
 export function isValidRatioForDevice(device: DeviceType, ratio: RatioType) {
   return (ratioOptions[device] as readonly RatioType[]).includes(ratio);
+}
+
+export function isCustomWallpaper(input: WallpaperInput): input is WallpaperInput & {
+  customWidth: number;
+  customHeight: number;
+} {
+  return (
+    input.device === "custom" &&
+    input.ratio === "custom" &&
+    Number.isFinite(input.customWidth) &&
+    Number.isFinite(input.customHeight)
+  );
+}
+
+export function reduceRatio(width: number, height: number) {
+  const divisor = gcd(width, height);
+  return `${Math.round(width / divisor)}:${Math.round(height / divisor)}`;
+}
+
+function gcd(a: number, b: number): number {
+  let x = Math.abs(Math.round(a));
+  let y = Math.abs(Math.round(b));
+
+  while (y) {
+    [x, y] = [y, x % y];
+  }
+
+  return x || 1;
+}
+
+function findClosestSupportedSize(
+  targetWidth: number,
+  targetHeight: number,
+  supportedSizes: readonly string[],
+) {
+  const targetRatio = targetWidth / targetHeight;
+
+  return supportedSizes.reduce((best, size) => {
+    const [width, height] = size.split("x").map(Number);
+    const ratio = width / height;
+    const currentDifference = Math.abs(ratio - targetRatio);
+    const [bestWidth, bestHeight] = best.split("x").map(Number);
+    const bestDifference = Math.abs(bestWidth / bestHeight - targetRatio);
+
+    return currentDifference < bestDifference ? size : best;
+  }, supportedSizes[0]);
 }

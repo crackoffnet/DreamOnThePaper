@@ -33,6 +33,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
+    if (hasOversizedCustomDimensions(body)) {
+      return jsonError("Custom size cannot exceed 3840px on either side.");
+    }
+
     const parsed = wallpaperInputSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
@@ -102,4 +106,16 @@ export async function POST(request: Request) {
     safeLog("Preview generation error", error);
     return jsonError("Unable to create your preview. Please try again.", 500);
   }
+}
+
+function hasOversizedCustomDimensions(body: unknown) {
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+
+  const customBody = body as { customWidth?: unknown; customHeight?: unknown };
+  return (
+    (typeof customBody.customWidth === "number" && customBody.customWidth > 3840) ||
+    (typeof customBody.customHeight === "number" && customBody.customHeight > 3840)
+  );
 }

@@ -8,7 +8,7 @@ import { PricingCard } from "@/components/PricingCard";
 import type { PackageId } from "@/lib/plans";
 import { packageIds, packages } from "@/lib/plans";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { labels } from "@/lib/wallpaper";
+import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
 type PreviewState = {
   imageUrl: string;
@@ -76,7 +76,9 @@ export function PreviewUnlock() {
 
         <div className="flex justify-center rounded-[1.5rem] border border-white/70 bg-white/45 p-4">
           <div
-            className="relative w-full max-w-sm overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft"
+            className={`relative w-full overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft ${
+              preview.meta.device === "custom" ? "max-w-md" : "max-w-sm"
+            }`}
             style={{ aspectRatio: preview.meta.aspectRatio }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -99,9 +101,12 @@ export function PreviewUnlock() {
 
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Device: {labels.devices[preview.meta.device]}</p>
-          <p>Ratio: {labels.ratios[preview.meta.ratio]}</p>
+          <p>Ratio: {preview.input ? getAspectRatioLabel(preview.input) : labels.ratios[preview.meta.ratio]}</p>
           <p>Style: {labels.styles[preview.meta.style]}</p>
           <p>Theme: {labels.themes[preview.meta.theme]}</p>
+          {preview.input?.device === "custom" ? (
+            <p>Resolution: {getResolutionLabel(preview.input)}</p>
+          ) : null}
         </div>
       </div>
 

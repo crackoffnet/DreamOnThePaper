@@ -1,6 +1,6 @@
 "use client";
 
-import { Monitor, Smartphone, Tablet } from "lucide-react";
+import { Monitor, Ruler, Smartphone, Tablet } from "lucide-react";
 import type { DeviceType } from "@/lib/types";
 import { labels } from "@/lib/wallpaper";
 
@@ -8,6 +8,7 @@ const deviceIcons = {
   mobile: Smartphone,
   desktop: Monitor,
   tablet: Tablet,
+  custom: Ruler,
 };
 
 type DeviceSelectorProps = {
@@ -17,8 +18,8 @@ type DeviceSelectorProps = {
 
 export function DeviceSelector({ value, onChange }: DeviceSelectorProps) {
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
-      {(["mobile", "desktop", "tablet"] as const).map((device) => {
+    <div className="grid gap-2 sm:grid-cols-4">
+      {(["mobile", "desktop", "tablet", "custom"] as const).map((device) => {
         const Icon = deviceIcons[device];
         const active = value === device;
 

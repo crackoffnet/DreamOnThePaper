@@ -48,33 +48,33 @@ const examples = [
 
 export function ExampleGallery() {
   return (
-    <section id="examples" className="px-4 py-8 sm:px-6">
+    <section id="examples" className="px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-5">
+        <div className="mb-3">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">
             Premium examples
           </p>
-          <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-ink sm:text-3xl">
+          <h2 className="mt-1.5 max-w-2xl text-xl font-semibold tracking-[-0.02em] text-ink sm:text-2xl">
             Wallpapers that feel like a daily visual ritual.
           </h2>
         </div>
-        <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+        <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
           {examples.map((example) => (
             <article
               key={example.title}
               className="group min-w-[72vw] snap-center sm:min-w-0"
             >
               <div
-                className={`relative aspect-[4/5] overflow-hidden rounded-2xl ${example.art} shadow-soft transition duration-300 group-hover:scale-[1.015]`}
+                className={`relative aspect-[5/4] overflow-hidden rounded-2xl ${example.art} shadow-sm transition duration-300 group-hover:scale-[1.012]`}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-ink/44" />
                 <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.22)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.16)_1px,transparent_1px)] [background-size:42px_42px]" />
-                <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/45 bg-white/45 px-3 py-1.5 text-xs font-semibold text-ink backdrop-blur-md">
-                  <example.icon aria-hidden className="h-3.5 w-3.5 text-gold" />
+                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/40 bg-white/42 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cocoa backdrop-blur-md">
+                  <example.icon aria-hidden className="h-3 w-3 text-gold" />
                   {example.title}
                 </div>
-                <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/45 bg-white/38 p-4 backdrop-blur-md">
-                  <p className="font-serif text-2xl leading-tight text-ink">
+                <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/40 bg-white/36 p-3 backdrop-blur-md">
+                  <p className="font-serif text-xl leading-tight text-ink">
                     {example.quote}
                   </p>
                 </div>

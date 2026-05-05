@@ -7,7 +7,7 @@ import { EmailDeliveryForm } from "@/components/EmailDeliveryForm";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
 import type { GenerateResponse, WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { labels } from "@/lib/wallpaper";
+import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
 type StoredResult = {
   imageUrl: string;
@@ -121,9 +121,15 @@ export function ResultPreview() {
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <p>Device: {labels.devices[meta.device]}</p>
-          <p>Ratio: {labels.ratios[meta.ratio]}</p>
+          <p>
+            Ratio:{" "}
+            {result.input ? getAspectRatioLabel(result.input) : labels.ratios[meta.ratio]}
+          </p>
           <p>Style: {labels.styles[meta.style]}</p>
           <p>Theme: {labels.themes[meta.theme]}</p>
+          {result.input?.device === "custom" ? (
+            <p>Resolution: {getResolutionLabel(result.input)}</p>
+          ) : null}
         </div>
 
         {isRegenerating ? (
@@ -172,7 +178,9 @@ export function ResultPreview() {
 
       <div className="flex justify-center rounded-[1.75rem] border border-white/70 bg-white/45 p-4 shadow-soft backdrop-blur-xl">
         <div
-          className="relative max-h-[72vh] w-full max-w-md overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft"
+          className={`relative max-h-[72vh] w-full overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft ${
+            meta.device === "custom" ? "max-w-lg" : "max-w-md"
+          }`}
           style={{ aspectRatio: meta.aspectRatio }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
