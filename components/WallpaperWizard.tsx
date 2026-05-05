@@ -10,6 +10,7 @@ import type {
   DeviceType,
   GenerateResponse,
   WallpaperInput,
+  WallpaperMeta,
 } from "@/lib/types";
 import {
   defaultWallpaperInput,
@@ -132,8 +133,28 @@ export function WallpaperWizard() {
         throw new Error("Unable to continue. Please try again.");
       }
 
+      const response = await fetch("/api/generate-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, website }),
+      });
+      const data = (await response.json()) as Partial<GenerateResponse> & {
+        error?: string;
+        preview?: boolean;
+        meta?: WallpaperMeta;
+      };
+
+      if (!response.ok || !data.imageUrl || !data.meta) {
+        throw new Error(data.error || "Unable to create your preview.");
+      }
+
       localStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
-      router.push("/checkout");
+      localStorage.setItem("dreamPreviewWallpaper", data.imageUrl);
+      localStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
+      localStorage.removeItem("dreamWallpaper");
+      localStorage.removeItem("dreamWallpaperMeta");
+      localStorage.removeItem("dreamOrderToken");
+      router.push("/preview");
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -240,7 +261,7 @@ export function WallpaperWizard() {
             <div className="rounded-2xl border border-cocoa/10 bg-white/60 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
                 <Sparkles aria-hidden className="h-4 w-4 text-gold" />
-                Ready for secure checkout
+                Ready to create preview
               </div>
               <div className="grid gap-2 text-sm text-taupe sm:grid-cols-2">
                 <p>Device: {labels.devices[form.device]}</p>
@@ -249,7 +270,9 @@ export function WallpaperWizard() {
                 <p>Style: {labels.styles[form.style]}</p>
               </div>
             </div>
-            {isGenerating ? <LoadingGeneration /> : null}
+            {isGenerating ? (
+              <LoadingGeneration label="Creating your preview..." />
+            ) : null}
           </div>
         ) : null}
 
@@ -289,7 +312,7 @@ export function WallpaperWizard() {
               ) : (
                 <Sparkles aria-hidden className="h-4 w-4" />
               )}
-              Choose Package
+              Generate Preview
             </button>
           )}
         </div>

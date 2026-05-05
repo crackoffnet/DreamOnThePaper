@@ -8,9 +8,14 @@ import type { WallpaperInput } from "@/lib/types";
 type CheckoutCTAProps = {
   packageId: PackageId;
   wallpaperInput: WallpaperInput | null;
+  label?: string;
 };
 
-export function CheckoutCTA({ packageId, wallpaperInput }: CheckoutCTAProps) {
+export function CheckoutCTA({
+  packageId,
+  wallpaperInput,
+  label = "Secure Checkout",
+}: CheckoutCTAProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,7 +69,7 @@ export function CheckoutCTA({ packageId, wallpaperInput }: CheckoutCTAProps) {
         ) : (
           <Lock aria-hidden className="h-4 w-4" />
         )}
-        Secure Checkout
+        {label}
       </button>
     </div>
   );

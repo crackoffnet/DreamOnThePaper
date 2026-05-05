@@ -42,7 +42,7 @@ export type WallpaperMeta = {
   theme: ThemeType;
   style: WallpaperStyle;
   quoteTone: QuoteTone;
-  imageSize: "1024x1024" | "1024x1536" | "1536x1024";
+  imageSize: string;
   aspectRatio: string;
 };
 

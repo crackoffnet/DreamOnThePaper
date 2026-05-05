@@ -1,7 +1,10 @@
 import type { WallpaperInput } from "@/lib/types";
 import { labels } from "@/lib/wallpaper";
 
-export function createMockWallpaperSvg(data: WallpaperInput) {
+export function createMockWallpaperSvg(
+  data: WallpaperInput,
+  options: { preview?: boolean } = {},
+) {
   const themeDark = data.theme === "dark";
   const width = data.device === "desktop" ? 1920 : 1080;
   const height = data.device === "desktop" ? 1080 : 1920;
@@ -45,6 +48,7 @@ export function createMockWallpaperSvg(data: WallpaperInput) {
       ${quote ? `<text x="${width / 2}" y="${height * 0.46}" fill="${text}" font-size="${width * 0.033}" font-family="Georgia, serif" text-anchor="middle">${escapeSvg(quote)}</text>` : ""}
       <text x="${width / 2}" y="${height * 0.56}" fill="${muted}" font-size="${width * 0.018}" font-family="Inter, Arial, sans-serif" text-anchor="middle">${escapeSvg(labels.styles[data.style])}</text>
       ${tags}
+      ${options.preview ? `<rect width="${width}" height="${height}" fill="${bg}" opacity="0.22"/><text x="${width / 2}" y="${height * 0.88}" fill="${text}" opacity="0.45" font-size="${width * 0.062}" font-family="Inter, Arial, sans-serif" font-weight="700" text-anchor="middle">Preview</text>` : ""}
     </svg>
   `;
 

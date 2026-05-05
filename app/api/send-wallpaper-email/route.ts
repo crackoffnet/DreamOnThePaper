@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         from: process.env.FROM_EMAIL || "hello@dreamonthepaper.com",
         to: parsed.data.email,
-        subject: "Your Dream On The Paper wallpaper is ready",
+        subject: "Your wallpaper is ready",
         text: `Your personalized wallpaper is ready. Download it here: ${downloadUrl}`,
         html: `<p>Your personalized wallpaper is ready.</p><p><a href="${downloadUrl}">Download it here</a>.</p>`,
         attachments: attachment

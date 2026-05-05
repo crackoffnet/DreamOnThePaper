@@ -38,17 +38,21 @@ NODE_VERSION=22
 
 `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, and `ORDER_TOKEN_SECRET` must never be exposed to the frontend.
 
-## Payment Flow
+## Preview-First Payment Flow
 
 1. User completes `/create`.
-2. Answers are stored in the browser session and the user goes to `/checkout`.
-3. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
-4. Stripe redirects to `/success?session_id=...`.
-5. `/api/verify-payment` retrieves the Stripe session server-side and returns a short-lived signed order token.
-6. `/success` uses that token to call `/api/generate-wallpaper`.
-7. `/thank-you` shows download, share, and email actions.
+2. `/api/generate-preview` creates a low-quality, watermarked preview without payment.
+3. `/preview` shows the preview in a device frame with the unlock offer.
+4. User clicks "Unlock Full Wallpaper".
+5. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
+6. Stripe redirects to `/success?session_id=...`.
+7. `/api/verify-payment` retrieves the Stripe session server-side and returns a short-lived signed order token.
+8. `/success` uses that token to call `/api/generate-final`.
+9. `/thank-you` shows the high-resolution wallpaper with download, share, and email actions.
 
 If Stripe is not configured, mock checkout is allowed only in development.
+
+Final generation never trusts a client-side `paid` flag. It requires a server-verified Stripe session and signed order token.
 
 ## Stripe Setup
 
@@ -120,11 +124,14 @@ Current delivery uses browser session storage and email attachments for generate
 
 - `/` landing page
 - `/create` guided wallpaper wizard
+- `/preview` low-quality preview and unlock page
 - `/checkout` package selection and Stripe Checkout
 - `/success` payment verification and final generation
 - `/thank-you` result, download, share, and email delivery
 - `/api/create-checkout-session`
 - `/api/verify-payment`
+- `/api/generate-preview`
+- `/api/generate-final`
 - `/api/generate-wallpaper`
 - `/api/send-wallpaper-email`
 - `/api/stripe-webhook`

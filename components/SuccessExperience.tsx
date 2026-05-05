@@ -51,8 +51,8 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         setOrderToken(verified.orderToken);
 
         setStep("generating");
-        setMessage("Creating your wallpaper...");
-        const generationResponse = await fetch("/api/generate-wallpaper", {
+        setMessage("Creating your high-quality wallpaper...");
+        const generationResponse = await fetch("/api/generate-final", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...input, orderToken: verified.orderToken }),
@@ -68,7 +68,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         localStorage.setItem("dreamWallpaper", generated.imageUrl);
         localStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
         setStep("done");
-        setMessage("Your wallpaper is ready.");
+        setMessage("Your full-resolution wallpaper is ready.");
       } catch (successError) {
         setStep("error");
         setError(

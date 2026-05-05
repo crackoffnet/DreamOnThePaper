@@ -49,7 +49,7 @@ export function ResultPreview() {
     setIsRegenerating(true);
 
     try {
-      const response = await fetch("/api/generate-wallpaper", {
+      const response = await fetch("/api/generate-final", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...result.input, orderToken }),

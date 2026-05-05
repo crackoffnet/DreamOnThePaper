@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       ? await verifyOrderToken(parsed.data.orderToken)
       : null;
 
-    if (!order && process.env.NODE_ENV === "production") {
+    if (!order) {
       return jsonError("Please confirm payment before generating.", 402);
     }
 
@@ -104,10 +104,10 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
+        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
         prompt,
         size: meta.imageSize,
-        quality: "medium",
+        quality: "high",
         output_format: "png",
         moderation: "auto",
         n: 1,
