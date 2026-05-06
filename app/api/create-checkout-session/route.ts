@@ -24,8 +24,15 @@ export async function POST(request: Request) {
     }
 
     if (!process.env.STRIPE_SECRET_KEY || !process.env.NEXT_PUBLIC_SITE_URL) {
-      safeLog("Payment configuration missing");
-      return checkoutError("Payment is not configured yet.", 503);
+      safeLog(
+        `Checkout configuration missing: ${
+          !process.env.STRIPE_SECRET_KEY ? "STRIPE_SECRET_KEY " : ""
+        }${!process.env.NEXT_PUBLIC_SITE_URL ? "NEXT_PUBLIC_SITE_URL" : ""}`.trim(),
+      );
+      return checkoutError(
+        "Checkout is temporarily unavailable. Please try again soon.",
+        503,
+      );
     }
 
     const body = await request.json().catch(() => null);
@@ -54,6 +61,7 @@ export async function POST(request: Request) {
 
     const result = await createCheckoutSession(parsed.data.packageId, {
       orderId: order.orderId,
+      packageType: parsed.data.packageId,
       device: parsed.data.wallpaperInput.device,
       ratio: parsed.data.wallpaperInput.ratio,
       width,
@@ -62,6 +70,7 @@ export async function POST(request: Request) {
       style: parsed.data.wallpaperInput.style,
       quoteTone: parsed.data.wallpaperInput.quoteTone,
       promptHash: order.promptHash,
+      createdAt: new Date().toISOString(),
     });
 
     if (result.mock) {
@@ -71,7 +80,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, orderSnapshotToken, ...result });
   } catch (error) {
     safeLog("Checkout session creation failed", error);
-    return checkoutError("Payment is not configured yet.", 503);
+    return checkoutError(
+      "Checkout is temporarily unavailable. Please try again soon.",
+      503,
+    );
   }
 }
 

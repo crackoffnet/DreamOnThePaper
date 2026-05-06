@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Footer } from "@/components/Footer";
 import { ResultPreview } from "@/components/ResultPreview";
 
 export default function ThankYouPage() {
@@ -15,6 +16,7 @@ export default function ThankYouPage() {
         </Link>
       </div>
       <ResultPreview />
+      <Footer />
     </main>
   );
 }

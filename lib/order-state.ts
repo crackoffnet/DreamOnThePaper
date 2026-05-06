@@ -1,12 +1,14 @@
 import type { PackageId } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
-import { fromBase64Url, toBase64Url } from "@/lib/security";
+import { fromBase64Url, timingSafeStringEqual, toBase64Url } from "@/lib/security";
 
 export type OrderStatus =
+  | "preview_created"
   | "pending_payment"
   | "paid"
   | "final_generating"
-  | "final_generated";
+  | "final_generated"
+  | "failed";
 
 export type OrderSnapshot = {
   orderId: string;
@@ -56,6 +58,12 @@ export function markFinalGenerated(order: OrderSnapshot, finalImageUrl: string) 
     finalImageUrl,
     status: "final_generated" as const,
   };
+  storeOrder(updated);
+  return updated;
+}
+
+export function markOrderFailed(order: OrderSnapshot) {
+  const updated = { ...order, status: "failed" as const };
   storeOrder(updated);
   return updated;
 }
@@ -138,7 +146,7 @@ async function verifySignedPayload<T>(token: string) {
   }
 
   const expected = await signValue(encodedPayload);
-  if (expected !== signature) {
+  if (!timingSafeStringEqual(expected, signature)) {
     return null;
   }
 

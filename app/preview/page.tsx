@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Footer } from "@/components/Footer";
 import { PreviewUnlock } from "@/components/PreviewUnlock";
 
 export default function PreviewPage() {
@@ -15,6 +16,7 @@ export default function PreviewPage() {
         </Link>
       </div>
       <PreviewUnlock />
+      <Footer />
     </main>
   );
 }

@@ -12,6 +12,7 @@ import {
   markOrderPaid,
   verifyOrderSnapshotToken,
 } from "@/lib/order-state";
+import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export async function POST(request: Request) {
   try {
@@ -49,9 +50,20 @@ export async function POST(request: Request) {
     const stripeMetadata = status.metadata || {};
 
     if (!isDevMock) {
+      const meta = getWallpaperMeta(snapshot.input);
+      const [width, height] = meta.imageSize.split("x");
+
       if (
         status.packageId !== snapshot.packageId ||
         stripeMetadata.orderId !== snapshot.orderId ||
+        stripeMetadata.packageType !== snapshot.packageId ||
+        stripeMetadata.device !== snapshot.input.device ||
+        stripeMetadata.ratio !== snapshot.input.ratio ||
+        stripeMetadata.width !== width ||
+        stripeMetadata.height !== height ||
+        stripeMetadata.theme !== snapshot.input.theme ||
+        stripeMetadata.style !== snapshot.input.style ||
+        stripeMetadata.quoteTone !== snapshot.input.quoteTone ||
         stripeMetadata.promptHash !== snapshot.promptHash
       ) {
         return jsonError("Unable to verify payment. Please contact support.", 400);

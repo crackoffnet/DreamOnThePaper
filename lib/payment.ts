@@ -1,7 +1,12 @@
 import Stripe from "stripe";
 import type { PackageId } from "@/lib/plans";
 import { packages } from "@/lib/plans";
-import { fromBase64Url, getSiteUrl, toBase64Url } from "@/lib/security";
+import {
+  fromBase64Url,
+  getSiteUrl,
+  timingSafeStringEqual,
+  toBase64Url,
+} from "@/lib/security";
 import type { OrderSnapshot } from "@/lib/order-state";
 
 export type PaymentStatus = {
@@ -60,12 +65,11 @@ export async function createCheckoutSession(
   const session = await stripe.checkout.sessions.create(
     {
       mode: "payment",
-      payment_method_types: ["card"],
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/create`,
       metadata: {
-        packageId,
         ...metadata,
+        packageType: metadata.packageType || packageId,
       },
       line_items: [
         {
@@ -109,7 +113,8 @@ export async function verifyStripePayment(sessionId: string): Promise<PaymentSta
   }
 
   const session = await stripe.checkout.sessions.retrieve(sessionId);
-  const packageId = session.metadata?.packageId as PackageId | undefined;
+  const packageId = (session.metadata?.packageType ||
+    session.metadata?.packageId) as PackageId | undefined;
 
   if (!packageId || !(packageId in packages)) {
     throw new Error("Invalid package metadata.");
@@ -149,7 +154,7 @@ export async function verifyOrderToken(token: string) {
   }
 
   const expected = await signValue(encodedPayload);
-  if (expected !== signature) {
+  if (!timingSafeStringEqual(expected, signature)) {
     return null;
   }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Footer } from "@/components/Footer";
 import { SuccessExperience } from "@/components/SuccessExperience";
 
 type SuccessPageProps = {
@@ -22,6 +23,7 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
         </Link>
       </div>
       <SuccessExperience sessionId={sessionId} />
+      <Footer />
     </main>
   );
 }

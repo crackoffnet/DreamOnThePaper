@@ -1,10 +1,12 @@
 import {
-  Monitor,
+  BadgeCheck,
+  Lock,
   Ruler,
   Smartphone,
   Sparkles,
   WandSparkles,
 } from "lucide-react";
+import Image from "next/image";
 import { ButtonLink } from "@/components/ButtonLink";
 
 export function Hero() {
@@ -32,10 +34,11 @@ export function Hero() {
               View examples
             </ButtonLink>
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-2 text-xs text-cocoa">
+          <div className="mt-5 grid grid-cols-2 gap-2 text-xs text-cocoa sm:grid-cols-4">
             {[
-              { icon: Smartphone, label: "Mobile" },
-              { icon: Monitor, label: "Desktop" },
+              { icon: BadgeCheck, label: "Free preview" },
+              { icon: Lock, label: "Secure checkout" },
+              { icon: Smartphone, label: "Phone, desktop, tablet" },
               { icon: Ruler, label: "Custom size" },
             ].map((item) => (
               <div
@@ -53,26 +56,33 @@ export function Hero() {
           <div className="absolute inset-0 rounded-[2rem] bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,.82),transparent_9rem),linear-gradient(145deg,rgba(183,150,92,.24),rgba(236,229,216,.52))]" />
           <div className="relative mx-auto grid max-w-md grid-cols-[0.65fr_1fr] items-center gap-3 p-3">
             <div className="aspect-[9/16] rounded-[1.6rem] border border-white/80 bg-[#f7efe3] p-2 shadow-soft">
-              <div className="flex h-full flex-col justify-between overflow-hidden rounded-[1.15rem] border border-white/70 bg-[linear-gradient(160deg,#fff8ee,#ddc9a7,#a58f66)] p-4">
-                <div className="space-y-2">
-                  <div className="h-16 rounded-2xl bg-white/50" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="h-12 rounded-xl bg-white/40" />
-                    <div className="h-12 rounded-xl bg-ink/10" />
-                  </div>
-                </div>
-                <p className="font-serif text-lg leading-tight text-ink">
+              <div className="relative h-full overflow-hidden rounded-[1.15rem] border border-white/70">
+                <Image
+                  src="/examples/soft-luxury.jpg"
+                  alt="Soft luxury AI wallpaper preview"
+                  fill
+                  priority
+                  sizes="180px"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-ink/45" />
+                <p className="absolute inset-x-4 bottom-4 font-serif text-lg leading-tight text-white drop-shadow-sm">
                   I move with ease toward what is mine.
                 </p>
               </div>
             </div>
             <div className="rounded-[1.4rem] border border-white/70 bg-[#eee5d8] p-3 shadow-soft">
-              <div className="aspect-video rounded-2xl border border-white/70 bg-[linear-gradient(135deg,#f8f1e5,#d3c0a0,#766e64)] p-4">
-                <div className="mb-8 flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-white/65" />
-                  <span className="h-2 w-10 rounded-full bg-white/45" />
-                </div>
-                <p className="max-w-[11rem] font-serif text-xl leading-tight text-white">
+              <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/70">
+                <Image
+                  src="/examples/wealth-business.jpg"
+                  alt="Wealth business desktop wallpaper preview"
+                  fill
+                  priority
+                  sizes="360px"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-ink/42 via-ink/12 to-transparent" />
+                <p className="absolute left-4 top-4 max-w-[11rem] font-serif text-xl leading-tight text-white drop-shadow-sm">
                   Clear work. Calm money. Better rooms.
                 </p>
               </div>

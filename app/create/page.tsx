@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Footer } from "@/components/Footer";
 import { WallpaperWizard } from "@/components/WallpaperWizard";
 
 export default function CreatePage() {
@@ -15,6 +16,7 @@ export default function CreatePage() {
         </Link>
       </div>
       <WallpaperWizard />
+      <Footer />
     </main>
   );
 }

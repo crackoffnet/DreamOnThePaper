@@ -18,13 +18,25 @@ export function Footer() {
         </p>
         <p className="mt-1">AI product design and cloud engineering by GAX Global.</p>
       </div>
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <Link href="/create" className="transition hover:text-ink">
           Create
         </Link>
         <a href="#examples" className="transition hover:text-ink">
           Examples
         </a>
+        <Link href="/privacy-policy" className="transition hover:text-ink">
+          Privacy
+        </Link>
+        <Link href="/terms" className="transition hover:text-ink">
+          Terms
+        </Link>
+        <Link href="/refund-policy" className="transition hover:text-ink">
+          Refund Policy
+        </Link>
+        <Link href="/contact" className="transition hover:text-ink">
+          Contact
+        </Link>
       </div>
     </footer>
   );

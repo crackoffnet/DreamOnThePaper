@@ -29,14 +29,16 @@ Copy `.env.example` to `.env.local`.
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-RESEND_API_KEY=
-FROM_EMAIL=hello@dreamonthepaper.com
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
+RESEND_API_KEY=
+FROM_EMAIL=hello@dreamonthepaper.com
+TURNSTILE_SECRET_KEY=
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 NODE_VERSION=22
 ```
 
-`OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, and `ORDER_TOKEN_SECRET` must never be exposed to the frontend.
+`OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `ORDER_TOKEN_SECRET`, and `TURNSTILE_SECRET_KEY` must never be exposed to the frontend.
 
 ## Preview-First Payment Flow
 
@@ -46,13 +48,13 @@ NODE_VERSION=22
 4. User clicks "Unlock Full Wallpaper".
 5. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
 6. Stripe redirects to `/success?session_id=...`.
-7. `/api/verify-payment` retrieves the Stripe session server-side and returns a short-lived signed order token.
+7. `/api/verify-payment` retrieves the Stripe session server-side, checks the original order metadata, and returns a short-lived signed order token.
 8. `/success` uses that token to call `/api/generate-final`.
 9. `/thank-you` shows the high-resolution wallpaper with download, share, and email actions.
 
 If Stripe is not configured, mock checkout is allowed only in development.
 
-Final generation never trusts a client-side `paid` flag. It requires a server-verified Stripe session and signed order token.
+Final generation never trusts a client-side `paid` flag or new generation parameters after payment. It requires a server-verified Stripe session and signed order token tied to the original preview/order.
 
 ## Stripe Setup
 
@@ -61,8 +63,8 @@ In Stripe Dashboard:
 - Enable Checkout.
 - Add your domain.
 - Add a webhook endpoint:
-  - URL: `https://dreamonthepaper.com/api/stripe-webhook`
-  - Events: `checkout.session.completed`
+  - URL: `https://www.dreamonthepaper.com/api/stripe-webhook`
+  - Events: `checkout.session.completed`, `payment_intent.payment_failed`
 - Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 
 The app uses inline `price_data` for:
@@ -90,18 +92,18 @@ NODE_VERSION=22
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-RESEND_API_KEY=
-FROM_EMAIL=hello@dreamonthepaper.com
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
+RESEND_API_KEY=
+FROM_EMAIL=hello@dreamonthepaper.com
+TURNSTILE_SECRET_KEY=
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```
 
 Production checkout requires `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_SITE_URL`.
 Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
 
-The free preview limit uses one browser-session token plus an IP/day limit. The
-paid final generation token is signed server-side and tied to the Stripe Session
-metadata for one generated final image.
+The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
 
 ## Cloudflare Deploy Settings
 
@@ -140,12 +142,13 @@ The script writes:
 
 ## Future R2 Storage Step
 
-Current delivery uses browser session storage and email attachments for generated data URLs. For durable production delivery, add Cloudflare R2:
+Current delivery uses temporary Worker memory for generated image bytes and browser session storage only for small IDs/URLs/tokens. For durable production delivery, add Cloudflare R2 plus D1/KV:
 
 - Binding name: `WALLPAPER_BUCKET`
 - Store generated PNGs without personal prompt answers.
 - Email signed expiring download URLs.
 - Add a Worker route that validates short-lived download tokens.
+- Store order state in D1 and distributed rate limits in KV.
 
 ## Routes
 

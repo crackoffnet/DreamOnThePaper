@@ -9,6 +9,7 @@ import {
   getOrderById,
   markFinalGenerated,
   markFinalGenerating,
+  markOrderFailed,
   markOrderPaid,
 } from "@/lib/order-state";
 import {
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       return jsonError("Your wallpaper is already being created.", 409);
     }
 
-    if (order.status !== "paid") {
+    if (order.status !== "paid" && order.status !== "failed") {
       return jsonError("Please confirm payment before generating.", 402);
     }
 
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
       if (!process.env.OPENAI_API_KEY) {
         if (process.env.NODE_ENV === "production") {
           markOrderPaid(generatingOrder, tokenOrder.sessionId);
+          markOrderFailed(generatingOrder);
           releaseFinalSession(tokenOrder.sessionId);
           return jsonError("Image generation is not configured yet.", 503);
         }
@@ -118,6 +120,7 @@ export async function POST(request: Request) {
 
         if (!mockImageUrl) {
           markOrderPaid(generatingOrder, tokenOrder.sessionId);
+          markOrderFailed(generatingOrder);
           releaseFinalSession(tokenOrder.sessionId);
           return jsonError("Unable to create your wallpaper. Please try again.", 500);
         }
@@ -151,6 +154,7 @@ export async function POST(request: Request) {
       if (!response.ok) {
         safeLog("OpenAI image generation failed", response.status);
         markOrderPaid(generatingOrder, tokenOrder.sessionId);
+        markOrderFailed(generatingOrder);
         releaseFinalSession(tokenOrder.sessionId);
         return jsonError(
           "We could not create your wallpaper right now. Please try again.",
@@ -166,6 +170,7 @@ export async function POST(request: Request) {
 
       if (!imageUrl) {
         markOrderPaid(generatingOrder, tokenOrder.sessionId);
+        markOrderFailed(generatingOrder);
         releaseFinalSession(tokenOrder.sessionId);
         return jsonError(
           "The image service did not return a wallpaper. Please try again.",
@@ -177,6 +182,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, imageUrl, meta, mock: false });
     } catch (error) {
       markOrderPaid(generatingOrder, tokenOrder.sessionId);
+      markOrderFailed(generatingOrder);
       releaseFinalSession(tokenOrder.sessionId);
       safeLog("Wallpaper generation provider error", error);
       return jsonError("Unable to create your wallpaper. Please try again.", 500);

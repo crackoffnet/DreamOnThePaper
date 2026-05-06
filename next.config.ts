@@ -21,7 +21,8 @@ const nextConfig: NextConfig = {
       },
       {
         key: "Permissions-Policy",
-        value: "camera=(), microphone=(), geolocation=(), payment=()",
+        value:
+          'camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.stripe.com")',
       },
       {
         key: "Content-Security-Policy",

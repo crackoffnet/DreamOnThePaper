@@ -1,12 +1,13 @@
 import { emailWallpaperSchema } from "@/lib/schemas";
 import {
   assertSameOrigin,
-  checkRateLimit,
   getSiteUrl,
   jsonError,
   safeLog,
 } from "@/lib/security";
+import { checkIpRateLimit } from "@/lib/rateLimit";
 import { verifyOrderToken } from "@/lib/payment";
+import { getOrderById } from "@/lib/order-state";
 import {
   dataUrlToAttachment,
   isTrustedGeneratedImage,
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
       return jsonError("Request origin is not allowed.", 403);
     }
 
-    if (!checkRateLimit(request, "email-wallpaper", 3)) {
+    if (!checkIpRateLimit(request, "email-wallpaper", 3, 60 * 60 * 1000)) {
       return jsonError("Too many email attempts. Please wait a moment.", 429);
     }
 
@@ -34,14 +35,18 @@ export async function POST(request: Request) {
       return jsonError("This wallpaper source cannot be emailed.");
     }
 
-    if (process.env.NODE_ENV === "production") {
-      const order = parsed.data.orderToken
-        ? await verifyOrderToken(parsed.data.orderToken)
-        : null;
+    const orderToken = parsed.data.orderToken
+      ? await verifyOrderToken(parsed.data.orderToken)
+      : null;
+    const order = orderToken ? getOrderById(orderToken.orderId) : null;
 
-      if (!order) {
-        return jsonError("Please confirm payment before emailing.", 402);
-      }
+    if (
+      !orderToken ||
+      !order ||
+      order.status !== "final_generated" ||
+      order.finalImageUrl !== parsed.data.imageUrl
+    ) {
+      return jsonError("Please confirm payment before emailing.", 402);
     }
 
     const stored = await saveWallpaperForDelivery(parsed.data.imageUrl);
@@ -49,7 +54,10 @@ export async function POST(request: Request) {
 
     if (!process.env.RESEND_API_KEY) {
       if (process.env.NODE_ENV === "production") {
-        return jsonError("Email delivery is not configured yet.", 503);
+        return jsonError(
+          "Email delivery is temporarily unavailable. Please download your wallpaper.",
+          503,
+        );
       }
 
       return Response.json({ sent: true, mock: true });

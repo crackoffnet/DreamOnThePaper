@@ -10,16 +10,39 @@ type StoredWallpaper = {
 const devWallpaperStore = new Map<string, StoredWallpaper>();
 const STORE_TTL_MS = 1000 * 60 * 60 * 6;
 
+export async function saveImage(bytes: Uint8Array, contentType = "image/png") {
+  const id = crypto.randomUUID();
+  devWallpaperStore.set(id, { bytes, contentType, createdAt: Date.now() });
+
+  // TODO: Replace with Cloudflare R2 put() using WALLPAPER_BUCKET.
+  return {
+    id,
+    url: `/api/wallpaper-image/${id}`,
+  };
+}
+
+export async function getImage(id: string) {
+  return getStoredWallpaper(id);
+}
+
+export async function imageExists(id: string) {
+  return Boolean(await getStoredWallpaper(id));
+}
+
+export async function getSignedDownloadUrl(id: string) {
+  // TODO: Sign short-lived R2 download URLs once WALLPAPER_BUCKET is configured.
+  return imageExists(id).then((exists) =>
+    exists ? `${getSiteUrl()}/api/wallpaper-image/${id}` : null,
+  );
+}
+
 export function saveGeneratedImageFromBase64(
   content: string,
   contentType = "image/png",
 ) {
   const id = crypto.randomUUID();
-  devWallpaperStore.set(id, {
-    bytes: base64ToBytes(content),
-    contentType,
-    createdAt: Date.now(),
-  });
+  const bytes = base64ToBytes(content);
+  devWallpaperStore.set(id, { bytes, contentType, createdAt: Date.now() });
 
   return `/api/wallpaper-image/${id}`;
 }
