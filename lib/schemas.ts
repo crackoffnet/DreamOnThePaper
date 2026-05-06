@@ -93,8 +93,9 @@ export const previewGenerationSchema = wallpaperInputSchema.extend({
 });
 
 export const checkoutSchema = z.object({
-  packageId: z.enum(packageIds),
-  wallpaperInput: wallpaperInputSchema,
+  packageType: z.enum(packageIds),
+  orderId: z.string().min(8).max(120),
+  orderSnapshotToken: z.string().min(24).max(12000).optional(),
   website: z.string().max(0).optional().or(z.literal("")),
 });
 

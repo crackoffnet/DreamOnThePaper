@@ -202,12 +202,18 @@ export function WallpaperWizard() {
       setDraft(activeDraft);
 
       if (activeDraft.previewStatus === "ready" && activeDraft.previewImageUrl) {
-        router.push("/preview");
+        router.push(
+          `/checkout?orderId=${encodeURIComponent(activeDraft.orderId || "")}`,
+        );
         return;
       }
 
       if (policy.freePreviewUsed) {
-        router.push("/checkout");
+        router.push(
+          activeDraft.orderId
+            ? `/checkout?orderId=${encodeURIComponent(activeDraft.orderId)}`
+            : "/checkout",
+        );
         return;
       }
 
@@ -244,14 +250,18 @@ export function WallpaperWizard() {
 
       sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
       sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
-      const readyDraft = markDraftReady(imageUrl, data.meta);
+      const readyDraft = markDraftReady(imageUrl, data.meta, {
+        orderId: data.orderId,
+        previewImageId: data.previewImageId,
+        orderSnapshotToken: data.orderSnapshotToken,
+      });
       setDraft(readyDraft);
       setPolicy(getPreviewPolicy());
       setEphemeralImage("previewImageUrl", imageUrl);
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
       sessionStorage.removeItem("dreamOrderToken");
-      router.push("/preview");
+      router.push(`/checkout?orderId=${encodeURIComponent(readyDraft.orderId || "")}`);
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -402,7 +412,11 @@ export function WallpaperWizard() {
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
-                    onClick={() => router.push("/preview")}
+                    onClick={() =>
+                      router.push(
+                        `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`,
+                      )
+                    }
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
                   >
                     View Preview
@@ -423,7 +437,11 @@ export function WallpaperWizard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => router.push("/preview")}
+                    onClick={() =>
+                      router.push(
+                        `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`,
+                      )
+                    }
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-gold px-4 text-sm font-medium text-ink"
                   >
                     Unlock Full Wallpaper
@@ -468,7 +486,13 @@ export function WallpaperWizard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => router.push("/checkout")}
+                    onClick={() =>
+                      router.push(
+                        draft?.orderId
+                          ? `/checkout?orderId=${encodeURIComponent(draft.orderId)}`
+                          : "/checkout",
+                      )
+                    }
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
                   >
                     Unlock Full Wallpaper

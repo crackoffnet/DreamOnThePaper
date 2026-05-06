@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description:
     "Create personalized AI-generated phone, desktop, and tablet wallpapers based on your goals, dreams, and vision.",
   metadataBase: new URL(
-    process.env.PUBLIC_SITE_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.PUBLIC_SITE_URL ||
       "https://www.dreamonthepaper.com",
   ),
   alternates: {

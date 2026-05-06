@@ -27,11 +27,6 @@ type OrderTokenPayload = {
 };
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 6;
-const stripePriceEnvNames: Record<PackageId, string> = {
-  single: "STRIPE_PRICE_SINGLE",
-  bundle: "STRIPE_PRICE_BUNDLE",
-  premium: "STRIPE_PRICE_PREMIUM",
-};
 
 export function getStripe() {
   const secretKey = getStripeSecretKey();
@@ -49,34 +44,26 @@ export function isPaymentConfigured() {
   return getMissingCheckoutEnv("single").length === 0;
 }
 
-export function getMissingCheckoutEnv(packageId: PackageId) {
+export function getMissingCheckoutEnv(_packageId?: PackageId) {
   const missing: string[] = [];
 
   if (!getStripeSecretKey()) {
     missing.push("STRIPE_SECRET_KEY");
   }
 
-  if (!getSiteUrlFromEnv()) {
-    missing.push("PUBLIC_SITE_URL");
-  }
-
-  if (!getStripePriceId(packageId)) {
-    missing.push(stripePriceEnvNames[packageId]);
+  if (!process.env.NEXT_PUBLIC_SITE_URL) {
+    missing.push("NEXT_PUBLIC_SITE_URL");
   }
 
   return missing;
 }
 
 export function getStripeSecretKey() {
-  return process.env.STRIPE_SECRET_KEY || process.env.STRIPE_KEY || "";
+  return process.env.STRIPE_SECRET_KEY || "";
 }
 
 export function getSiteUrlFromEnv() {
-  return process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
-}
-
-export function getStripePriceId(packageId: PackageId) {
-  return process.env[stripePriceEnvNames[packageId]] || "";
+  return process.env.NEXT_PUBLIC_SITE_URL || "";
 }
 
 export async function createCheckoutSession(
@@ -84,10 +71,10 @@ export async function createCheckoutSession(
   metadata: Record<string, string>,
 ) {
   const stripe = getStripe();
+  const plan = packages[packageId];
   const siteUrl = getSiteUrl();
-  const priceId = getStripePriceId(packageId);
 
-  if (!stripe || !getSiteUrlFromEnv() || !priceId) {
+  if (!stripe || !getSiteUrlFromEnv()) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Stripe is not configured.");
     }
@@ -99,22 +86,33 @@ export async function createCheckoutSession(
     };
   }
 
-  const session = await stripe.checkout.sessions.create(
-    {
+  const sessionParams: Stripe.Checkout.SessionCreateParams & {
+    automatic_payment_methods?: { enabled: true };
+  } = {
       mode: "payment",
+      automatic_payment_methods: { enabled: true },
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/create`,
+      cancel_url: `${siteUrl}/checkout?orderId=${metadata.orderId}`,
       metadata: {
         ...metadata,
         packageType: metadata.packageType || packageId,
       },
       line_items: [
         {
-          price: priceId,
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Dream On The Paper - ${plan.name}`,
+            },
+            unit_amount: plan.amount,
+          },
           quantity: 1,
         },
       ],
-    },
+    };
+
+  const session = await stripe.checkout.sessions.create(
+    sessionParams,
     {
       idempotencyKey: `checkout:${metadata.orderId}`,
     },

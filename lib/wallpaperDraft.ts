@@ -5,9 +5,12 @@ import { defaultWallpaperInput } from "@/lib/wallpaper";
 
 export type WallpaperDraft = {
   id: string;
+  orderId?: string | null;
   input: WallpaperInput;
   previewStatus: "not_started" | "generating" | "ready" | "failed";
+  previewImageId?: string | null;
   previewImageUrl?: string | null;
+  orderSnapshotToken?: string | null;
   previewMeta?: WallpaperMeta | null;
   createdAt: string;
   updatedAt: string;
@@ -77,12 +80,23 @@ export function markDraftGenerating() {
   });
 }
 
-export function markDraftReady(imageUrl: string, meta: WallpaperMeta) {
+export function markDraftReady(
+  imageUrl: string,
+  meta: WallpaperMeta,
+  order?: {
+    orderId?: string;
+    previewImageId?: string | null;
+    orderSnapshotToken?: string;
+  },
+) {
   const draft = getCurrentDraft();
   const ready = saveCurrentDraft({
     ...draft,
+    orderId: order?.orderId || draft.orderId || draft.id,
     previewStatus: "ready",
+    previewImageId: order?.previewImageId || draft.previewImageId || null,
     previewImageUrl: imageUrl,
+    orderSnapshotToken: order?.orderSnapshotToken || draft.orderSnapshotToken || null,
     previewMeta: meta,
   });
   savePreviewPolicy({
@@ -103,9 +117,12 @@ export function createNewWallpaperDraft() {
   const now = new Date().toISOString();
   const draft: WallpaperDraft = {
     id: crypto.randomUUID(),
+    orderId: null,
     input: { ...defaultWallpaperInput },
     previewStatus: "not_started",
+    previewImageId: null,
     previewImageUrl: null,
+    orderSnapshotToken: null,
     previewMeta: null,
     createdAt: now,
     updatedAt: now,
@@ -119,6 +136,8 @@ export function createNewWallpaperDraft() {
   sessionStorage.removeItem("dreamWallpaperMeta");
   sessionStorage.removeItem("dreamOrderToken");
   sessionStorage.removeItem("dreamOrderSnapshotToken");
+  sessionStorage.removeItem("dreamOrderId");
+  sessionStorage.removeItem("dreamPreviewImageId");
   return draft;
 }
 
@@ -136,9 +155,12 @@ function hydrateLegacyDraft(): WallpaperDraft {
 
   return {
     id: sessionStorage.getItem("dreamCurrentDraftId") || crypto.randomUUID(),
+    orderId: sessionStorage.getItem("dreamOrderId") || null,
     input,
     previewStatus: hasPreview ? "ready" : "not_started",
+    previewImageId: sessionStorage.getItem("dreamPreviewImageId") || null,
     previewImageUrl,
+    orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken") || null,
     previewMeta,
     createdAt: now,
     updatedAt: now,
@@ -148,6 +170,18 @@ function hydrateLegacyDraft(): WallpaperDraft {
 function syncLegacyStorage(draft: WallpaperDraft) {
   sessionStorage.setItem("dreamCurrentDraftId", draft.id);
   sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(draft.input));
+
+  if (draft.orderId) {
+    sessionStorage.setItem("dreamOrderId", draft.orderId);
+  }
+
+  if (draft.previewImageId) {
+    sessionStorage.setItem("dreamPreviewImageId", draft.previewImageId);
+  }
+
+  if (draft.orderSnapshotToken) {
+    sessionStorage.setItem("dreamOrderSnapshotToken", draft.orderSnapshotToken);
+  }
 
   if (draft.previewImageUrl) {
     sessionStorage.setItem("previewImageUrl", draft.previewImageUrl);

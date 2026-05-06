@@ -10,6 +10,7 @@ import {
   safeLog,
 } from "@/lib/security";
 import { checkIpRateLimit, consumePreviewSession } from "@/lib/rateLimit";
+import { createPreviewOrder, signOrderSnapshot } from "@/lib/order-state";
 import type { WallpaperInput } from "@/lib/types";
 import {
   buildPreviewWallpaperPrompt,
@@ -78,9 +79,15 @@ export async function POST(request: Request) {
       if (!mockImageUrl) {
         return previewError("Preview generation failed", 500);
       }
+      const order = await createPreviewOrder(input, mockImageUrl);
+      const orderSnapshotToken = await signOrderSnapshot(order);
 
       return NextResponse.json({
         success: true,
+        orderId: order.orderId,
+        previewImageId: order.previewImageId || null,
+        previewImageUrl: mockImageUrl,
+        orderSnapshotToken,
         imageUrl: mockImageUrl,
         meta,
         preview: true,
@@ -119,9 +126,15 @@ export async function POST(request: Request) {
     if (!imageUrl) {
       return previewError("Preview generation failed", 502);
     }
+    const order = await createPreviewOrder(input, imageUrl);
+    const orderSnapshotToken = await signOrderSnapshot(order);
 
     return NextResponse.json({
       success: true,
+      orderId: order.orderId,
+      previewImageId: order.previewImageId || null,
+      previewImageUrl: imageUrl,
+      orderSnapshotToken,
       imageUrl,
       meta,
       preview: true,

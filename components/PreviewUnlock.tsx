@@ -17,6 +17,8 @@ type PreviewState = {
   imageUrl: string;
   input: WallpaperInput | null;
   meta: WallpaperMeta | null;
+  orderId: string | null;
+  orderSnapshotToken: string | null;
 };
 
 const unlockFeatures = [
@@ -32,6 +34,8 @@ export function PreviewUnlock() {
     imageUrl: "",
     input: null,
     meta: null,
+    orderId: null,
+    orderSnapshotToken: null,
   });
   const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
 
@@ -48,6 +52,10 @@ export function PreviewUnlock() {
       meta:
         draft.previewMeta ||
         parseJson<WallpaperMeta>(sessionStorage.getItem("dreamPreviewMeta")),
+      orderId: draft.orderId || sessionStorage.getItem("dreamOrderId"),
+      orderSnapshotToken:
+        draft.orderSnapshotToken ||
+        sessionStorage.getItem("dreamOrderSnapshotToken"),
     });
   }, []);
 
@@ -185,7 +193,8 @@ export function PreviewUnlock() {
 
         <CheckoutCTA
           packageId={selectedPackage}
-          wallpaperInput={preview.input}
+          orderId={preview.orderId}
+          orderSnapshotToken={preview.orderSnapshotToken}
           label="Unlock Full Wallpaper"
         />
       </aside>

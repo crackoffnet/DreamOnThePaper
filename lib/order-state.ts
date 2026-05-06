@@ -1,6 +1,7 @@
 import type { PackageId } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
 import { fromBase64Url, timingSafeStringEqual, toBase64Url } from "@/lib/security";
+import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type OrderStatus =
   | "preview_created"
@@ -13,10 +14,22 @@ export type OrderStatus =
 export type OrderSnapshot = {
   orderId: string;
   packageId: PackageId;
+  packageType?: PackageId;
   input: WallpaperInput;
   promptHash: string;
   status: OrderStatus;
+  previewImageId?: string;
+  previewImageUrl?: string;
+  device?: string;
+  ratio?: string;
+  width?: string;
+  height?: string;
+  theme?: string;
+  style?: string;
+  quoteTone?: string;
   sessionId?: string;
+  stripeSessionId?: string;
+  finalImageId?: string;
   finalImageUrl?: string;
 };
 
@@ -41,7 +54,23 @@ export function getOrderBySessionId(sessionId: string) {
 }
 
 export function markOrderPaid(order: OrderSnapshot, sessionId: string) {
-  const updated = { ...order, sessionId, status: "paid" as const };
+  const updated = {
+    ...order,
+    sessionId,
+    stripeSessionId: sessionId,
+    status: "paid" as const,
+  };
+  storeOrder(updated);
+  return updated;
+}
+
+export function markOrderPendingPayment(order: OrderSnapshot, packageId: PackageId) {
+  const updated = {
+    ...order,
+    packageId,
+    packageType: packageId,
+    status: "pending_payment" as const,
+  };
   storeOrder(updated);
   return updated;
 }
@@ -55,6 +84,7 @@ export function markFinalGenerating(order: OrderSnapshot) {
 export function markFinalGenerated(order: OrderSnapshot, finalImageUrl: string) {
   const updated = {
     ...order,
+    finalImageId: imageIdFromUrl(finalImageUrl) || order.finalImageId,
     finalImageUrl,
     status: "final_generated" as const,
   };
@@ -71,19 +101,37 @@ export function markOrderFailed(order: OrderSnapshot) {
 export async function createOrderSnapshot(
   packageId: PackageId,
   input: WallpaperInput,
+  options?: {
+    status?: OrderStatus;
+    previewImageUrl?: string;
+    previewImageId?: string;
+  },
 ) {
   const orderId = crypto.randomUUID();
   const promptHash = await hashOrderInput(input);
+  const meta = getOrderMeta(input);
   const order: OrderSnapshot = {
     orderId,
     packageId,
+    packageType: packageId,
     input,
     promptHash,
-    status: "pending_payment",
+    status: options?.status || "pending_payment",
+    previewImageUrl: options?.previewImageUrl,
+    previewImageId:
+      options?.previewImageId || imageIdFromUrl(options?.previewImageUrl || ""),
+    ...meta,
   };
 
   storeOrder(order);
   return order;
+}
+
+export async function createPreviewOrder(input: WallpaperInput, previewImageUrl: string) {
+  return createOrderSnapshot("single", input, {
+    status: "preview_created",
+    previewImageUrl,
+  });
 }
 
 export async function signOrderSnapshot(order: OrderSnapshot) {
@@ -91,6 +139,25 @@ export async function signOrderSnapshot(order: OrderSnapshot) {
     ...order,
     exp: Math.floor(Date.now() / 1000) + SNAPSHOT_TOKEN_TTL_SECONDS,
   });
+}
+
+function getOrderMeta(input: WallpaperInput) {
+  const [width, height] = getWallpaperMeta(input).imageSize.split("x");
+
+  return {
+    device: input.device,
+    ratio: input.ratio,
+    width,
+    height,
+    theme: input.theme,
+    style: input.style,
+    quoteTone: input.quoteTone,
+  };
+}
+
+function imageIdFromUrl(value: string) {
+  const match = value.match(/\/api\/wallpaper-image\/([^/?#]+)/);
+  return match?.[1] || "";
 }
 
 export async function verifyOrderSnapshotToken(token: string) {

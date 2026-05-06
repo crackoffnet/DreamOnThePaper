@@ -3,25 +3,26 @@
 import { useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import type { PackageId } from "@/lib/plans";
-import type { WallpaperInput } from "@/lib/types";
 
 type CheckoutCTAProps = {
   packageId: PackageId;
-  wallpaperInput: WallpaperInput | null;
+  orderId: string | null;
+  orderSnapshotToken?: string | null;
   label?: string;
 };
 
 export function CheckoutCTA({
   packageId,
-  wallpaperInput,
+  orderId,
+  orderSnapshotToken,
   label = "Secure Checkout",
 }: CheckoutCTAProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function startCheckout() {
-    if (!wallpaperInput) {
-      setError("Create your wallpaper answers before checkout.");
+    if (!orderId) {
+      setError("Create your preview first.");
       return;
     }
 
@@ -33,8 +34,9 @@ export function CheckoutCTA({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          packageId,
-          wallpaperInput,
+          packageType: packageId,
+          orderId,
+          orderSnapshotToken,
           website: "",
         }),
       });
@@ -90,7 +92,7 @@ export function CheckoutCTA({
       <button
         type="button"
         onClick={startCheckout}
-        disabled={isLoading || !wallpaperInput}
+        disabled={isLoading || !orderId}
         className="focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-sm font-semibold text-pearl shadow-soft transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? (

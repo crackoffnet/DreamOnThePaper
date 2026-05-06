@@ -2,7 +2,14 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Pricing } from "@/components/Pricing";
 
-export default function CheckoutPage() {
+type CheckoutPageProps = {
+  searchParams: Promise<{ orderId?: string }>;
+};
+
+export default async function CheckoutPage({ searchParams }: CheckoutPageProps) {
+  const params = await searchParams;
+  const orderId = params.orderId || "";
+
   return (
     <main className="min-h-screen px-4 py-4 sm:px-6">
       <div className="mx-auto max-w-6xl">
@@ -24,7 +31,7 @@ export default function CheckoutPage() {
             Payment is verified server-side before final generation and download.
           </p>
         </div>
-        <Pricing />
+        <Pricing orderId={orderId} />
       </div>
     </main>
   );

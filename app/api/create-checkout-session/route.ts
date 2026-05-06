@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { checkoutSchema, containsAbusiveInput, hasMeaningfulInput } from "@/lib/schemas";
+import { checkoutSchema } from "@/lib/schemas";
 import {
   assertSameOrigin,
-  safeLog,
 } from "@/lib/security";
 import { createCheckoutSession, getMissingCheckoutEnv } from "@/lib/payment";
 import { checkIpRateLimit } from "@/lib/rateLimit";
 import {
-  createOrderSnapshot,
+  getOrderById,
+  markOrderPendingPayment,
   signOrderSnapshot,
   storeOrder,
+  verifyOrderSnapshotToken,
 } from "@/lib/order-state";
-import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
     if (!assertSameOrigin(request)) {
       return checkoutError("Request origin is not allowed.", 403);
@@ -30,41 +31,51 @@ export async function POST(request: Request) {
       return checkoutError("Please check your order details and try again.");
     }
 
-    const missing = getMissingCheckoutEnv(parsed.data.packageId);
+    const missing = getMissingCheckoutEnv(parsed.data.packageType);
     if (missing.length > 0) {
-      safeLog(`Checkout configuration missing: ${missing.join(", ")}`);
-      return checkoutError("Checkout is not configured", 503, missing);
+      missing.forEach((name) =>
+        logCheckoutDiagnostic("missing_env", {
+          requestId,
+          orderId: parsed.data.orderId,
+          missing: name,
+        }),
+      );
+      return checkoutError(
+        "Checkout is temporarily unavailable. Please try again soon.",
+        503,
+      );
     }
 
-    if (!hasMeaningfulInput(parsed.data.wallpaperInput)) {
-      return checkoutError("Please add a little more detail before checkout.");
+    const tokenOrder = parsed.data.orderSnapshotToken
+      ? await verifyOrderSnapshotToken(parsed.data.orderSnapshotToken)
+      : null;
+    const storedOrder = getOrderById(parsed.data.orderId);
+    const orderSource =
+      storedOrder ||
+      (tokenOrder?.orderId === parsed.data.orderId ? tokenOrder : null);
+
+    if (!orderSource || orderSource.status === "final_generated") {
+      logCheckoutDiagnostic("order_missing_or_invalid", {
+        requestId,
+        orderId: parsed.data.orderId,
+      });
+      return checkoutError("Create your preview first.", 404);
     }
 
-    const personalText = Object.values(parsed.data.wallpaperInput).join(" ");
-    if (containsAbusiveInput(personalText)) {
-      return checkoutError("Please keep the wallpaper request safe and respectful.");
-    }
-
-    const order = await createOrderSnapshot(
-      parsed.data.packageId,
-      parsed.data.wallpaperInput,
-    );
+    const order = markOrderPendingPayment(orderSource, parsed.data.packageType);
     const orderSnapshotToken = await signOrderSnapshot(order);
-    const meta = getWallpaperMeta(parsed.data.wallpaperInput);
-    const [width, height] = meta.imageSize.split("x");
 
-    const result = await createCheckoutSession(parsed.data.packageId, {
+    const result = await createCheckoutSession(parsed.data.packageType, {
       orderId: order.orderId,
-      packageType: parsed.data.packageId,
-      device: parsed.data.wallpaperInput.device,
-      ratio: parsed.data.wallpaperInput.ratio,
-      width,
-      height,
-      theme: parsed.data.wallpaperInput.theme,
-      style: parsed.data.wallpaperInput.style,
-      quoteTone: parsed.data.wallpaperInput.quoteTone,
+      packageType: parsed.data.packageType,
+      device: order.device || order.input.device,
+      ratio: order.ratio || order.input.ratio,
+      width: order.width || "",
+      height: order.height || "",
+      theme: order.theme || order.input.theme,
+      style: order.style || order.input.style,
+      quoteTone: order.quoteTone || order.input.quoteTone,
       promptHash: order.promptHash,
-      createdAt: new Date().toISOString(),
     });
 
     if (result.mock) {
@@ -73,12 +84,27 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, orderSnapshotToken, ...result });
   } catch (error) {
-    safeLog("Checkout session creation failed", error);
+    logCheckoutDiagnostic("stripe_checkout_failed", {
+      requestId,
+      error: error instanceof Error ? error.message : "Unknown checkout error",
+    });
     return checkoutError(
       "Checkout is temporarily unavailable. Please try again soon.",
       503,
     );
   }
+}
+
+function logCheckoutDiagnostic(
+  event: string,
+  details: Record<string, string | undefined>,
+) {
+  console.error(
+    JSON.stringify({
+      event,
+      ...details,
+    }),
+  );
 }
 
 function checkoutError(message: string, status = 400, missing?: string[]) {

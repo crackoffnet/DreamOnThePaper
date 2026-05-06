@@ -1,5 +1,6 @@
 export {
   createOrderSnapshot,
+  createPreviewOrder,
   getOrderById,
   getOrderBySessionId,
   hashOrderInput,
@@ -7,6 +8,7 @@ export {
   markFinalGenerating,
   markOrderFailed,
   markOrderPaid,
+  markOrderPendingPayment,
   storeOrder,
   verifyOrderSnapshotToken,
   signOrderSnapshot,

@@ -51,6 +51,10 @@ export type WallpaperMeta = {
 
 export type GenerateResponse = {
   success?: boolean;
+  orderId?: string;
+  previewImageId?: string | null;
+  previewImageUrl?: string;
+  orderSnapshotToken?: string;
   imageUrl?: string;
   imageBase64?: string;
   mimeType?: string;
