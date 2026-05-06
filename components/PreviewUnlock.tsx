@@ -21,7 +21,7 @@ const unlockFeatures = [
   "High resolution",
   "No watermark",
   "Download + Email",
-  "Multiple sizes",
+  "Original selected size",
 ];
 
 export function PreviewUnlock() {

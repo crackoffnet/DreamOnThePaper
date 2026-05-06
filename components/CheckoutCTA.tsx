@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import type { PackageId } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
 
@@ -41,14 +41,21 @@ export function CheckoutCTA({
       const data = (await response.json()) as {
         success?: boolean;
         url?: string;
+        orderSnapshotToken?: string;
         message?: string;
         error?: string;
       };
 
-      if (!response.ok || data.success === false || !data.url) {
+      if (
+        !response.ok ||
+        data.success === false ||
+        !data.url ||
+        !data.orderSnapshotToken
+      ) {
         throw new Error(data.message || data.error || "Unable to start checkout.");
       }
 
+      sessionStorage.setItem("dreamOrderSnapshotToken", data.orderSnapshotToken);
       window.location.href = data.url;
     } catch (checkoutError) {
       setError(
@@ -76,15 +83,8 @@ export function CheckoutCTA({
         )}
         {label}
       </button>
-      <div className="mt-3 grid gap-1.5 text-center text-[11px] font-medium text-taupe">
-        <p className="inline-flex items-center justify-center gap-1.5">
-          <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-gold" />
-          Secure checkout powered by Stripe
-        </p>
-        <p className="inline-flex items-center justify-center gap-1.5">
-          <CreditCard aria-hidden className="h-3.5 w-3.5 text-gold" />
-          Cards · Apple Pay · Google Pay
-        </p>
+      <div className="mt-3 text-center text-[11px] font-medium text-taupe">
+        <p>Secure checkout</p>
       </div>
     </div>
   );

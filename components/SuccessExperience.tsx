@@ -15,9 +15,10 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState("");
   const [orderToken, setOrderToken] = useState("");
   const input = useMemo(() => getStoredInput(), []);
+  const orderSnapshotToken = useMemo(() => getStoredOrderSnapshotToken(), []);
 
   useEffect(() => {
-    if (!sessionId || !input) {
+    if (!sessionId || !input || !orderSnapshotToken) {
       setStep("error");
       setError("Missing payment or wallpaper details.");
       return;
@@ -31,7 +32,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         const verifyResponse = await fetch("/api/verify-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
+          body: JSON.stringify({ sessionId, orderSnapshotToken }),
         });
         const verified = (await verifyResponse.json()) as {
           orderToken?: string;
@@ -56,7 +57,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         const generationResponse = await fetch("/api/generate-final", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...input, orderToken: verified.orderToken }),
+          body: JSON.stringify({ orderToken: verified.orderToken }),
         });
         const generated = (await generationResponse.json()) as GenerateResponse | undefined;
         const imageUrl = generated ? await imageUrlFromPayload(generated) : "";
@@ -87,7 +88,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
     }
-  }, [input, sessionId]);
+  }, [input, orderSnapshotToken, sessionId]);
 
   if (step === "done") {
     return (
@@ -150,5 +151,13 @@ function getStoredInput() {
     return stored ? (JSON.parse(stored) as WallpaperInput) : null;
   } catch {
     return null;
+  }
+}
+
+function getStoredOrderSnapshotToken() {
+  try {
+    return sessionStorage.getItem("dreamOrderSnapshotToken") || "";
+  } catch {
+    return "";
   }
 }

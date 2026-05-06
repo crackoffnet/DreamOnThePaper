@@ -3,13 +3,13 @@ import { createMockWallpaperSvg } from "@/lib/mock";
 import {
   containsAbusiveInput,
   hasMeaningfulInput,
-  wallpaperInputSchema,
+  previewGenerationSchema,
 } from "@/lib/schemas";
 import {
   assertSameOrigin,
-  checkRateLimit,
   safeLog,
 } from "@/lib/security";
+import { checkIpRateLimit, consumePreviewSession } from "@/lib/rateLimit";
 import type { WallpaperInput } from "@/lib/types";
 import {
   buildPreviewWallpaperPrompt,
@@ -31,8 +31,8 @@ export async function POST(request: Request) {
       return previewError("Request origin is not allowed.", 403);
     }
 
-    if (!checkRateLimit(request, "generate-preview", 6)) {
-      return previewError("Too many preview requests. Please wait a moment.", 429);
+    if (!checkIpRateLimit(request, "preview", 3, 24 * 60 * 60 * 1000)) {
+      return previewError("Too many preview requests. Please try again later.", 429);
     }
 
     const body = await request.json().catch(() => null);
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       return previewError("Custom size cannot exceed 3840px on either side.");
     }
 
-    const parsed = wallpaperInputSchema.safeParse(body);
+    const parsed = previewGenerationSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
       return previewError("Please check your wallpaper answers and try again.");
@@ -53,6 +53,13 @@ export async function POST(request: Request) {
     const joined = Object.values(parsed.data).join(" ");
     if (containsAbusiveInput(joined)) {
       return previewError("Please keep the wallpaper request safe and respectful.");
+    }
+
+    if (!consumePreviewSession(parsed.data.previewSessionId)) {
+      return previewError(
+        "You already created your free preview. Unlock the full wallpaper to continue.",
+        409,
+      );
     }
 
     const input = parsed.data as WallpaperInput;

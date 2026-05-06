@@ -2,16 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, RefreshCw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Download, SlidersHorizontal, Sparkles } from "lucide-react";
 import { EmailDeliveryForm } from "@/components/EmailDeliveryForm";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
-import {
-  getEphemeralImage,
-  imageUrlFromPayload,
-  setEphemeralImage,
-} from "@/lib/client-images";
-import type { GenerateResponse, WallpaperInput, WallpaperMeta } from "@/lib/types";
+import { getEphemeralImage } from "@/lib/client-images";
+import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
 type StoredResult = {
@@ -27,8 +23,6 @@ export function ResultPreview() {
     meta: null,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [error, setError] = useState("");
   const [orderToken, setOrderToken] = useState("");
 
   useEffect(() => {
@@ -43,48 +37,6 @@ export function ResultPreview() {
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => window.clearTimeout(timer);
   }, []);
-
-  async function createAnotherVersion() {
-    if (!result.input) {
-      setError("Start a new wallpaper first.");
-      return;
-    }
-
-    setError("");
-    setIsRegenerating(true);
-
-    try {
-      const response = await fetch("/api/generate-final", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...result.input, orderToken }),
-      });
-      const data = (await response.json()) as GenerateResponse;
-      const imageUrl = await imageUrlFromPayload(data);
-
-      if (!response.ok || data.success === false || !imageUrl || !data.meta) {
-        throw new Error(
-          data.message || data.error || "Unable to create another version.",
-        );
-      }
-
-      setEphemeralImage("finalImageUrl", imageUrl);
-      sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(data.meta));
-      setResult((current) => ({
-        ...current,
-        imageUrl,
-        meta: data.meta || current.meta,
-      }));
-    } catch (regenerateError) {
-      setError(
-        regenerateError instanceof Error
-          ? regenerateError.message
-          : "Unable to create another version.",
-      );
-    } finally {
-      setIsRegenerating(false);
-    }
-  }
 
   if (isLoading) {
     return (
@@ -138,18 +90,6 @@ export function ResultPreview() {
           ) : null}
         </div>
 
-        {isRegenerating ? (
-          <div className="mt-5">
-            <LoadingGeneration label="Creating another version..." />
-          </div>
-        ) : null}
-
-        {error ? (
-          <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
-          </p>
-        ) : null}
-
         <div className="mt-6 grid gap-3">
           <a
             href={result.imageUrl}
@@ -159,15 +99,6 @@ export function ResultPreview() {
             <Download aria-hidden className="h-4 w-4" />
             Download Wallpaper
           </a>
-          <button
-            type="button"
-            onClick={createAnotherVersion}
-            disabled={isRegenerating}
-            className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-cocoa/10 bg-white/65 px-5 text-sm font-medium text-ink transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw aria-hidden className="h-4 w-4" />
-            Create Another Version
-          </button>
           <Link
             href="/create"
             className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-cocoa/10 bg-white/65 px-5 text-sm font-medium text-ink transition hover:bg-white"

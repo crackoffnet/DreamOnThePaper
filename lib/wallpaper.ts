@@ -205,6 +205,7 @@ export function getAspectRatioLabel(input: WallpaperInput) {
 }
 
 export function buildPreviewWallpaperPrompt(input: WallpaperInput) {
+  const summary = summarizeWallpaperInput(input);
   const quoteInstruction =
     input.quoteTone === "none"
       ? "Do not include any quote or readable text."
@@ -217,7 +218,7 @@ Resolution target: ${getResolutionLabel(input)}
 Theme: ${labels.themes[input.theme]}
 Style: ${labels.styles[input.style]}
 Mood: calm, elegant, aspirational.
-Represent these goals visually: ${input.goals || "clear personal growth and beauty"}.
+Represent these goals visually: ${summary.goals || "clear personal growth and beauty"}.
 Include only a few subtle symbols that match the user's answers.
 ${quoteInstruction}
 This is a preview concept: keep it simple, soft, and slightly less detailed.
@@ -225,10 +226,11 @@ No logos. No copyrighted characters. No distorted faces. No tiny unreadable text
 }
 
 export function buildFinalWallpaperPrompt(input: WallpaperInput) {
+  const summary = summarizeWallpaperInput(input);
   const quoteInstruction =
     input.quoteTone === "none"
       ? "Do not include any quote or readable text."
-      : `Add centered readable quote: "${input.reminder || labels.quoteTones[input.quoteTone]}". Typography must be elegant, readable, and not too small.`;
+      : `Add centered readable quote: "${summary.reminder || labels.quoteTones[input.quoteTone]}". Typography must be elegant, readable, and not too small.`;
 
   return `Create a premium, elegant, minimal vision board wallpaper.
 Device: ${labels.devices[input.device]}
@@ -238,16 +240,38 @@ Style: ${labels.styles[input.style]}
 Theme: ${labels.themes[input.theme]}, warm neutral tones, cream, beige, muted gold, and refined contrast.
 Composition: clean, spacious, not cluttered, wallpaper-friendly, with negative space for app icons and desktop folders.
 Include subtle visual symbols of success, calm wealth, personal growth, health, home, family, travel, business, nature, or whatever matches the user answers.
-Dreams and goals: ${input.goals || "clear personal growth, beauty, peace, and forward momentum"}.
-Life being built: ${input.lifestyle || "a refined, intentional everyday life"}.
-Career, business, or financial goal: ${input.career || "steady progress and grounded abundance"}.
-Personal life: ${input.personalLife || "love, belonging, and meaningful connection"}.
-Health, body, or energy: ${input.health || "vitality, rest, strength, and calm energy"}.
-Place, home, or travel dream: ${input.place || "a serene beautiful home and inspiring places"}.
-Feeling words: ${input.feelingWords || "clear, soft, focused, abundant"}.
+Dreams and goals: ${summary.goals || "clear personal growth, beauty, peace, and forward momentum"}.
+Life being built: ${summary.lifestyle || "a refined, intentional everyday life"}.
+Career, business, or financial goal: ${summary.career || "steady progress and grounded abundance"}.
+Personal life: ${summary.personalLife || "love, belonging, and meaningful connection"}.
+Health, body, or energy: ${summary.health || "vitality, rest, strength, and calm energy"}.
+Place, home, or travel dream: ${summary.place || "a serene beautiful home and inspiring places"}.
+Feeling words: ${summary.feelingWords || "clear, soft, focused, abundant"}.
 ${quoteInstruction}
 High-end editorial quality, refined composition, no noise, no chaos, no distortion.
 No logos. No copyrighted characters. No distorted faces. No tiny unreadable text.`;
+}
+
+function summarizeWallpaperInput(input: WallpaperInput) {
+  return {
+    goals: sanitizePromptText(input.goals),
+    lifestyle: sanitizePromptText(input.lifestyle),
+    career: sanitizePromptText(input.career),
+    personalLife: sanitizePromptText(input.personalLife),
+    health: sanitizePromptText(input.health),
+    place: sanitizePromptText(input.place),
+    feelingWords: sanitizePromptText(input.feelingWords),
+    reminder: sanitizePromptText(input.reminder, 120),
+  };
+}
+
+function sanitizePromptText(value: string, maxLength = 220) {
+  return value
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 export const buildWallpaperPrompt = buildFinalWallpaperPrompt;

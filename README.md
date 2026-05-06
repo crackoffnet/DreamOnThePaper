@@ -31,7 +31,7 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
-NEXT_PUBLIC_SITE_URL=https://dreamonthepaper.com
+NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
 NODE_VERSION=22
 ```
@@ -83,7 +83,7 @@ Email sends the generated wallpaper as an attachment when available. Persistent 
 
 ## Cloudflare Environment Variables
 
-Set these in your Cloudflare Workers build/deploy environment:
+Set these in your Cloudflare Workers production build/deploy environment:
 
 ```bash
 NODE_VERSION=22
@@ -92,9 +92,16 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
-NEXT_PUBLIC_SITE_URL=https://dreamonthepaper.com
+NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
 ```
+
+Production checkout requires `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_SITE_URL`.
+Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
+
+The free preview limit uses one browser-session token plus an IP/day limit. The
+paid final generation token is signed server-side and tied to the Stripe Session
+metadata for one generated final image.
 
 ## Cloudflare Deploy Settings
 

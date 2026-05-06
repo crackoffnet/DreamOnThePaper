@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HelpCircle, Loader2, Sparkles } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
@@ -103,7 +103,12 @@ export function WallpaperWizard() {
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasCreatedPreview, setHasCreatedPreview] = useState(false);
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
+
+  useEffect(() => {
+    setHasCreatedPreview(sessionStorage.getItem("dreamPreviewGenerated") === "true");
+  }, []);
 
   function update<K extends keyof WallpaperInput>(
     key: K,
@@ -144,6 +149,12 @@ export function WallpaperWizard() {
     setIsGenerating(true);
 
     try {
+      if (hasCreatedPreview) {
+        throw new Error(
+          "You already created your free preview. Unlock the full wallpaper to continue.",
+        );
+      }
+
       if (website) {
         throw new Error("Unable to continue. Please try again.");
       }
@@ -156,7 +167,11 @@ export function WallpaperWizard() {
       const response = await fetch("/api/generate-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, website }),
+        body: JSON.stringify({
+          ...form,
+          website,
+          previewSessionId: getOrCreatePreviewGenerationId(),
+        }),
       });
       const data = (await response.json()) as GenerateResponse & {
         preview?: boolean;
@@ -171,6 +186,7 @@ export function WallpaperWizard() {
 
       sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
       sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
+      sessionStorage.setItem("dreamPreviewGenerated", "true");
       setEphemeralImage("previewImageUrl", imageUrl);
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
@@ -182,6 +198,7 @@ export function WallpaperWizard() {
           ? generationError.message
           : "Unable to create your wallpaper.",
       );
+      setHasCreatedPreview(sessionStorage.getItem("dreamPreviewGenerated") === "true");
       setIsGenerating(false);
     }
   }
@@ -267,7 +284,7 @@ export function WallpaperWizard() {
                 </span>
                 <textarea
                   className="field min-h-20 resize-y"
-                  maxLength={360}
+                  maxLength={300}
                   value={form[question.key]}
                   placeholder={question.placeholder}
                   onChange={(event) => update(question.key, event.target.value)}
@@ -303,6 +320,12 @@ export function WallpaperWizard() {
             {isGenerating ? (
               <LoadingGeneration label="Creating your preview..." />
             ) : null}
+            {hasCreatedPreview && !isGenerating ? (
+              <p className="rounded-2xl border border-gold/20 bg-[#f8f0df] px-4 py-3 text-sm text-cocoa">
+                You already created your free preview. Unlock the full wallpaper
+                to continue.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -334,7 +357,7 @@ export function WallpaperWizard() {
           ) : (
             <button
               type="submit"
-              disabled={isGenerating}
+              disabled={isGenerating || hasCreatedPreview}
               className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isGenerating ? (
@@ -342,7 +365,7 @@ export function WallpaperWizard() {
               ) : (
                 <Sparkles aria-hidden className="h-4 w-4" />
               )}
-              Generate Preview
+              {hasCreatedPreview ? "Preview Created" : "Generate Preview"}
             </button>
           )}
         </div>
@@ -380,6 +403,21 @@ export function WallpaperWizard() {
       </aside>
     </form>
   );
+}
+
+function getOrCreatePreviewGenerationId() {
+  const existing = sessionStorage.getItem("dreamPreviewGenerationId");
+
+  if (existing) {
+    return existing;
+  }
+
+  const next =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  sessionStorage.setItem("dreamPreviewGenerationId", next);
+  return next;
 }
 
 type CustomSizeFieldsProps = {

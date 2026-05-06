@@ -59,9 +59,12 @@ export function assertSameOrigin(request: Request) {
 }
 
 export function safeLog(message: string, details?: unknown) {
-  if (process.env.NODE_ENV !== "production") {
-    console.error(message, details);
+  if (process.env.NODE_ENV === "production") {
+    console.error(message);
+    return;
   }
+
+  console.error(message, details);
 }
 
 export function toBase64Url(bytes: ArrayBuffer | Uint8Array) {

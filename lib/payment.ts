@@ -2,17 +2,22 @@ import Stripe from "stripe";
 import type { PackageId } from "@/lib/plans";
 import { packages } from "@/lib/plans";
 import { fromBase64Url, getSiteUrl, toBase64Url } from "@/lib/security";
+import type { OrderSnapshot } from "@/lib/order-state";
 
 export type PaymentStatus = {
   paid: boolean;
   sessionId: string;
   packageId: PackageId;
   customerEmail?: string | null;
+  metadata?: Stripe.Metadata | null;
 };
 
 type OrderTokenPayload = {
   sessionId: string;
   packageId: PackageId;
+  orderId: string;
+  promptHash: string;
+  input: OrderSnapshot["input"];
   exp: number;
 };
 
@@ -29,11 +34,7 @@ export function getStripe() {
 }
 
 export function isPaymentConfigured() {
-  return Boolean(
-    process.env.STRIPE_SECRET_KEY &&
-      process.env.NEXT_PUBLIC_SITE_URL &&
-      process.env.ORDER_TOKEN_SECRET,
-  );
+  return Boolean(process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_SITE_URL);
 }
 
 export async function createCheckoutSession(
@@ -50,40 +51,46 @@ export async function createCheckoutSession(
     }
 
     return {
+      sessionId: `dev_mock_${Date.now()}`,
       url: `${siteUrl}/success?session_id=dev_mock_${Date.now()}`,
       mock: true,
     };
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/create`,
-    metadata: {
-      packageId,
-      ...metadata,
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: `Dream On The Paper - ${plan.name}`,
-            description: plan.description,
-          },
-          unit_amount: plan.amount,
-        },
-        quantity: 1,
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      payment_method_types: ["card"],
+      success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/create`,
+      metadata: {
+        packageId,
+        ...metadata,
       },
-    ],
-  });
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Dream On The Paper - ${plan.name}`,
+              description: plan.description,
+            },
+            unit_amount: plan.amount,
+          },
+          quantity: 1,
+        },
+      ],
+    },
+    {
+      idempotencyKey: `checkout:${metadata.orderId}`,
+    },
+  );
 
   if (!session.url) {
     throw new Error("Stripe did not return a Checkout URL.");
   }
 
-  return { url: session.url, mock: false };
+  return { sessionId: session.id, url: session.url, mock: false };
 }
 
 export async function verifyStripePayment(sessionId: string): Promise<PaymentStatus> {
@@ -113,13 +120,17 @@ export async function verifyStripePayment(sessionId: string): Promise<PaymentSta
     sessionId: session.id,
     packageId,
     customerEmail: session.customer_details?.email,
+    metadata: session.metadata,
   };
 }
 
-export async function signOrderToken(status: PaymentStatus) {
+export async function signOrderToken(status: PaymentStatus, order: OrderSnapshot) {
   const payload: OrderTokenPayload = {
     sessionId: status.sessionId,
     packageId: status.packageId,
+    orderId: order.orderId,
+    promptHash: order.promptHash,
+    input: order.input,
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
   };
   const encodedPayload = toBase64Url(

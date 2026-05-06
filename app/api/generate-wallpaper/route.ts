@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { createMockWallpaperSvg } from "@/lib/mock";
-import {
-  containsAbusiveInput,
-  generateWallpaperSchema,
-  hasMeaningfulInput,
-} from "@/lib/schemas";
-import {
-  assertSameOrigin,
-  checkRateLimit,
-  jsonError,
-  safeLog,
-} from "@/lib/security";
+import { containsAbusiveInput, hasMeaningfulInput, orderTokenSchema } from "@/lib/schemas";
+import { assertSameOrigin, jsonError, safeLog } from "@/lib/security";
 import { verifyOrderToken } from "@/lib/payment";
-import type { WallpaperInput } from "@/lib/types";
+import { consumeFinalSession, releaseFinalSession } from "@/lib/rateLimit";
+import type { OrderSnapshot } from "@/lib/order-state";
+import {
+  getOrderById,
+  markFinalGenerated,
+  markFinalGenerating,
+  markOrderPaid,
+} from "@/lib/order-state";
 import {
   buildWallpaperPrompt,
   getFinalImageSize,
@@ -33,144 +31,158 @@ export async function POST(request: Request) {
       return jsonError("Request origin is not allowed.", 403);
     }
 
-    if (!checkRateLimit(request, "generate-wallpaper", 4)) {
-      return jsonError("Too many requests. Please wait a moment and try again.", 429);
-    }
-
     const body = await request.json().catch(() => null);
-    if (hasOversizedCustomDimensions(body)) {
-      return jsonError("Custom size cannot exceed 3840px on either side.");
-    }
-
-    const parsed = generateWallpaperSchema.safeParse(body);
+    const parsed = orderTokenSchema.safeParse(body);
 
     if (!parsed.success) {
-      return jsonError("Please check your wallpaper answers and try again.");
+      return jsonError("Please confirm payment before generating.", 402);
     }
 
-    if (parsed.data.website) {
-      return jsonError("Unable to create your wallpaper. Please try again.");
+    const tokenOrder = await verifyOrderToken(parsed.data.orderToken);
+    if (!tokenOrder) {
+      return jsonError("Please confirm payment before generating.", 402);
     }
 
-    if (!hasMeaningfulInput(parsed.data)) {
+    const storedOrder = getOrderById(tokenOrder.orderId);
+    const order: OrderSnapshot =
+      storedOrder ||
+      ({
+        orderId: tokenOrder.orderId,
+        packageId: tokenOrder.packageId,
+        input: tokenOrder.input,
+        promptHash: tokenOrder.promptHash,
+        sessionId: tokenOrder.sessionId,
+        status: "paid",
+      } satisfies OrderSnapshot);
+
+    if (order.promptHash !== tokenOrder.promptHash) {
+      return jsonError("Unable to verify this order.", 400);
+    }
+
+    if (order.status === "final_generated" && order.finalImageUrl) {
+      return NextResponse.json({
+        success: true,
+        imageUrl: order.finalImageUrl,
+        meta: getWallpaperMeta(order.input),
+        reused: true,
+      });
+    }
+
+    if (order.status === "final_generating") {
+      return jsonError("Your wallpaper is already being created.", 409);
+    }
+
+    if (order.status !== "paid") {
+      return jsonError("Please confirm payment before generating.", 402);
+    }
+
+    const input = order.input;
+    if (!hasMeaningfulInput(input)) {
       return jsonError("Please add a little more detail first.");
     }
 
     const joined = [
-      parsed.data.goals,
-      parsed.data.lifestyle,
-      parsed.data.career,
-      parsed.data.personalLife,
-      parsed.data.health,
-      parsed.data.place,
-      parsed.data.feelingWords,
-      parsed.data.reminder,
+      input.goals,
+      input.lifestyle,
+      input.career,
+      input.personalLife,
+      input.health,
+      input.place,
+      input.feelingWords,
+      input.reminder,
     ].join(" ");
 
     if (containsAbusiveInput(joined)) {
       return jsonError("Please keep the wallpaper request safe and respectful.");
     }
 
-    const order = parsed.data.orderToken
-      ? await verifyOrderToken(parsed.data.orderToken)
-      : null;
-
-    if (!order) {
-      return jsonError("Please confirm payment before generating.", 402);
+    if (!consumeFinalSession(tokenOrder.sessionId)) {
+      return jsonError("Your wallpaper is already being created.", 409);
     }
 
-    const input: WallpaperInput = {
-      device: parsed.data.device,
-      ratio: parsed.data.ratio,
-      theme: parsed.data.theme,
-      style: parsed.data.style,
-      goals: parsed.data.goals,
-      lifestyle: parsed.data.lifestyle,
-      career: parsed.data.career,
-      personalLife: parsed.data.personalLife,
-      health: parsed.data.health,
-      place: parsed.data.place,
-      feelingWords: parsed.data.feelingWords,
-      reminder: parsed.data.reminder,
-      quoteTone: parsed.data.quoteTone,
-      customWidth: parsed.data.customWidth,
-      customHeight: parsed.data.customHeight,
-    };
+    const generatingOrder = markFinalGenerating(order);
     const meta = getWallpaperMeta(input);
     const prompt = buildWallpaperPrompt(input);
 
-    if (!process.env.OPENAI_API_KEY) {
-      if (process.env.NODE_ENV === "production") {
-        return jsonError("Image generation is not configured yet.", 503);
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        if (process.env.NODE_ENV === "production") {
+          markOrderPaid(generatingOrder, tokenOrder.sessionId);
+          releaseFinalSession(tokenOrder.sessionId);
+          return jsonError("Image generation is not configured yet.", 503);
+        }
+
+        const mockImageUrl = saveGeneratedImageFromDataUrl(
+          createMockWallpaperSvg(input),
+        );
+
+        if (!mockImageUrl) {
+          markOrderPaid(generatingOrder, tokenOrder.sessionId);
+          releaseFinalSession(tokenOrder.sessionId);
+          return jsonError("Unable to create your wallpaper. Please try again.", 500);
+        }
+
+        markFinalGenerated(generatingOrder, mockImageUrl);
+        return NextResponse.json({
+          success: true,
+          imageUrl: mockImageUrl,
+          meta,
+          mock: true,
+        });
       }
 
-      const mockImageUrl = saveGeneratedImageFromDataUrl(createMockWallpaperSvg(input));
-
-      if (!mockImageUrl) {
-        return jsonError("Unable to create your wallpaper. Please try again.", 500);
-      }
-
-      return NextResponse.json({
-        success: true,
-        imageUrl: mockImageUrl,
-        meta,
-        mock: true,
+      const response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+          prompt,
+          size: getFinalImageSize(input),
+          quality: "high",
+          output_format: "png",
+          moderation: "auto",
+          n: 1,
+        }),
       });
+
+      if (!response.ok) {
+        safeLog("OpenAI image generation failed", response.status);
+        markOrderPaid(generatingOrder, tokenOrder.sessionId);
+        releaseFinalSession(tokenOrder.sessionId);
+        return jsonError(
+          "We could not create your wallpaper right now. Please try again.",
+          502,
+        );
+      }
+
+      const result = (await response.json()) as OpenAIImageResponse;
+      const image = result.data?.[0];
+      const imageUrl = image?.b64_json
+        ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
+        : image?.url;
+
+      if (!imageUrl) {
+        markOrderPaid(generatingOrder, tokenOrder.sessionId);
+        releaseFinalSession(tokenOrder.sessionId);
+        return jsonError(
+          "The image service did not return a wallpaper. Please try again.",
+          502,
+        );
+      }
+
+      markFinalGenerated(generatingOrder, imageUrl);
+      return NextResponse.json({ success: true, imageUrl, meta, mock: false });
+    } catch (error) {
+      markOrderPaid(generatingOrder, tokenOrder.sessionId);
+      releaseFinalSession(tokenOrder.sessionId);
+      safeLog("Wallpaper generation provider error", error);
+      return jsonError("Unable to create your wallpaper. Please try again.", 500);
     }
-
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
-        prompt,
-        size: getFinalImageSize(input),
-        quality: "high",
-        output_format: "png",
-        moderation: "auto",
-        n: 1,
-      }),
-    });
-
-    if (!response.ok) {
-      safeLog("OpenAI image generation failed", response.status);
-      return jsonError(
-        "We could not create your wallpaper right now. Please try again.",
-        502,
-      );
-    }
-
-    const result = (await response.json()) as OpenAIImageResponse;
-    const image = result.data?.[0];
-    const imageUrl = image?.b64_json
-      ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
-      : image?.url;
-
-    if (!imageUrl) {
-      return jsonError(
-        "The image service did not return a wallpaper. Please try again.",
-        502,
-      );
-    }
-
-    return NextResponse.json({ success: true, imageUrl, meta, mock: false });
   } catch (error) {
     safeLog("Wallpaper generation error", error);
     return jsonError("Unable to create your wallpaper. Please try again.", 500);
   }
-}
-
-function hasOversizedCustomDimensions(body: unknown) {
-  if (!body || typeof body !== "object") {
-    return false;
-  }
-
-  const customBody = body as { customWidth?: unknown; customHeight?: unknown };
-  return (
-    (typeof customBody.customWidth === "number" && customBody.customWidth > 3840) ||
-    (typeof customBody.customHeight === "number" && customBody.customHeight > 3840)
-  );
 }
