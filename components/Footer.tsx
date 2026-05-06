@@ -3,7 +3,21 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-8 text-xs text-taupe sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p>Dream On The Paper</p>
+      <div>
+        <p>Dream On The Paper</p>
+        <p className="mt-1">
+          Created by{" "}
+          <a
+            href="https://gax-global.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-cocoa transition hover:text-ink"
+          >
+            GAX Global
+          </a>
+        </p>
+        <p className="mt-1">AI product design and cloud engineering by GAX Global.</p>
+      </div>
       <div className="flex gap-4">
         <Link href="/create" className="transition hover:text-ink">
           Create

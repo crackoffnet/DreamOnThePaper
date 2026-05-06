@@ -149,6 +149,7 @@ Current delivery uses browser session storage and email attachments for generate
 - `/success` payment verification and final generation
 - `/thank-you` result, download, share, and email delivery
 - `/api/create-checkout-session`
+- `/api/verify-checkout-session`
 - `/api/verify-payment`
 - `/api/generate-preview`
 - `/api/generate-final`

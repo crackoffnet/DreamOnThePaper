@@ -28,7 +28,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
     async function verifyAndGenerate() {
       try {
         setStep("verifying");
-        const verifyResponse = await fetch("/api/verify-payment", {
+        const verifyResponse = await fetch("/api/verify-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId }),

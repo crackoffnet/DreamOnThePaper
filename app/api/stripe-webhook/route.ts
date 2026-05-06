@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Stripe signature verification needs the exact raw request body.
+    // In App Router/OpenNext on Cloudflare, request.text() reads that raw body
+    // as long as no JSON/body parser touches it first.
     const payload = await request.text();
     const event = stripe.webhooks.constructEvent(payload, signature, secret);
 

@@ -8,24 +8,22 @@ type OpenAIImageResponse = {
 
 const prompts = {
   "soft-luxury":
-    "Create a premium vertical phone wallpaper in soft cream, beige, and muted gold tones. Minimal elegant composition, quiet luxury mood, subtle abstract light shapes, negative space for app icons, refined typography area. Include the quote: “I move with ease toward what is mine.”",
+    'Create a premium vertical phone wallpaper in soft cream, beige, and muted gold tones. Minimal elegant composition, quiet luxury mood, subtle abstract light shapes, negative space for app icons, refined typography area. Include the quote: "I move with ease toward what is mine."',
   "wealth-business":
-    "Create a premium vertical wallpaper with warm neutral tones, subtle desk/workspace abstraction, calm wealth energy, soft shadows, minimal gold details, negative space. Include the quote: “Clear work. Calm money. Better rooms.”",
+    'Create a premium vertical wallpaper with warm neutral tones, subtle desk/workspace abstraction, calm wealth energy, soft shadows, minimal gold details, negative space. Include the quote: "Clear work. Calm money. Better rooms."',
   "nature-reset":
-    "Create a premium vertical wallpaper with sage green, cream, and soft natural textures, gentle botanical abstract shapes, calm growth feeling, lots of negative space. Include the quote: “I grow where I place my attention.”",
+    'Create a premium vertical wallpaper with sage green, cream, and soft natural textures, gentle botanical abstract shapes, calm growth feeling, lots of negative space. Include the quote: "I grow where I place my attention."',
   "fitness-health":
-    "Create a premium vertical wallpaper with warm beige, stone, and soft charcoal accents, clean strength mood, subtle movement shapes, calm energy, not sporty or loud. Include the quote: “Strong body, soft mind, steady energy.”",
+    'Create a premium vertical wallpaper with warm beige, stone, and soft charcoal accents, clean strength mood, subtle movement shapes, calm energy, not sporty or loud. Include the quote: "Strong body, soft mind, steady energy."',
   "family-home":
-    "Create a premium vertical wallpaper with warm home tones, soft sunlight, gentle abstract house/family symbols, cozy but elegant, not childish, negative space. Include the quote: “We are building something that lasts.”",
+    'Create a premium vertical wallpaper with warm home tones, soft sunlight, gentle abstract house/family symbols, cozy but elegant, not childish, negative space. Include the quote: "We are building something that lasts."',
   "freedom-travel":
-    "Create a premium vertical wallpaper with soft sky blue, cream, warm sand tones, abstract travel/path horizon feeling, airy composition, elegant minimal style. Include the quote: “My life moves freely across the world.”",
+    'Create a premium vertical wallpaper with soft sky blue, cream, warm sand tones, abstract travel/path horizon feeling, airy composition, elegant minimal style. Include the quote: "My life moves freely across the world."',
 } satisfies Record<(typeof exampleWallpapers)[number]["id"], string>;
 
 async function main() {
   if (!process.env.OPENAI_API_KEY) {
-    console.error(
-      "Missing OPENAI_API_KEY. Set it locally, then run npm run generate:examples again.",
-    );
+    console.error("OPENAI_API_KEY is required to generate examples.");
     process.exitCode = 1;
     return;
   }

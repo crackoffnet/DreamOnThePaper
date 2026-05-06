@@ -30,7 +30,7 @@ export function ExampleGallery() {
             Wallpapers that feel like a daily visual ritual.
           </h2>
         </div>
-        <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+        <div className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
           {exampleWallpapers.map((example) => {
             const Icon = exampleIcons[example.id];
 
@@ -40,23 +40,22 @@ export function ExampleGallery() {
                 className="group min-w-[72vw] snap-center sm:min-w-0"
               >
               <div
-                className="relative aspect-[5/4] overflow-hidden rounded-2xl bg-linen shadow-sm transition duration-300 group-hover:scale-[1.012]"
+                className="relative aspect-[1.18/1] overflow-hidden rounded-2xl bg-linen shadow-sm transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-soft"
               >
                 <Image
                   src={example.image}
                   alt={`${example.title} wallpaper example`}
                   fill
                   sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 72vw"
-                  className="object-cover transition duration-500 group-hover:scale-105 group-hover:blur-0"
+                  className="object-cover object-center transition duration-500 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-ink/5 via-ink/5 to-ink/55 transition duration-300 group-hover:from-transparent" />
-                <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] transition duration-300 group-hover:bg-transparent group-hover:backdrop-blur-0" />
-                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/40 bg-white/42 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cocoa backdrop-blur-md">
+                <div className="absolute inset-0 bg-gradient-to-b from-cream/10 via-ink/4 to-ink/62 transition duration-300 group-hover:to-ink/52" />
+                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/40 bg-white/48 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cocoa backdrop-blur-md">
                   <Icon aria-hidden className="h-3 w-3 text-gold" />
                   {example.title}
                 </div>
-                <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/40 bg-white/36 p-3 backdrop-blur-md">
-                  <p className="font-serif text-xl leading-tight text-ink">
+                <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/35 bg-white/32 p-3 backdrop-blur-md">
+                  <p className="font-serif text-lg leading-tight text-white drop-shadow-sm">
                     {example.quote}
                   </p>
                 </div>

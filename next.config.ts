@@ -27,13 +27,15 @@ const nextConfig: NextConfig = {
         key: "Content-Security-Policy",
         value: [
           "default-src 'self'",
+          // TODO: tighten inline script/style allowances after validating Next.js/OpenNext runtime needs.
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data:",
-          "connect-src 'self' https://api.openai.com https://api.resend.com https://api.stripe.com",
+          "connect-src 'self' https://api.openai.com https://api.resend.com https://api.stripe.com https://checkout.stripe.com",
           "base-uri 'self'",
           "form-action 'self' https://checkout.stripe.com",
+          "frame-src https://checkout.stripe.com",
           "frame-ancestors 'none'",
         ].join("; "),
       },

@@ -28,6 +28,14 @@ export function getStripe() {
   });
 }
 
+export function isPaymentConfigured() {
+  return Boolean(
+    process.env.STRIPE_SECRET_KEY &&
+      process.env.NEXT_PUBLIC_SITE_URL &&
+      process.env.ORDER_TOKEN_SECRET,
+  );
+}
+
 export async function createCheckoutSession(
   packageId: PackageId,
   metadata: Record<string, string>,
@@ -36,7 +44,7 @@ export async function createCheckoutSession(
   const plan = packages[packageId];
   const siteUrl = getSiteUrl();
 
-  if (!stripe) {
+  if (!stripe || !process.env.NEXT_PUBLIC_SITE_URL) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Stripe is not configured.");
     }
@@ -49,8 +57,9 @@ export async function createCheckoutSession(
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
+    payment_method_types: ["card"],
     success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/preview?canceled=true`,
+    cancel_url: `${siteUrl}/create`,
     metadata: {
       packageId,
       ...metadata,

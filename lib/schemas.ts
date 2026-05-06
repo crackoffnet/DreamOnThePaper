@@ -83,9 +83,18 @@ export const generateWallpaperSchema = wallpaperInputSchema.extend({
   orderToken: z.string().min(24).max(4096).optional(),
 });
 
-export const verifyPaymentSchema = z.object({
-  sessionId: z.string().min(8).max(300),
-});
+export const verifyPaymentSchema = z
+  .object({
+    sessionId: z.string().min(8).max(300).optional(),
+    session_id: z.string().min(8).max(300).optional(),
+  })
+  .transform((input) => ({
+    sessionId: input.sessionId || input.session_id || "",
+  }))
+  .refine((input) => input.sessionId.length >= 8, {
+    message: "Missing payment session.",
+    path: ["session_id"],
+  });
 
 export const emailWallpaperSchema = z.object({
   email: z.string().email().max(254),
