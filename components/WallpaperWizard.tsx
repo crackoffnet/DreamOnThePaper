@@ -11,6 +11,19 @@ import {
   removeEphemeralImage,
   setEphemeralImage,
 } from "@/lib/client-images";
+import {
+  createNewWallpaperDraft,
+  getCurrentDraft,
+  getDraftPreviewSessionId,
+  getPreviewPolicy,
+  markDraftFailed,
+  markDraftGenerating,
+  markDraftReady,
+  saveCurrentDraft,
+  updateDraftInput,
+  type PreviewPolicy,
+  type WallpaperDraft,
+} from "@/lib/wallpaperDraft";
 import type {
   DeviceType,
   GenerateResponse,
@@ -103,26 +116,44 @@ export function WallpaperWizard() {
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [hasCreatedPreview, setHasCreatedPreview] = useState(false);
+  const [draft, setDraft] = useState<WallpaperDraft | null>(null);
+  const [policy, setPolicy] = useState<PreviewPolicy>({
+    freePreviewUsed: false,
+    freePreviewDraftId: null,
+  });
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
 
   useEffect(() => {
-    setHasCreatedPreview(sessionStorage.getItem("dreamPreviewGenerated") === "true");
+    const currentDraft = getCurrentDraft();
+    setDraft(currentDraft);
+    setForm(currentDraft.input);
+    setPolicy(getPreviewPolicy());
+    if (currentDraft.previewStatus !== "not_started") {
+      setStep(stepTitles.length - 1);
+    }
   }, []);
 
   function update<K extends keyof WallpaperInput>(
     key: K,
     value: WallpaperInput[K],
   ) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      setDraft(updateDraftInput(next));
+      return next;
+    });
   }
 
   function setDevice(device: DeviceType) {
-    setForm((current) => ({
-      ...current,
-      device,
-      ratio: ratioOptions[device][0],
-    }));
+    setForm((current) => {
+      const next = {
+        ...current,
+        device,
+        ratio: ratioOptions[device][0],
+      };
+      setDraft(updateDraftInput(next));
+      return next;
+    });
   }
 
   function next() {
@@ -143,16 +174,41 @@ export function WallpaperWizard() {
     setStep((current) => Math.max(current - 1, 0));
   }
 
+  function editAnswers() {
+    setError("");
+    setStep(4);
+  }
+
+  function startNewWallpaper() {
+    const nextDraft = createNewWallpaperDraft();
+    setDraft(nextDraft);
+    setForm(nextDraft.input);
+    setPolicy(getPreviewPolicy());
+    setError("");
+    setIsGenerating(false);
+    setStep(0);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setIsGenerating(true);
 
     try {
-      if (hasCreatedPreview) {
-        throw new Error(
-          "You already created your free preview. Unlock the full wallpaper to continue.",
-        );
+      const activeDraft = saveCurrentDraft({
+        ...(draft || getCurrentDraft()),
+        input: form,
+      });
+      setDraft(activeDraft);
+
+      if (activeDraft.previewStatus === "ready" && activeDraft.previewImageUrl) {
+        router.push("/preview");
+        return;
+      }
+
+      if (policy.freePreviewUsed) {
+        router.push("/checkout");
+        return;
       }
 
       if (website) {
@@ -164,13 +220,15 @@ export function WallpaperWizard() {
         throw new Error(customIssue);
       }
 
+      setDraft(markDraftGenerating());
+
       const response = await fetch("/api/generate-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
           website,
-          previewSessionId: getOrCreatePreviewGenerationId(),
+          previewSessionId: getDraftPreviewSessionId(activeDraft.id),
         }),
       });
       const data = (await response.json()) as GenerateResponse & {
@@ -186,7 +244,9 @@ export function WallpaperWizard() {
 
       sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
       sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
-      sessionStorage.setItem("dreamPreviewGenerated", "true");
+      const readyDraft = markDraftReady(imageUrl, data.meta);
+      setDraft(readyDraft);
+      setPolicy(getPreviewPolicy());
       setEphemeralImage("previewImageUrl", imageUrl);
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
@@ -198,7 +258,13 @@ export function WallpaperWizard() {
           ? generationError.message
           : "Unable to create your wallpaper.",
       );
-      setHasCreatedPreview(sessionStorage.getItem("dreamPreviewGenerated") === "true");
+      const currentDraft = getCurrentDraft();
+      setDraft(
+        currentDraft.previewStatus === "generating"
+          ? markDraftFailed()
+          : currentDraft,
+      );
+      setPolicy(getPreviewPolicy());
       setIsGenerating(false);
     }
   }
@@ -308,7 +374,9 @@ export function WallpaperWizard() {
             <div className="rounded-2xl border border-cocoa/10 bg-white/60 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
                 <Sparkles aria-hidden className="h-4 w-4 text-gold" />
-                Ready to create preview
+                {draft?.previewStatus === "ready"
+                  ? "Your free preview is ready."
+                  : "Ready to create preview"}
               </div>
               <div className="grid gap-2 text-sm text-taupe sm:grid-cols-2">
                 <p>Device: {labels.devices[form.device]}</p>
@@ -317,14 +385,96 @@ export function WallpaperWizard() {
                 <p>Style: {labels.styles[form.style]}</p>
               </div>
             </div>
-            {isGenerating ? (
+            {draft?.previewStatus === "ready" && draft.previewImageUrl ? (
+              <div className="rounded-2xl border border-gold/20 bg-white/70 p-4">
+                <p className="text-sm leading-6 text-taupe">
+                  You can review it, edit your answers, or unlock the full
+                  wallpaper download.
+                </p>
+                <div className="mt-3 overflow-hidden rounded-2xl border border-white/70 bg-linen">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={draft.previewImageUrl}
+                    alt="Generated wallpaper preview"
+                    className="max-h-72 w-full object-cover"
+                  />
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/preview")}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
+                  >
+                    View Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={editAnswers}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+                  >
+                    Edit Answers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startNewWallpaper}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+                  >
+                    Start New Wallpaper
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/preview")}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-gold px-4 text-sm font-medium text-ink"
+                  >
+                    Unlock Full Wallpaper
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {isGenerating || draft?.previewStatus === "generating" ? (
               <LoadingGeneration label="Creating your preview..." />
             ) : null}
-            {hasCreatedPreview && !isGenerating ? (
-              <p className="rounded-2xl border border-gold/20 bg-[#f8f0df] px-4 py-3 text-sm text-cocoa">
-                You already created your free preview. Unlock the full wallpaper
-                to continue.
+            {draft?.previewStatus === "failed" && !isGenerating ? (
+              <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                Preview generation failed. You can edit your answers and try
+                again if your free preview is still available.
               </p>
+            ) : null}
+            {draft?.previewStatus === "not_started" &&
+            policy.freePreviewUsed &&
+            !isGenerating ? (
+              <div className="rounded-2xl border border-gold/20 bg-[#f8f0df] p-4 text-sm text-cocoa">
+                <p className="font-semibold text-ink">
+                  You&apos;ve already used your free preview.
+                </p>
+                <p className="mt-1 leading-6">
+                  You can still create a new wallpaper and unlock the full
+                  version anytime.
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={editAnswers}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+                  >
+                    Edit Answers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startNewWallpaper}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+                  >
+                    Start New Wallpaper
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/checkout")}
+                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
+                  >
+                    Unlock Full Wallpaper
+                  </button>
+                </div>
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -357,7 +507,7 @@ export function WallpaperWizard() {
           ) : (
             <button
               type="submit"
-              disabled={isGenerating || hasCreatedPreview}
+              disabled={isGenerating}
               className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isGenerating ? (
@@ -365,7 +515,11 @@ export function WallpaperWizard() {
               ) : (
                 <Sparkles aria-hidden className="h-4 w-4" />
               )}
-              {hasCreatedPreview ? "Preview Created" : "Generate Preview"}
+              {draft?.previewStatus === "ready"
+                ? "View Preview"
+                : policy.freePreviewUsed
+                  ? "Unlock Full Wallpaper"
+                  : "Generate Free Preview"}
             </button>
           )}
         </div>
@@ -403,21 +557,6 @@ export function WallpaperWizard() {
       </aside>
     </form>
   );
-}
-
-function getOrCreatePreviewGenerationId() {
-  const existing = sessionStorage.getItem("dreamPreviewGenerationId");
-
-  if (existing) {
-    return existing;
-  }
-
-  const next =
-    typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  sessionStorage.setItem("dreamPreviewGenerationId", next);
-  return next;
 }
 
 type CustomSizeFieldsProps = {

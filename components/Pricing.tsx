@@ -7,6 +7,7 @@ import { TrustBadges } from "@/components/TrustBadges";
 import type { PackageId } from "@/lib/plans";
 import { packageIds } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
+import { getCurrentDraft } from "@/lib/wallpaperDraft";
 
 export function Pricing() {
   const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
@@ -14,8 +15,7 @@ export function Pricing() {
 
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem("dreamWallpaperInput");
-      setWallpaperInput(stored ? (JSON.parse(stored) as WallpaperInput) : null);
+      setWallpaperInput(getCurrentDraft().input);
     } catch {
       setWallpaperInput(null);
     }

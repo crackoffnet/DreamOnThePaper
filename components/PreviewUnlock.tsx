@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
 import { getEphemeralImage } from "@/lib/client-images";
+import { createNewWallpaperDraft, getCurrentDraft } from "@/lib/wallpaperDraft";
 import type { PackageId } from "@/lib/plans";
 import { packageIds, packages } from "@/lib/plans";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
@@ -25,6 +27,7 @@ const unlockFeatures = [
 ];
 
 export function PreviewUnlock() {
+  const router = useRouter();
   const [preview, setPreview] = useState<PreviewState>({
     imageUrl: "",
     input: null,
@@ -33,12 +36,25 @@ export function PreviewUnlock() {
   const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
 
   useEffect(() => {
+    const draft = getCurrentDraft();
+    const draftHasPreview = draft.previewStatus === "ready";
     setPreview({
-      imageUrl: getEphemeralImage("previewImageUrl"),
-      input: parseJson<WallpaperInput>(sessionStorage.getItem("dreamWallpaperInput")),
-      meta: parseJson<WallpaperMeta>(sessionStorage.getItem("dreamPreviewMeta")),
+      imageUrl: draftHasPreview
+        ? draft.previewImageUrl || getEphemeralImage("previewImageUrl")
+        : "",
+      input:
+        draft.input ||
+        parseJson<WallpaperInput>(sessionStorage.getItem("dreamWallpaperInput")),
+      meta:
+        draft.previewMeta ||
+        parseJson<WallpaperMeta>(sessionStorage.getItem("dreamPreviewMeta")),
     });
   }, []);
+
+  function startNewWallpaper() {
+    createNewWallpaperDraft();
+    router.push("/create");
+  }
 
   if (!preview.imageUrl || !preview.input || !preview.meta) {
     return (
@@ -49,12 +65,21 @@ export function PreviewUnlock() {
           <p className="mt-3 text-sm leading-6 text-taupe">
             Generate a preview first, then unlock the final wallpaper.
           </p>
-          <Link
-            href="/create"
-            className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-pearl"
-          >
-            Create Preview
-          </Link>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              href="/create"
+              className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-pearl"
+            >
+              Edit Answers
+            </Link>
+            <button
+              type="button"
+              onClick={startNewWallpaper}
+              className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-5 text-sm font-semibold text-ink"
+            >
+              Start New Wallpaper
+            </button>
+          </div>
         </div>
       </section>
     );
@@ -108,6 +133,21 @@ export function PreviewUnlock() {
           {preview.input?.device === "custom" ? (
             <p>Resolution: {getResolutionLabel(preview.input)}</p>
           ) : null}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href="/create"
+            className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+          >
+            Edit Answers
+          </Link>
+          <button
+            type="button"
+            onClick={startNewWallpaper}
+            className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+          >
+            Start New Wallpaper
+          </button>
         </div>
       </div>
 
