@@ -54,6 +54,7 @@ export type GenerateResponse = {
   orderId?: string;
   previewImageId?: string | null;
   previewImageUrl?: string;
+  orderToken?: string;
   orderSnapshotToken?: string;
   imageUrl?: string;
   imageBase64?: string;

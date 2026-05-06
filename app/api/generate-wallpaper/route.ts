@@ -97,7 +97,7 @@ export async function POST(request: Request) {
       return jsonError("Please keep the wallpaper request safe and respectful.");
     }
 
-    if (!consumeFinalSession(tokenOrder.sessionId)) {
+    if (!(await consumeFinalSession(tokenOrder.sessionId))) {
       return jsonError("Your wallpaper is already being created.", 409);
     }
 
@@ -110,18 +110,18 @@ export async function POST(request: Request) {
         if (process.env.NODE_ENV === "production") {
           markOrderPaid(generatingOrder, tokenOrder.sessionId);
           markOrderFailed(generatingOrder);
-          releaseFinalSession(tokenOrder.sessionId);
+          await releaseFinalSession(tokenOrder.sessionId);
           return jsonError("Image generation is not configured yet.", 503);
         }
 
-        const mockImageUrl = saveGeneratedImageFromDataUrl(
+        const mockImageUrl = await saveGeneratedImageFromDataUrl(
           createMockWallpaperSvg(input),
         );
 
         if (!mockImageUrl) {
           markOrderPaid(generatingOrder, tokenOrder.sessionId);
           markOrderFailed(generatingOrder);
-          releaseFinalSession(tokenOrder.sessionId);
+          await releaseFinalSession(tokenOrder.sessionId);
           return jsonError("Unable to create your wallpaper. Please try again.", 500);
         }
 
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
         safeLog("OpenAI image generation failed", response.status);
         markOrderPaid(generatingOrder, tokenOrder.sessionId);
         markOrderFailed(generatingOrder);
-        releaseFinalSession(tokenOrder.sessionId);
+        await releaseFinalSession(tokenOrder.sessionId);
         return jsonError(
           "We could not create your wallpaper right now. Please try again.",
           502,
@@ -165,13 +165,13 @@ export async function POST(request: Request) {
       const result = (await response.json()) as OpenAIImageResponse;
       const image = result.data?.[0];
       const imageUrl = image?.b64_json
-        ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
+        ? await saveGeneratedImageFromBase64(image.b64_json, "image/png")
         : image?.url;
 
       if (!imageUrl) {
         markOrderPaid(generatingOrder, tokenOrder.sessionId);
         markOrderFailed(generatingOrder);
-        releaseFinalSession(tokenOrder.sessionId);
+        await releaseFinalSession(tokenOrder.sessionId);
         return jsonError(
           "The image service did not return a wallpaper. Please try again.",
           502,
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
     } catch (error) {
       markOrderPaid(generatingOrder, tokenOrder.sessionId);
       markOrderFailed(generatingOrder);
-      releaseFinalSession(tokenOrder.sessionId);
+      await releaseFinalSession(tokenOrder.sessionId);
       safeLog("Wallpaper generation provider error", error);
       return jsonError("Unable to create your wallpaper. Please try again.", 500);
     }

@@ -94,9 +94,13 @@ export const previewGenerationSchema = wallpaperInputSchema.extend({
 
 export const checkoutSchema = z.object({
   packageType: z.enum(packageIds),
-  orderId: z.string().min(8).max(120),
+  orderId: z.string().min(8).max(120).optional(),
+  orderToken: z.string().min(24).max(12000).optional(),
   orderSnapshotToken: z.string().min(24).max(12000).optional(),
   website: z.string().max(0).optional().or(z.literal("")),
+}).refine((input) => Boolean(input.orderId || input.orderToken), {
+  message: "Create your preview first.",
+  path: ["orderId"],
 });
 
 export const orderTokenSchema = z.object({

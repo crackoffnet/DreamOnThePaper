@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return jsonError("Request origin is not allowed.", 403);
     }
 
-    if (!checkIpRateLimit(request, "verify-payment", 20, 60 * 60 * 1000)) {
+    if (!(await checkIpRateLimit(request, "verify-payment", 20, 60 * 60 * 1000))) {
       return jsonError("Too many verification attempts. Please wait a moment.", 429);
     }
 

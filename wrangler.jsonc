@@ -13,5 +13,24 @@
       "enabled": false,
       "invocation_logs": true
     }
+  },
+  "d1_databases": [
+  {
+    "binding": "DB",
+    "database_name": "dreamonpaper-db",
+    "database_id": "fede34ed-61e9-4f5a-a6e9-7e9e442b4799"
   }
+],
+ "kv_namespaces": [
+  {
+    "binding": "DREAM_RATE_LIMITS",
+    "id": "49ffc2fcdf6647a888f71c02e8a4314e"
+  }
+],
+ "r2_buckets": [
+  {
+    "binding": "WALLPAPER_BUCKET",
+    "bucket_name": "dreamonpaper-wallpapers"
+  }
+]
 }

@@ -1,3 +1,4 @@
+import { getRateLimitKv } from "@/lib/cloudflare";
 import { getClientIp } from "@/lib/security";
 
 type RateLimitEntry = {
@@ -5,30 +6,52 @@ type RateLimitEntry = {
   resetAt: number;
 };
 
-const memoryRateLimits = new Map<string, RateLimitEntry>();
-const usedPreviewSessions = new Set<string>();
-const usedFinalSessions = new Set<string>();
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 
-// TODO: Replace this in-memory fallback with Cloudflare KV/D1 for production-wide
-// limits across isolates, regions, and deploys.
-export function checkRateLimitKey(key: string, limit: number, windowMs: number) {
+export async function checkPreviewRateLimit(ipOrSession: string) {
+  return checkRateLimitKey(`preview:${ipOrSession}`, 3, DAY_MS);
+}
+
+export async function checkCheckoutRateLimit(ip: string) {
+  return checkRateLimitKey(`checkout:ip:${ip}`, 5, HOUR_MS);
+}
+
+export async function recordPreviewUse(ipOrSession: string) {
+  return checkRateLimitKey(`preview-session:${ipOrSession}`, 1, DAY_MS);
+}
+
+export async function checkRateLimitKey(
+  key: string,
+  limit: number,
+  windowMs: number,
+) {
+  const kv = getRateLimitKv();
   const now = Date.now();
-  const current = memoryRateLimits.get(key);
+  const stored = await kv.get<RateLimitEntry>(key, "json");
 
-  if (!current || current.resetAt <= now) {
-    memoryRateLimits.set(key, { count: 1, resetAt: now + windowMs });
+  if (!stored || stored.resetAt <= now) {
+    await kv.put(
+      key,
+      JSON.stringify({ count: 1, resetAt: now + windowMs }),
+      { expirationTtl: Math.ceil(windowMs / 1000) },
+    );
     return true;
   }
 
-  if (current.count >= limit) {
+  if (stored.count >= limit) {
     return false;
   }
 
-  current.count += 1;
+  await kv.put(
+    key,
+    JSON.stringify({ count: stored.count + 1, resetAt: stored.resetAt }),
+    { expirationTtl: Math.max(1, Math.ceil((stored.resetAt - now) / 1000)) },
+  );
   return true;
 }
 
-export function checkIpRateLimit(
+export async function checkIpRateLimit(
   request: Request,
   scope: string,
   limit: number,
@@ -37,24 +60,23 @@ export function checkIpRateLimit(
   return checkRateLimitKey(`${scope}:ip:${getClientIp(request)}`, limit, windowMs);
 }
 
-export function consumePreviewSession(previewSessionId: string) {
-  if (usedPreviewSessions.has(previewSessionId)) {
+export async function consumePreviewSession(previewSessionId: string) {
+  return recordPreviewUse(previewSessionId);
+}
+
+export async function consumeFinalSession(sessionId: string) {
+  const kv = getRateLimitKv();
+  const key = `final-session:${sessionId}`;
+  const existing = await kv.get(key);
+
+  if (existing) {
     return false;
   }
 
-  usedPreviewSessions.add(previewSessionId);
+  await kv.put(key, "1", { expirationTtl: 60 * 60 * 24 * 30 });
   return true;
 }
 
-export function consumeFinalSession(sessionId: string) {
-  if (usedFinalSessions.has(sessionId)) {
-    return false;
-  }
-
-  usedFinalSessions.add(sessionId);
-  return true;
-}
-
-export function releaseFinalSession(sessionId: string) {
-  usedFinalSessions.delete(sessionId);
+export async function releaseFinalSession(sessionId: string) {
+  await getRateLimitKv().delete(`final-session:${sessionId}`);
 }

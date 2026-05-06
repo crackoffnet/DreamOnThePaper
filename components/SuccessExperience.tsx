@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
-import { imageUrlFromPayload, setEphemeralImage } from "@/lib/client-images";
-import type { GenerateResponse, WallpaperInput } from "@/lib/types";
+import { getEphemeralImage, imageUrlFromPayload, setEphemeralImage } from "@/lib/client-images";
+import type { GenerateResponse } from "@/lib/types";
 
 type Step = "verifying" | "generating" | "done" | "error";
 
@@ -14,13 +14,22 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [message, setMessage] = useState("Payment confirmed. Preparing generation...");
   const [error, setError] = useState("");
   const [orderToken, setOrderToken] = useState("");
-  const input = useMemo(() => getStoredInput(), []);
   const orderSnapshotToken = useMemo(() => getStoredOrderSnapshotToken(), []);
 
   useEffect(() => {
-    if (!sessionId || !input || !orderSnapshotToken) {
+    if (!sessionId || !orderSnapshotToken) {
       setStep("error");
       setError("Missing payment or wallpaper details.");
+      return;
+    }
+
+    const existingFinal = getEphemeralImage("finalImageUrl");
+    if (
+      existingFinal &&
+      sessionStorage.getItem("dreamFinalSessionId") === sessionId
+    ) {
+      setStep("done");
+      setMessage("Your full-resolution wallpaper is ready.");
       return;
     }
 
@@ -76,6 +85,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         }
 
         setEphemeralImage("finalImageUrl", imageUrl);
+        sessionStorage.setItem("dreamFinalSessionId", sessionId);
         sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
         setStep("done");
         setMessage("Your full-resolution wallpaper is ready.");
@@ -88,7 +98,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
     }
-  }, [input, orderSnapshotToken, sessionId]);
+  }, [orderSnapshotToken, sessionId]);
 
   if (step === "done") {
     return (
@@ -143,15 +153,6 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       </div>
     </section>
   );
-}
-
-function getStoredInput() {
-  try {
-    const stored = sessionStorage.getItem("dreamWallpaperInput");
-    return stored ? (JSON.parse(stored) as WallpaperInput) : null;
-  } catch {
-    return null;
-  }
 }
 
 function getStoredOrderSnapshotToken() {

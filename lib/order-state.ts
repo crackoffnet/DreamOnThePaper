@@ -31,6 +31,24 @@ export type OrderSnapshot = {
   stripeSessionId?: string;
   finalImageId?: string;
   finalImageUrl?: string;
+  createdAt?: string;
+  expiresAt?: string;
+};
+
+export type CheckoutOrderToken = {
+  orderId: string;
+  previewImageId?: string;
+  previewImageUrl?: string;
+  device: string;
+  ratio: string;
+  width: string;
+  height: string;
+  theme: string;
+  style: string;
+  quoteTone: string;
+  promptHash: string;
+  createdAt: string;
+  expiresAt: string;
 };
 
 const orderStore = new Map<string, OrderSnapshot>();
@@ -110,6 +128,7 @@ export async function createOrderSnapshot(
   const orderId = crypto.randomUUID();
   const promptHash = await hashOrderInput(input);
   const meta = getOrderMeta(input);
+  const createdAt = new Date();
   const order: OrderSnapshot = {
     orderId,
     packageId,
@@ -120,6 +139,10 @@ export async function createOrderSnapshot(
     previewImageUrl: options?.previewImageUrl,
     previewImageId:
       options?.previewImageId || imageIdFromUrl(options?.previewImageUrl || ""),
+    createdAt: createdAt.toISOString(),
+    expiresAt: new Date(
+      createdAt.getTime() + SNAPSHOT_TOKEN_TTL_SECONDS * 1000,
+    ).toISOString(),
     ...meta,
   };
 
@@ -141,6 +164,34 @@ export async function signOrderSnapshot(order: OrderSnapshot) {
   });
 }
 
+export async function signCheckoutOrderToken(order: OrderSnapshot) {
+  return signPayload(createCheckoutTokenPayload(order));
+}
+
+export async function verifyCheckoutOrderToken(token: string) {
+  const payload = await verifySignedPayload<CheckoutOrderToken>(token);
+
+  if (!payload?.expiresAt || Date.parse(payload.expiresAt) <= Date.now()) {
+    return null;
+  }
+
+  return payload;
+}
+
+export function checkoutPayloadToMeta(payload: CheckoutOrderToken) {
+  return {
+    orderId: payload.orderId,
+    device: payload.device,
+    ratio: payload.ratio,
+    width: payload.width,
+    height: payload.height,
+    theme: payload.theme,
+    style: payload.style,
+    quoteTone: payload.quoteTone,
+    promptHash: payload.promptHash,
+  };
+}
+
 function getOrderMeta(input: WallpaperInput) {
   const [width, height] = getWallpaperMeta(input).imageSize.split("x");
 
@@ -158,6 +209,29 @@ function getOrderMeta(input: WallpaperInput) {
 function imageIdFromUrl(value: string) {
   const match = value.match(/\/api\/wallpaper-image\/([^/?#]+)/);
   return match?.[1] || "";
+}
+
+function createCheckoutTokenPayload(order: OrderSnapshot): CheckoutOrderToken {
+  const createdAt = order.createdAt || new Date().toISOString();
+  const expiresAt =
+    order.expiresAt ||
+    new Date(Date.now() + SNAPSHOT_TOKEN_TTL_SECONDS * 1000).toISOString();
+
+  return {
+    orderId: order.orderId,
+    previewImageId: order.previewImageId,
+    previewImageUrl: order.previewImageUrl,
+    device: order.device || order.input.device,
+    ratio: order.ratio || order.input.ratio,
+    width: order.width || "",
+    height: order.height || "",
+    theme: order.theme || order.input.theme,
+    style: order.style || order.input.style,
+    quoteTone: order.quoteTone || order.input.quoteTone,
+    promptHash: order.promptHash,
+    createdAt,
+    expiresAt,
+  };
 }
 
 export async function verifyOrderSnapshotToken(token: string) {

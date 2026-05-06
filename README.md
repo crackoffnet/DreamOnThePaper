@@ -44,8 +44,10 @@ NODE_VERSION=22
 
 1. User completes `/create`.
 2. `/api/generate-preview` creates a low-quality, watermarked preview without payment.
-3. The app stores only the temporary order id, preview image id/URL, and signed order snapshot.
-4. `/checkout?orderId=...` shows the low-quality preview and package options.
+3. The app returns a safe signed checkout `orderToken` plus a temporary
+   browser-session snapshot used for final generation.
+4. `/checkout?orderToken=...` verifies the token server-side and shows the
+   low-quality preview and package options without relying on Worker memory.
 5. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
 6. Stripe redirects to `/success?session_id=...`.
 7. `/api/verify-payment` retrieves the Stripe session server-side, checks the original order metadata, and returns a short-lived signed order token.
@@ -55,6 +57,10 @@ NODE_VERSION=22
 If Stripe is not configured, mock checkout is allowed only in development.
 
 Final generation never trusts a client-side `paid` flag or new generation parameters after payment. It requires a server-verified Stripe session and signed order token tied to the original preview/order.
+
+Cloudflare Workers are stateless, so checkout restoration uses the signed
+`orderToken` first and session storage only as a browser fallback. Temporary
+order/image storage still has TODOs for Cloudflare D1/KV and R2.
 
 ## Stripe Setup
 
@@ -121,6 +127,19 @@ Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and
 `ORDER_TOKEN_SECRET`. Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
 
 The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
+
+## Cloudflare Storage Helpers
+
+Production helper modules are available for Cloudflare bindings:
+
+- `lib/cloudflare.ts` reads OpenNext Cloudflare bindings: `DB`,
+  `DREAM_RATE_LIMITS`, and `WALLPAPER_BUCKET`.
+- `lib/orders.ts` stores order state in D1 and uses an atomic
+  `paid -> final_generating` update so one paid order can start final
+  generation only once.
+- `lib/storage.ts` stores image bytes in R2. Preview keys use
+  `previews/{orderId}.webp`; final keys use `finals/{orderId}.png`.
+- `lib/rateLimit.ts` stores rate-limit counters and generation locks in KV.
 
 ## Cloudflare Deploy Settings
 

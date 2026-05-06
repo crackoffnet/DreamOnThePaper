@@ -10,7 +10,11 @@ import {
   safeLog,
 } from "@/lib/security";
 import { checkIpRateLimit, consumePreviewSession } from "@/lib/rateLimit";
-import { createPreviewOrder, signOrderSnapshot } from "@/lib/order-state";
+import {
+  createPreviewOrder,
+  signCheckoutOrderToken,
+  signOrderSnapshot,
+} from "@/lib/order-state";
 import type { WallpaperInput } from "@/lib/types";
 import {
   buildPreviewWallpaperPrompt,
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
       return previewError("Request origin is not allowed.", 403);
     }
 
-    if (!checkIpRateLimit(request, "preview", 3, 24 * 60 * 60 * 1000)) {
+    if (!(await checkIpRateLimit(request, "preview", 3, 24 * 60 * 60 * 1000))) {
       return previewError("Too many preview requests. Please try again later.", 429);
     }
 
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
       return previewError("Please keep the wallpaper request safe and respectful.");
     }
 
-    if (!consumePreviewSession(parsed.data.previewSessionId)) {
+    if (!(await consumePreviewSession(parsed.data.previewSessionId))) {
       return previewError(
         "You already created your free preview. Unlock the full wallpaper to continue.",
         409,
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
         return previewError("Preview generation is not configured yet.", 503);
       }
 
-      const mockImageUrl = saveGeneratedImageFromDataUrl(
+      const mockImageUrl = await saveGeneratedImageFromDataUrl(
         createMockWallpaperSvg(input, { preview: true }),
       );
 
@@ -80,13 +84,16 @@ export async function POST(request: Request) {
         return previewError("Preview generation failed", 500);
       }
       const order = await createPreviewOrder(input, mockImageUrl);
+      const orderToken = await signCheckoutOrderToken(order);
       const orderSnapshotToken = await signOrderSnapshot(order);
+      console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
 
       return NextResponse.json({
         success: true,
         orderId: order.orderId,
         previewImageId: order.previewImageId || null,
         previewImageUrl: mockImageUrl,
+        orderToken,
         orderSnapshotToken,
         imageUrl: mockImageUrl,
         meta,
@@ -120,20 +127,23 @@ export async function POST(request: Request) {
     const result = (await response.json()) as OpenAIImageResponse;
     const image = result.data?.[0];
     const imageUrl = image?.b64_json
-      ? saveGeneratedImageFromBase64(image.b64_json, "image/png")
+      ? await saveGeneratedImageFromBase64(image.b64_json, "image/png")
       : image?.url;
 
     if (!imageUrl) {
       return previewError("Preview generation failed", 502);
     }
     const order = await createPreviewOrder(input, imageUrl);
+    const orderToken = await signCheckoutOrderToken(order);
     const orderSnapshotToken = await signOrderSnapshot(order);
+    console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
 
     return NextResponse.json({
       success: true,
       orderId: order.orderId,
       previewImageId: order.previewImageId || null,
       previewImageUrl: imageUrl,
+      orderToken,
       orderSnapshotToken,
       imageUrl,
       meta,

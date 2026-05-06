@@ -10,6 +10,7 @@ export type WallpaperDraft = {
   previewStatus: "not_started" | "generating" | "ready" | "failed";
   previewImageId?: string | null;
   previewImageUrl?: string | null;
+  orderToken?: string | null;
   orderSnapshotToken?: string | null;
   previewMeta?: WallpaperMeta | null;
   createdAt: string;
@@ -25,6 +26,7 @@ const draftKey = "dreamCurrentDraft";
 const policyKey = "dreamPreviewPolicy";
 
 export function getPreviewPolicy(): PreviewPolicy {
+  repairStalePreviewPolicy();
   const stored = readJson<PreviewPolicy>(policyKey);
   if (stored) {
     return stored;
@@ -39,6 +41,7 @@ export function getPreviewPolicy(): PreviewPolicy {
 export function savePreviewPolicy(policy: PreviewPolicy) {
   sessionStorage.setItem(policyKey, JSON.stringify(policy));
   sessionStorage.setItem("dreamPreviewGenerated", String(policy.freePreviewUsed));
+  sessionStorage.setItem("dreamPreviewCreated", String(policy.freePreviewUsed));
   if (policy.freePreviewDraftId) {
     sessionStorage.setItem("dreamPreviewGenerationId", policy.freePreviewDraftId);
   }
@@ -47,11 +50,12 @@ export function savePreviewPolicy(policy: PreviewPolicy) {
 export function getCurrentDraft() {
   const stored = readJson<WallpaperDraft>(draftKey);
   if (stored) {
-    syncLegacyStorage(stored);
-    return stored;
+    const repaired = repairDraft(stored);
+    syncLegacyStorage(repaired);
+    return repaired;
   }
 
-  const hydrated = hydrateLegacyDraft();
+  const hydrated = repairDraft(hydrateLegacyDraft());
   saveCurrentDraft(hydrated);
   return hydrated;
 }
@@ -86,6 +90,7 @@ export function markDraftReady(
   order?: {
     orderId?: string;
     previewImageId?: string | null;
+    orderToken?: string;
     orderSnapshotToken?: string;
   },
 ) {
@@ -96,6 +101,7 @@ export function markDraftReady(
     previewStatus: "ready",
     previewImageId: order?.previewImageId || draft.previewImageId || null,
     previewImageUrl: imageUrl,
+    orderToken: order?.orderToken || draft.orderToken || null,
     orderSnapshotToken: order?.orderSnapshotToken || draft.orderSnapshotToken || null,
     previewMeta: meta,
   });
@@ -122,6 +128,7 @@ export function createNewWallpaperDraft() {
     previewStatus: "not_started",
     previewImageId: null,
     previewImageUrl: null,
+    orderToken: null,
     orderSnapshotToken: null,
     previewMeta: null,
     createdAt: now,
@@ -135,9 +142,11 @@ export function createNewWallpaperDraft() {
   sessionStorage.removeItem("finalImageUrl");
   sessionStorage.removeItem("dreamWallpaperMeta");
   sessionStorage.removeItem("dreamOrderToken");
+  sessionStorage.removeItem("dreamCheckoutOrderToken");
   sessionStorage.removeItem("dreamOrderSnapshotToken");
   sessionStorage.removeItem("dreamOrderId");
   sessionStorage.removeItem("dreamPreviewImageId");
+  sessionStorage.removeItem("dreamPreviewCreated");
   return draft;
 }
 
@@ -160,6 +169,7 @@ function hydrateLegacyDraft(): WallpaperDraft {
     previewStatus: hasPreview ? "ready" : "not_started",
     previewImageId: sessionStorage.getItem("dreamPreviewImageId") || null,
     previewImageUrl,
+    orderToken: sessionStorage.getItem("dreamCheckoutOrderToken") || null,
     orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken") || null,
     previewMeta,
     createdAt: now,
@@ -179,6 +189,10 @@ function syncLegacyStorage(draft: WallpaperDraft) {
     sessionStorage.setItem("dreamPreviewImageId", draft.previewImageId);
   }
 
+  if (draft.orderToken) {
+    sessionStorage.setItem("dreamCheckoutOrderToken", draft.orderToken);
+  }
+
   if (draft.orderSnapshotToken) {
     sessionStorage.setItem("dreamOrderSnapshotToken", draft.orderSnapshotToken);
   }
@@ -190,6 +204,52 @@ function syncLegacyStorage(draft: WallpaperDraft) {
   if (draft.previewMeta) {
     sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(draft.previewMeta));
   }
+}
+
+function repairDraft(draft: WallpaperDraft): WallpaperDraft {
+  if (
+    draft.previewStatus === "ready" &&
+    (!draft.orderId || !draft.previewImageUrl || !draft.orderToken)
+  ) {
+    clearBrokenCheckoutState();
+    return {
+      ...draft,
+      orderId: null,
+      previewStatus: "not_started",
+      previewImageId: null,
+      previewImageUrl: null,
+      orderToken: null,
+      orderSnapshotToken: null,
+      previewMeta: null,
+    };
+  }
+
+  return draft;
+}
+
+function repairStalePreviewPolicy() {
+  const previewGenerated = sessionStorage.getItem("dreamPreviewGenerated") === "true";
+  const hasOrderToken = Boolean(sessionStorage.getItem("dreamCheckoutOrderToken"));
+
+  if (previewGenerated && !hasOrderToken) {
+    clearBrokenCheckoutState();
+    sessionStorage.setItem(
+      policyKey,
+      JSON.stringify({ freePreviewUsed: false, freePreviewDraftId: null }),
+    );
+    sessionStorage.setItem("dreamPreviewGenerated", "false");
+  }
+}
+
+export function clearBrokenCheckoutState() {
+  sessionStorage.removeItem("dreamOrderToken");
+  sessionStorage.removeItem("dreamCheckoutOrderToken");
+  sessionStorage.removeItem("dreamOrderSnapshotToken");
+  sessionStorage.removeItem("dreamOrderId");
+  sessionStorage.removeItem("dreamPreviewImageId");
+  sessionStorage.removeItem("dreamPreviewCreated");
+  sessionStorage.removeItem("dreamPreviewMeta");
+  sessionStorage.removeItem("previewImageUrl");
 }
 
 function readJson<T>(key: string) {

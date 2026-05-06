@@ -1,14 +1,27 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Pricing } from "@/components/Pricing";
+import { verifyCheckoutOrderToken } from "@/lib/order-state";
 
 type CheckoutPageProps = {
-  searchParams: Promise<{ orderId?: string }>;
+  searchParams: Promise<{ orderId?: string; orderToken?: string }>;
 };
 
 export default async function CheckoutPage({ searchParams }: CheckoutPageProps) {
   const params = await searchParams;
   const orderId = params.orderId || "";
+  const orderToken = params.orderToken || "";
+  const initialOrder = orderToken ? await readCheckoutToken(orderToken) : null;
+  const tokenExpired = Boolean(orderToken && !initialOrder);
+
+  console.info(
+    JSON.stringify({
+      event: "checkout_load",
+      hasOrderToken: Boolean(orderToken),
+      tokenValid: Boolean(initialOrder),
+      orderId: initialOrder?.orderId || orderId || undefined,
+    }),
+  );
 
   return (
     <main className="min-h-screen px-4 py-4 sm:px-6">
@@ -31,8 +44,27 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
             Payment is verified server-side before final generation and download.
           </p>
         </div>
-        <Pricing orderId={orderId} />
+        <Pricing
+          orderId={initialOrder?.orderId || orderId}
+          orderToken={orderToken}
+          initialOrder={initialOrder}
+          tokenExpired={tokenExpired}
+        />
       </div>
     </main>
   );
+}
+
+async function readCheckoutToken(orderToken: string) {
+  try {
+    return await verifyCheckoutOrderToken(orderToken);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "checkout_token_error",
+        error: error instanceof Error ? error.message : "Unknown token error",
+      }),
+    );
+    return null;
+  }
 }

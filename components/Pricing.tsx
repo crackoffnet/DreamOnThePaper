@@ -1,50 +1,89 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
 import { TrustBadges } from "@/components/TrustBadges";
+import type { CheckoutOrderToken } from "@/lib/order-state";
 import type { PackageId } from "@/lib/plans";
 import { packageIds } from "@/lib/plans";
-import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { getCurrentDraft } from "@/lib/wallpaperDraft";
-import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
+import type { DeviceType, QuoteTone, RatioType, ThemeType, WallpaperMeta, WallpaperStyle } from "@/lib/types";
+import { clearBrokenCheckoutState, getCurrentDraft } from "@/lib/wallpaperDraft";
+import { labels } from "@/lib/wallpaper";
 
 type PricingState = {
   imageUrl: string;
-  input: WallpaperInput | null;
   meta: WallpaperMeta | null;
   orderId: string | null;
+  orderToken: string | null;
   orderSnapshotToken: string | null;
 };
 
-export function Pricing({ orderId }: { orderId?: string }) {
+type PricingProps = {
+  orderId?: string;
+  orderToken?: string;
+  initialOrder?: CheckoutOrderToken | null;
+  tokenExpired?: boolean;
+};
+
+export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: PricingProps) {
   const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
   const [state, setState] = useState<PricingState>({
     imageUrl: "",
-    input: null,
     meta: null,
     orderId: null,
+    orderToken: null,
     orderSnapshotToken: null,
   });
 
   useEffect(() => {
     try {
+      if (initialOrder?.previewImageUrl) {
+        const meta = metaFromCheckoutOrder(initialOrder);
+        sessionStorage.setItem("dreamOrderId", initialOrder.orderId);
+        sessionStorage.setItem("dreamCheckoutOrderToken", orderToken || "");
+        sessionStorage.setItem("previewImageUrl", initialOrder.previewImageUrl);
+        if (initialOrder.previewImageId) {
+          sessionStorage.setItem("dreamPreviewImageId", initialOrder.previewImageId);
+        }
+        console.info("Checkout preview restored", {
+          hasOrderToken: Boolean(orderToken),
+          orderId: initialOrder.orderId,
+        });
+        setState({
+          imageUrl: initialOrder.previewImageUrl,
+          meta,
+          orderId: initialOrder.orderId,
+          orderToken: orderToken || null,
+          orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
+        });
+        return;
+      }
+
       const draft = getCurrentDraft();
       const activeOrderId = orderId || sessionStorage.getItem("dreamOrderId");
+      const activeOrderToken =
+        orderToken || draft.orderToken || sessionStorage.getItem("dreamCheckoutOrderToken");
 
       if (!activeOrderId || draft.orderId !== activeOrderId) {
-        setState((current) => ({ ...current, orderId: activeOrderId || null }));
+        console.info("Checkout preview missing", {
+          hasOrderToken: Boolean(activeOrderToken),
+          hasOrderId: Boolean(activeOrderId),
+        });
+        setState((current) => ({
+          ...current,
+          orderId: activeOrderId || null,
+          orderToken: activeOrderToken || null,
+        }));
         return;
       }
 
       setState({
         imageUrl: draft.previewImageUrl || sessionStorage.getItem("previewImageUrl") || "",
-        input: draft.input,
         meta: draft.previewMeta || null,
         orderId: draft.orderId || activeOrderId,
+        orderToken: activeOrderToken || null,
         orderSnapshotToken:
           draft.orderSnapshotToken ||
           sessionStorage.getItem("dreamOrderSnapshotToken"),
@@ -52,31 +91,36 @@ export function Pricing({ orderId }: { orderId?: string }) {
     } catch {
       setState({
         imageUrl: "",
-        input: null,
         meta: null,
         orderId: orderId || null,
+        orderToken: orderToken || null,
         orderSnapshotToken: null,
       });
     }
-  }, [orderId]);
+  }, [initialOrder, orderId, orderToken]);
 
-  if (!state.orderId || !state.imageUrl || !state.input || !state.meta) {
+  if (!state.orderId || !state.imageUrl || !state.meta) {
     return (
       <div className="rounded-[1.75rem] border border-white/70 bg-white/60 p-6 shadow-soft">
         <Sparkles aria-hidden className="mb-4 h-6 w-6 text-gold" />
         <h2 className="text-3xl font-semibold text-ink">
-          Create your preview first.
+          {tokenExpired ? "Your preview expired." : "Create your preview first."}
         </h2>
         <p className="mt-3 text-sm leading-6 text-taupe">
-          Generate a low-quality preview before choosing a package and starting
-          secure checkout.
+          {tokenExpired
+            ? "Please create a new preview before choosing a package."
+            : "Generate a low-quality preview before choosing a package and starting secure checkout."}
         </p>
-        <Link
-          href="/create"
+        <button
+          type="button"
+          onClick={() => {
+            clearBrokenCheckoutState();
+            window.location.href = "/create";
+          }}
           className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-pearl"
         >
           Back to Create
-        </Link>
+        </button>
       </div>
     );
   }
@@ -111,7 +155,7 @@ export function Pricing({ orderId }: { orderId?: string }) {
         </div>
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Device: {labels.devices[state.meta.device]}</p>
-          <p>Ratio: {getAspectRatioLabel(state.input)}</p>
+          <p>Ratio: {labels.ratios[state.meta.ratio]}</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>
@@ -132,9 +176,22 @@ export function Pricing({ orderId }: { orderId?: string }) {
         <CheckoutCTA
           packageId={selectedPackage}
           orderId={state.orderId}
+          orderToken={state.orderToken}
           orderSnapshotToken={state.orderSnapshotToken}
         />
       </aside>
     </div>
   );
+}
+
+function metaFromCheckoutOrder(order: CheckoutOrderToken): WallpaperMeta {
+  return {
+    device: order.device as DeviceType,
+    ratio: order.ratio as RatioType,
+    theme: order.theme as ThemeType,
+    style: order.style as WallpaperStyle,
+    quoteTone: order.quoteTone as QuoteTone,
+    imageSize: `${order.width}x${order.height}`,
+    aspectRatio: `${order.width} / ${order.height}`,
+  };
 }

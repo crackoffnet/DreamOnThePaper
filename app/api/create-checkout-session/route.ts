@@ -6,10 +6,12 @@ import {
 import { createCheckoutSession, getMissingCheckoutEnv } from "@/lib/payment";
 import { checkIpRateLimit } from "@/lib/rateLimit";
 import {
+  checkoutPayloadToMeta,
   getOrderById,
   markOrderPendingPayment,
   signOrderSnapshot,
   storeOrder,
+  verifyCheckoutOrderToken,
   verifyOrderSnapshotToken,
 } from "@/lib/order-state";
 
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
       return checkoutError("Request origin is not allowed.", 403);
     }
 
-    if (!checkIpRateLimit(request, "checkout", 5, 60 * 60 * 1000)) {
+    if (!(await checkIpRateLimit(request, "checkout", 5, 60 * 60 * 1000))) {
       return checkoutError("Too many checkout attempts. Please wait a moment.", 429);
     }
 
@@ -46,43 +48,79 @@ export async function POST(request: Request) {
       );
     }
 
+    const checkoutToken = parsed.data.orderToken
+      ? await verifyCheckoutOrderToken(parsed.data.orderToken)
+      : null;
     const tokenOrder = parsed.data.orderSnapshotToken
       ? await verifyOrderSnapshotToken(parsed.data.orderSnapshotToken)
       : null;
-    const storedOrder = getOrderById(parsed.data.orderId);
+    const requestedOrderId =
+      parsed.data.orderId || checkoutToken?.orderId || tokenOrder?.orderId || "";
+    const storedOrder = requestedOrderId ? getOrderById(requestedOrderId) : null;
     const orderSource =
       storedOrder ||
-      (tokenOrder?.orderId === parsed.data.orderId ? tokenOrder : null);
+      (tokenOrder?.orderId === requestedOrderId ? tokenOrder : null);
+    const checkoutMeta =
+      checkoutToken && checkoutToken.orderId === requestedOrderId
+        ? checkoutPayloadToMeta(checkoutToken)
+        : null;
 
-    if (!orderSource || orderSource.status === "final_generated") {
+    if (!orderSource && !checkoutMeta) {
       logCheckoutDiagnostic("order_missing_or_invalid", {
         requestId,
-        orderId: parsed.data.orderId,
+        orderId: requestedOrderId,
+        reason: parsed.data.orderToken ? "invalid_or_expired_token" : "missing_order",
       });
-      return checkoutError("Create your preview first.", 404);
+      return checkoutError(
+        parsed.data.orderToken
+          ? "Your preview expired. Please create a new preview."
+          : "Create your preview first.",
+        404,
+      );
     }
 
-    const order = markOrderPendingPayment(orderSource, parsed.data.packageType);
-    const orderSnapshotToken = await signOrderSnapshot(order);
+    if (orderSource?.status === "final_generated") {
+      logCheckoutDiagnostic("order_missing_or_invalid", {
+        requestId,
+        orderId: requestedOrderId,
+        reason: "final_already_generated",
+      });
+      return checkoutError("This order has already been completed.", 409);
+    }
 
-    const result = await createCheckoutSession(parsed.data.packageType, {
-      orderId: order.orderId,
-      packageType: parsed.data.packageType,
-      device: order.device || order.input.device,
-      ratio: order.ratio || order.input.ratio,
-      width: order.width || "",
-      height: order.height || "",
-      theme: order.theme || order.input.theme,
-      style: order.style || order.input.style,
-      quoteTone: order.quoteTone || order.input.quoteTone,
-      promptHash: order.promptHash,
-    });
+    const order = orderSource
+      ? markOrderPendingPayment(orderSource, parsed.data.packageType)
+      : null;
+    const orderSnapshotToken = order ? await signOrderSnapshot(order) : null;
+    const metadata = order
+      ? {
+          orderId: order.orderId,
+          packageType: parsed.data.packageType,
+          device: order.device || order.input.device,
+          ratio: order.ratio || order.input.ratio,
+          width: order.width || "",
+          height: order.height || "",
+          theme: order.theme || order.input.theme,
+          style: order.style || order.input.style,
+          quoteTone: order.quoteTone || order.input.quoteTone,
+          promptHash: order.promptHash,
+        }
+      : {
+          ...checkoutMeta!,
+          packageType: parsed.data.packageType,
+        };
 
-    if (result.mock) {
+    const result = await createCheckoutSession(parsed.data.packageType, metadata);
+
+    if (result.mock && order) {
       storeOrder({ ...order, sessionId: result.sessionId, status: "paid" });
     }
 
-    return NextResponse.json({ success: true, orderSnapshotToken, ...result });
+    return NextResponse.json({
+      success: true,
+      ...(orderSnapshotToken ? { orderSnapshotToken } : {}),
+      ...result,
+    });
   } catch (error) {
     logCheckoutDiagnostic("stripe_checkout_failed", {
       requestId,

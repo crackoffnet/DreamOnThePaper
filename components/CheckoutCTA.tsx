@@ -7,6 +7,7 @@ import type { PackageId } from "@/lib/plans";
 type CheckoutCTAProps = {
   packageId: PackageId;
   orderId: string | null;
+  orderToken?: string | null;
   orderSnapshotToken?: string | null;
   label?: string;
 };
@@ -14,6 +15,7 @@ type CheckoutCTAProps = {
 export function CheckoutCTA({
   packageId,
   orderId,
+  orderToken,
   orderSnapshotToken,
   label = "Secure Checkout",
 }: CheckoutCTAProps) {
@@ -21,7 +23,7 @@ export function CheckoutCTA({
   const [error, setError] = useState("");
 
   async function startCheckout() {
-    if (!orderId) {
+    if (!orderId && !orderToken) {
       setError("Create your preview first.");
       return;
     }
@@ -36,6 +38,7 @@ export function CheckoutCTA({
         body: JSON.stringify({
           packageType: packageId,
           orderId,
+          orderToken,
           orderSnapshotToken,
           website: "",
         }),
@@ -53,7 +56,8 @@ export function CheckoutCTA({
         !response.ok ||
         data.success === false ||
         !data.url ||
-        !data.orderSnapshotToken
+        !data.orderSnapshotToken &&
+        !orderSnapshotToken
       ) {
         if (process.env.NODE_ENV !== "production") {
           console.error("Checkout session failed", {
@@ -70,7 +74,9 @@ export function CheckoutCTA({
         );
       }
 
-      sessionStorage.setItem("dreamOrderSnapshotToken", data.orderSnapshotToken);
+      if (data.orderSnapshotToken) {
+        sessionStorage.setItem("dreamOrderSnapshotToken", data.orderSnapshotToken);
+      }
       window.location.href = data.url;
     } catch (checkoutError) {
       if (process.env.NODE_ENV !== "production") {
@@ -92,7 +98,7 @@ export function CheckoutCTA({
       <button
         type="button"
         onClick={startCheckout}
-        disabled={isLoading || !orderId}
+        disabled={isLoading || (!orderId && !orderToken)}
         className="focus-ring inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-sm font-semibold text-pearl shadow-soft transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? (

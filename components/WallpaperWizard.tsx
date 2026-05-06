@@ -203,15 +203,15 @@ export function WallpaperWizard() {
 
       if (activeDraft.previewStatus === "ready" && activeDraft.previewImageUrl) {
         router.push(
-          `/checkout?orderId=${encodeURIComponent(activeDraft.orderId || "")}`,
+          checkoutHref(activeDraft),
         );
         return;
       }
 
       if (policy.freePreviewUsed) {
         router.push(
-          activeDraft.orderId
-            ? `/checkout?orderId=${encodeURIComponent(activeDraft.orderId)}`
+          activeDraft.orderToken
+            ? checkoutHref(activeDraft)
             : "/checkout",
         );
         return;
@@ -253,6 +253,7 @@ export function WallpaperWizard() {
       const readyDraft = markDraftReady(imageUrl, data.meta, {
         orderId: data.orderId,
         previewImageId: data.previewImageId,
+        orderToken: data.orderToken,
         orderSnapshotToken: data.orderSnapshotToken,
       });
       setDraft(readyDraft);
@@ -261,7 +262,7 @@ export function WallpaperWizard() {
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
       sessionStorage.removeItem("dreamOrderToken");
-      router.push(`/checkout?orderId=${encodeURIComponent(readyDraft.orderId || "")}`);
+      router.push(checkoutHref(readyDraft));
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -414,7 +415,7 @@ export function WallpaperWizard() {
                     type="button"
                     onClick={() =>
                       router.push(
-                        `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`,
+                        checkoutHref(draft),
                       )
                     }
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
@@ -439,7 +440,7 @@ export function WallpaperWizard() {
                     type="button"
                     onClick={() =>
                       router.push(
-                        `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`,
+                        checkoutHref(draft),
                       )
                     }
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-gold px-4 text-sm font-medium text-ink"
@@ -489,7 +490,7 @@ export function WallpaperWizard() {
                     onClick={() =>
                       router.push(
                         draft?.orderId
-                          ? `/checkout?orderId=${encodeURIComponent(draft.orderId)}`
+                          ? checkoutHref(draft)
                           : "/checkout",
                       )
                     }
@@ -581,6 +582,14 @@ export function WallpaperWizard() {
       </aside>
     </form>
   );
+}
+
+function checkoutHref(draft: WallpaperDraft) {
+  if (draft.orderToken) {
+    return `/checkout?orderToken=${encodeURIComponent(draft.orderToken)}`;
+  }
+
+  return `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`;
 }
 
 type CustomSizeFieldsProps = {

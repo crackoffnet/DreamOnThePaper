@@ -1,3 +1,4 @@
+import { getWallpaperBucket } from "@/lib/cloudflare";
 import { getSiteUrl } from "@/lib/security";
 
 type StoredWallpaper = {
@@ -7,48 +8,82 @@ type StoredWallpaper = {
   createdAt: number;
 };
 
-const devWallpaperStore = new Map<string, StoredWallpaper>();
-const STORE_TTL_MS = 1000 * 60 * 60 * 6;
+const CACHE_CONTROL = "private, no-store";
+
+export async function savePreviewImage(
+  orderId: string,
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  return saveImageAtKey(`previews/${orderId}.webp`, bytes, contentType);
+}
+
+export async function saveFinalImage(
+  orderId: string,
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  return saveImageAtKey(`finals/${orderId}.png`, bytes, contentType);
+}
 
 export async function saveImage(bytes: Uint8Array, contentType = "image/png") {
   const id = crypto.randomUUID();
-  devWallpaperStore.set(id, { bytes, contentType, createdAt: Date.now() });
+  const key = `generated/${id}.${extensionForContentType(contentType)}`;
+  const saved = await saveImageAtKey(key, bytes, contentType);
 
-  // TODO: Replace with Cloudflare R2 put() using WALLPAPER_BUCKET.
   return {
-    id,
-    url: `/api/wallpaper-image/${id}`,
+    id: saved.key,
+    url: saved.url,
   };
 }
 
-export async function getImage(id: string) {
-  return getStoredWallpaper(id);
+export async function getImage(r2Key: string) {
+  return getWallpaperBucket().get(r2Key);
 }
 
-export async function imageExists(id: string) {
-  return Boolean(await getStoredWallpaper(id));
+export async function getImageResponse(r2Key: string) {
+  const object = await getImage(r2Key);
+
+  if (!object) {
+    return new Response("Image not found.", { status: 404 });
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("Cache-Control", CACHE_CONTROL);
+  headers.set("X-Content-Type-Options", "nosniff");
+
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/octet-stream");
+  }
+
+  return new Response(object.body, { headers });
 }
 
-export async function getSignedDownloadUrl(id: string) {
-  // TODO: Sign short-lived R2 download URLs once WALLPAPER_BUCKET is configured.
-  return imageExists(id).then((exists) =>
-    exists ? `${getSiteUrl()}/api/wallpaper-image/${id}` : null,
-  );
+export async function imageExists(r2Key: string) {
+  return Boolean(await getImage(r2Key));
 }
 
-export function saveGeneratedImageFromBase64(
+export async function getSignedDownloadUrl(r2Key: string) {
+  // TODO: Replace this app-routed URL with signed R2 URLs if public delivery is
+  // moved outside the Worker. Keep downloads private until the route verifies
+  // an order token.
+  return (await imageExists(r2Key))
+    ? `${getSiteUrl()}/api/wallpaper-image/${encodeURIComponent(r2Key)}`
+    : null;
+}
+
+export async function saveGeneratedImageFromBase64(
   content: string,
   contentType = "image/png",
 ) {
-  const id = crypto.randomUUID();
-  const bytes = base64ToBytes(content);
-  devWallpaperStore.set(id, { bytes, contentType, createdAt: Date.now() });
-
-  return `/api/wallpaper-image/${id}`;
+  const saved = await saveImage(base64ToBytes(content), contentType);
+  return saved.url;
 }
 
-export function saveGeneratedImageFromDataUrl(dataUrl: string) {
-  const match = dataUrl.match(/^data:(image\/(?:png|svg\+xml|jpeg));base64,(.+)$/);
+export async function saveGeneratedImageFromDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:(image\/(?:png|svg\+xml|jpeg|webp));base64,(.+)$/);
   if (!match) {
     return null;
   }
@@ -57,53 +92,45 @@ export function saveGeneratedImageFromDataUrl(dataUrl: string) {
 }
 
 export async function saveWallpaperForDelivery(imageUrl: string) {
-  const id = crypto.randomUUID();
-
-  // TODO: Replace this with Cloudflare R2 for durable delivery.
-  // Suggested binding: WALLPAPER_BUCKET
-  // Preferred production flow: upload PNG to private R2 and email a signed URL,
-  // or serve through a Worker route that verifies an expiring download token.
-  devWallpaperStore.set(id, { imageUrl, createdAt: Date.now() });
+  if (imageUrl.startsWith("/api/wallpaper-image/")) {
+    return {
+      id: decodeURIComponent(imageUrl.replace("/api/wallpaper-image/", "")),
+      url: `${getSiteUrl()}${imageUrl}`,
+    };
+  }
 
   return {
-    id,
-    url: imageUrl.startsWith("data:")
-      ? null
-      : imageUrl.startsWith("/")
-        ? `${getSiteUrl()}${imageUrl}`
-        : imageUrl,
+    id: crypto.randomUUID(),
+    url: imageUrl.startsWith("/")
+      ? `${getSiteUrl()}${imageUrl}`
+      : imageUrl,
   };
 }
 
-export async function getStoredWallpaper(id: string) {
-  const stored = devWallpaperStore.get(id);
+export async function getStoredWallpaper(r2Key: string): Promise<StoredWallpaper | null> {
+  const object = await getImage(r2Key);
 
-  if (!stored) {
+  if (!object) {
     return null;
   }
 
-  if (Date.now() - stored.createdAt > STORE_TTL_MS) {
-    devWallpaperStore.delete(id);
-    return null;
-  }
-
-  return stored;
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  return {
+    bytes,
+    contentType:
+      object.httpMetadata?.contentType ||
+      object.customMetadata?.contentType ||
+      "application/octet-stream",
+    createdAt: Date.parse(object.uploaded.toISOString()),
+  };
 }
 
 export function isTrustedGeneratedImage(value: string) {
-  if (value.startsWith("data:image/png;base64,")) {
-    return value.length <= 8_000_000;
-  }
-
-  if (value.startsWith("data:image/svg+xml;base64,")) {
-    return value.length <= 2_000_000;
+  if (value.startsWith("/api/wallpaper-image/")) {
+    return true;
   }
 
   try {
-    if (value.startsWith("/api/wallpaper-image/")) {
-      return true;
-    }
-
     const url = new URL(value);
     const siteUrl = new URL(getSiteUrl());
     const isOwnTemporaryImage =
@@ -118,19 +145,36 @@ export function isTrustedGeneratedImage(value: string) {
   }
 }
 
-export function dataUrlToAttachment(value: string) {
-  const match = value.match(/^data:(image\/(?:png|svg\+xml));base64,(.+)$/);
-  if (!match) {
-    return null;
-  }
+type EmailAttachment = {
+  contentType: string;
+  content: string;
+  filename: string;
+};
+
+export function dataUrlToAttachment(_value: string): EmailAttachment | null {
+  // R2-backed images should be delivered as trusted URLs. Attachments from
+  // arbitrary browser-provided data URLs are intentionally disabled.
+  return null;
+}
+
+async function saveImageAtKey(
+  key: string,
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  await getWallpaperBucket().put(key, bytes, {
+    httpMetadata: {
+      contentType,
+      cacheControl: CACHE_CONTROL,
+    },
+    customMetadata: {
+      contentType,
+    },
+  });
 
   return {
-    contentType: match[1],
-    content: match[2],
-    filename:
-      match[1] === "image/png"
-        ? "dream-on-the-paper-wallpaper.png"
-        : "dream-on-the-paper-wallpaper.svg",
+    key,
+    url: `/api/wallpaper-image/${encodeURIComponent(key)}`,
   };
 }
 
@@ -143,4 +187,20 @@ function base64ToBytes(content: string) {
   }
 
   return bytes;
+}
+
+function extensionForContentType(contentType: string) {
+  if (contentType === "image/webp") {
+    return "webp";
+  }
+
+  if (contentType === "image/svg+xml") {
+    return "svg";
+  }
+
+  if (contentType === "image/jpeg") {
+    return "jpg";
+  }
+
+  return "png";
 }
