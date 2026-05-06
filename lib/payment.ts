@@ -27,19 +27,56 @@ type OrderTokenPayload = {
 };
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 6;
+const stripePriceEnvNames: Record<PackageId, string> = {
+  single: "STRIPE_PRICE_SINGLE",
+  bundle: "STRIPE_PRICE_BUNDLE",
+  premium: "STRIPE_PRICE_PREMIUM",
+};
 
 export function getStripe() {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  const secretKey = getStripeSecretKey();
+
+  if (!secretKey) {
     return null;
   }
 
-  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+  return new Stripe(secretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
 }
 
 export function isPaymentConfigured() {
-  return Boolean(process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_SITE_URL);
+  return getMissingCheckoutEnv("single").length === 0;
+}
+
+export function getMissingCheckoutEnv(packageId: PackageId) {
+  const missing: string[] = [];
+
+  if (!getStripeSecretKey()) {
+    missing.push("STRIPE_SECRET_KEY");
+  }
+
+  if (!getSiteUrlFromEnv()) {
+    missing.push("PUBLIC_SITE_URL");
+  }
+
+  if (!getStripePriceId(packageId)) {
+    missing.push(stripePriceEnvNames[packageId]);
+  }
+
+  return missing;
+}
+
+export function getStripeSecretKey() {
+  return process.env.STRIPE_SECRET_KEY || process.env.STRIPE_KEY || "";
+}
+
+export function getSiteUrlFromEnv() {
+  return process.env.PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
+}
+
+export function getStripePriceId(packageId: PackageId) {
+  return process.env[stripePriceEnvNames[packageId]] || "";
 }
 
 export async function createCheckoutSession(
@@ -47,10 +84,10 @@ export async function createCheckoutSession(
   metadata: Record<string, string>,
 ) {
   const stripe = getStripe();
-  const plan = packages[packageId];
   const siteUrl = getSiteUrl();
+  const priceId = getStripePriceId(packageId);
 
-  if (!stripe || !process.env.NEXT_PUBLIC_SITE_URL) {
+  if (!stripe || !getSiteUrlFromEnv() || !priceId) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Stripe is not configured.");
     }
@@ -73,14 +110,7 @@ export async function createCheckoutSession(
       },
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Dream On The Paper - ${plan.name}`,
-              description: plan.description,
-            },
-            unit_amount: plan.amount,
-          },
+          price: priceId,
           quantity: 1,
         },
       ],

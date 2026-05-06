@@ -42,6 +42,7 @@ export function CheckoutCTA({
         success?: boolean;
         url?: string;
         orderSnapshotToken?: string;
+        missing?: string[];
         message?: string;
         error?: string;
       };
@@ -52,12 +53,28 @@ export function CheckoutCTA({
         !data.url ||
         !data.orderSnapshotToken
       ) {
-        throw new Error(data.message || data.error || "Unable to start checkout.");
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Checkout session failed", {
+            status: response.status,
+            message: data.message || data.error,
+            missing: data.missing,
+          });
+        }
+
+        throw new Error(
+          response.status === 503
+            ? "Checkout is temporarily unavailable. Please try again soon."
+            : data.message || data.error || "Unable to start checkout.",
+        );
       }
 
       sessionStorage.setItem("dreamOrderSnapshotToken", data.orderSnapshotToken);
       window.location.href = data.url;
     } catch (checkoutError) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Checkout redirect failed", checkoutError);
+      }
+
       setError(
         checkoutError instanceof Error
           ? checkoutError.message

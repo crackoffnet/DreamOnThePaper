@@ -30,7 +30,7 @@ export function Hero() {
           </p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <ButtonLink href="/create">Create My Wallpaper</ButtonLink>
-            <ButtonLink href="#examples" variant="secondary">
+            <ButtonLink href="/#examples" variant="secondary">
               View examples
             </ButtonLink>
           </div>

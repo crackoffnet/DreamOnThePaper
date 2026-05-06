@@ -22,9 +22,9 @@ export function Footer() {
         <Link href="/create" className="transition hover:text-ink">
           Create
         </Link>
-        <a href="#examples" className="transition hover:text-ink">
+        <Link href="/#examples" className="transition hover:text-ink">
           Examples
-        </a>
+        </Link>
         <Link href="/privacy-policy" className="transition hover:text-ink">
           Privacy
         </Link>

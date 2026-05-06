@@ -8,7 +8,11 @@ export function jsonError(message: string, status = 400) {
 }
 
 export function getSiteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL || "https://dreamonthepaper.com")
+  return (
+    process.env.PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://www.dreamonthepaper.com"
+  )
     .replace(/\/+$/, "");
 }
 

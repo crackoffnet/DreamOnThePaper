@@ -4,7 +4,7 @@ import {
   assertSameOrigin,
   safeLog,
 } from "@/lib/security";
-import { createCheckoutSession } from "@/lib/payment";
+import { createCheckoutSession, getMissingCheckoutEnv } from "@/lib/payment";
 import { checkIpRateLimit } from "@/lib/rateLimit";
 import {
   createOrderSnapshot,
@@ -23,23 +23,17 @@ export async function POST(request: Request) {
       return checkoutError("Too many checkout attempts. Please wait a moment.", 429);
     }
 
-    if (!process.env.STRIPE_SECRET_KEY || !process.env.NEXT_PUBLIC_SITE_URL) {
-      safeLog(
-        `Checkout configuration missing: ${
-          !process.env.STRIPE_SECRET_KEY ? "STRIPE_SECRET_KEY " : ""
-        }${!process.env.NEXT_PUBLIC_SITE_URL ? "NEXT_PUBLIC_SITE_URL" : ""}`.trim(),
-      );
-      return checkoutError(
-        "Checkout is temporarily unavailable. Please try again soon.",
-        503,
-      );
-    }
-
     const body = await request.json().catch(() => null);
     const parsed = checkoutSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
       return checkoutError("Please check your order details and try again.");
+    }
+
+    const missing = getMissingCheckoutEnv(parsed.data.packageId);
+    if (missing.length > 0) {
+      safeLog(`Checkout configuration missing: ${missing.join(", ")}`);
+      return checkoutError("Checkout is not configured", 503, missing);
     }
 
     if (!hasMeaningfulInput(parsed.data.wallpaperInput)) {
@@ -87,12 +81,13 @@ export async function POST(request: Request) {
   }
 }
 
-function checkoutError(message: string, status = 400) {
+function checkoutError(message: string, status = 400, missing?: string[]) {
   return NextResponse.json(
     {
       success: false,
       message,
       error: message,
+      ...(missing ? { missing } : {}),
     },
     { status },
   );

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { getStripeSecretKey } from "@/lib/payment";
 import { jsonError, safeLog } from "@/lib/security";
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  const stripeSecret = getStripeSecretKey();
 
   if (!secret || !stripeSecret) {
     return jsonError("Webhook is not configured.", 503);

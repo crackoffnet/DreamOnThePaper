@@ -29,6 +29,10 @@ Copy `.env.example` to `.env.local`.
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_SINGLE=
+STRIPE_PRICE_BUNDLE=
+STRIPE_PRICE_PREMIUM=
+PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
 RESEND_API_KEY=
@@ -67,11 +71,23 @@ In Stripe Dashboard:
   - Events: `checkout.session.completed`, `payment_intent.payment_failed`
 - Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 
-The app uses inline `price_data` for:
+Create Stripe Prices for:
 
-- Single wallpaper: `$7.99`
-- Mobile + desktop bundle: `$12.99`
-- Premium 3-version pack: `$19.99`
+- Single wallpaper: `$4.99`
+- Mobile + desktop bundle: `$6.99`
+- Premium 3-version pack: `$11.99`
+
+Then set:
+
+```bash
+STRIPE_PRICE_SINGLE=price_...
+STRIPE_PRICE_BUNDLE=price_...
+STRIPE_PRICE_PREMIUM=price_...
+```
+
+Use `STRIPE_SECRET_KEY`, not `STRIPE_KEY`, as the preferred production secret
+name. The server has a temporary fallback for `STRIPE_KEY`, but Cloudflare should
+be configured with `STRIPE_SECRET_KEY`.
 
 ## Resend Setup
 
@@ -92,6 +108,10 @@ NODE_VERSION=22
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_SINGLE=
+STRIPE_PRICE_BUNDLE=
+STRIPE_PRICE_PREMIUM=
+PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
 RESEND_API_KEY=
@@ -100,7 +120,8 @@ TURNSTILE_SECRET_KEY=
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```
 
-Production checkout requires `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_SITE_URL`.
+Production checkout requires `STRIPE_SECRET_KEY`, `PUBLIC_SITE_URL`, and the
+three `STRIPE_PRICE_*` variables.
 Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
 
 The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
