@@ -27,7 +27,6 @@ type OrderTokenPayload = {
 };
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 6;
-
 export function getStripe() {
   const secretKey = getStripeSecretKey();
 
@@ -91,6 +90,7 @@ export async function createCheckoutSession(
   } = {
       mode: "payment",
       automatic_payment_methods: { enabled: true },
+      automatic_tax: { enabled: true },
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/checkout?orderId=${metadata.orderId}`,
       metadata: {

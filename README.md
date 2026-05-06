@@ -73,6 +73,19 @@ Checkout uses inline Stripe `price_data` for:
 - Mobile + desktop bundle: `$6.99`
 - Premium 3-version pack: `$11.99`
 
+Stripe Tax is enabled in hosted Checkout with `automatic_tax`. To collect tax,
+confirm these Stripe Dashboard settings:
+
+1. Stripe Tax is enabled.
+2. Your business address is confirmed.
+3. A product tax code is selected for digital goods, or Stripe's default
+   product tax code is set for the account.
+4. A tax registration is added, for example California.
+5. Checkout Sessions are created with `automatic_tax.enabled = true`.
+
+The app does not manually calculate tax, collect tax in the frontend, or use
+hardcoded tax rates.
+
 Use `STRIPE_SECRET_KEY`, not `STRIPE_KEY`, in Cloudflare. Use `sk_test_...`
 while Stripe is in test mode. Use `sk_live_...` only after the Stripe account is
 activated, and do not mix test keys with live-mode webhooks or products.
