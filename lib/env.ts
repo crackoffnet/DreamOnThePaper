@@ -48,6 +48,9 @@ export function getRuntimeEnvPresence() {
     hasBundlePriceId: Boolean(env.STRIPE_BUNDLE_PRICE_ID),
     hasPremiumPriceId: Boolean(env.STRIPE_PREMIUM_PRICE_ID),
     hasSiteUrl: Boolean(env.NEXT_PUBLIC_SITE_URL),
+    hasBrevoApiKey: Boolean(env.BREVO_API_KEY),
+    hasFromEmail: Boolean(env.FROM_EMAIL),
+    hasFromName: Boolean(env.FROM_NAME),
   };
 }
 

@@ -11,16 +11,21 @@ import { getImage } from "@/lib/storage";
 
 const unavailableMessage =
   "Email delivery is not available yet. Please download your wallpaper.";
-const maxAttachmentBytes = 8 * 1024 * 1024;
+const maxAttachmentBytes = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  let orderId: string | undefined;
+
   try {
     if (!assertSameOrigin(request)) {
+      logEmailFailure({ requestId, failureReason: "Origin not allowed" });
       return jsonError("Request origin is not allowed.", 403);
     }
 
     const ipLimit = await checkEmailIpRateLimit(getClientIp(request));
     if (!ipLimit.allowed) {
+      logEmailFailure({ requestId, failureReason: "Email IP rate limit exceeded" });
       return emailError("Too many email attempts. Please wait and try again.", 429);
     }
 
@@ -28,11 +33,13 @@ export async function POST(request: Request) {
     const parsed = emailWallpaperSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
+      logEmailFailure({ requestId, failureReason: "Invalid email request body" });
       return emailError("Please enter a valid email address.");
     }
 
     const token = await verifyFinalGenerationToken(parsed.data.finalGenerationToken);
     const order = token ? await getOrder(token.orderId) : null;
+    orderId = token?.orderId;
 
     if (
       !token ||
@@ -42,23 +49,49 @@ export async function POST(request: Request) {
       order.prompt_hash !== token.promptHash ||
       order.stripe_session_id !== token.sessionId
     ) {
+      logEmailFailure({
+        requestId,
+        orderId,
+        failureReason: "Invalid final generation token or order state",
+      });
       return emailError("Please confirm payment before emailing.", 402);
     }
 
     const env = getRuntimeEnv();
-    if (!env.BREVO_API_KEY || !env.FROM_EMAIL || !env.FROM_NAME) {
+    const brevoApiKey = env.BREVO_API_KEY;
+    const fromEmail = env.FROM_EMAIL;
+    const fromName = env.FROM_NAME;
+    const missingEmailEnv = getMissingEmailEnv(env);
+    if (missingEmailEnv.length > 0) {
+      logEmailFailure({
+        requestId,
+        orderId,
+        failureReason: `Missing ${missingEmailEnv.join(", ")}`,
+        envPresence: {
+          hasBrevoApiKey: Boolean(env.BREVO_API_KEY),
+          hasFromEmail: Boolean(env.FROM_EMAIL),
+          hasFromName: Boolean(env.FROM_NAME),
+        },
+      });
       return emailError(unavailableMessage, 503);
     }
 
     const orderLimit = await checkEmailOrderRateLimit(order.id);
     if (!orderLimit.allowed) {
+      logEmailFailure({ requestId, orderId, failureReason: "Email order rate limit exceeded" });
       return emailError("Too many email attempts. Please wait and try again.", 429);
     }
 
     const stored = await getImage(order.final_r2_key);
     if (!stored || stored.size > maxAttachmentBytes) {
+      logEmailFailure({
+        requestId,
+        orderId,
+        failureReason: stored ? "Final image too large for email" : "Final R2 image missing",
+        imageSize: stored?.size,
+      });
       return emailError(
-        "Email delivery is not available for this file size yet. Please download your wallpaper.",
+        "This wallpaper is too large to email. Please use the download button.",
         413,
       );
     }
@@ -68,13 +101,13 @@ export async function POST(request: Request) {
       method: "POST",
       headers: {
         accept: "application/json",
-        "api-key": env.BREVO_API_KEY,
+        "api-key": brevoApiKey!,
         "content-type": "application/json",
       },
       body: JSON.stringify({
         sender: {
-          name: env.FROM_NAME,
-          email: env.FROM_EMAIL,
+          name: fromName!,
+          email: fromEmail!,
         },
         to: [{ email: parsed.data.email }],
         subject: "Your Dream On The Paper wallpaper is ready",
@@ -90,15 +123,59 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      safeLog("Brevo email failed", response.status);
-      return emailError("Unable to send the email right now.", 502);
+      const brevoError = await response.text().catch(() => "");
+      console.error("[brevo-email]", {
+        requestId,
+        orderId,
+        status: response.status,
+        statusText: response.statusText,
+        brevoError: brevoError.slice(0, 500),
+      });
+      return emailError("Email delivery failed. Please download your wallpaper.", 502);
     }
 
+    console.info("[brevo-email]", {
+      requestId,
+      orderId,
+      status: response.status,
+      event: "email_sent",
+    });
     return Response.json({ success: true, sent: true });
   } catch (error) {
-    safeLog("Wallpaper email failed", error);
+    const message = error instanceof Error ? error.message : "Unknown email error";
+    console.error("[brevo-email]", {
+      requestId,
+      orderId,
+      failureReason: "Unhandled email route error",
+      message,
+    });
+    safeLog("Wallpaper email failed", message);
     return emailError("Unable to send the email right now.", 500);
   }
+}
+
+function getMissingEmailEnv(env: ReturnType<typeof getRuntimeEnv>) {
+  return [
+    ["BREVO_API_KEY", env.BREVO_API_KEY],
+    ["FROM_EMAIL", env.FROM_EMAIL],
+    ["FROM_NAME", env.FROM_NAME],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+}
+
+function logEmailFailure(details: {
+  requestId: string;
+  orderId?: string;
+  failureReason: string;
+  imageSize?: number;
+  envPresence?: {
+    hasBrevoApiKey: boolean;
+    hasFromEmail: boolean;
+    hasFromName: boolean;
+  };
+}) {
+  console.error("[brevo-email]", details);
 }
 
 function emailError(message: string, status = 400) {

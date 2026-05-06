@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data:",
-          "connect-src 'self' https://api.openai.com https://api.resend.com https://api.stripe.com https://checkout.stripe.com",
+          "connect-src 'self' https://api.openai.com https://api.brevo.com https://api.stripe.com https://checkout.stripe.com",
           "base-uri 'self'",
           "form-action 'self' https://checkout.stripe.com",
           "frame-src https://checkout.stripe.com",

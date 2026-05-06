@@ -30,13 +30,7 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
       };
 
       if (!response.ok) {
-        throw new Error(
-          response.status === 503
-            ? "Email delivery is not available yet. Please download your wallpaper."
-            : response.status === 429
-              ? "Too many email attempts. Please wait and try again."
-              : data.message || data.error || "Unable to send email.",
-        );
+        throw new Error(emailErrorMessage(response.status, data));
       }
 
       setStatus("Wallpaper sent. Check your inbox.");
@@ -95,4 +89,27 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
       ) : null}
     </form>
   );
+}
+
+function emailErrorMessage(
+  status: number,
+  data: { error?: string; message?: string },
+) {
+  if (status === 503) {
+    return "Email delivery is not available yet. Please download your wallpaper.";
+  }
+
+  if (status === 502) {
+    return "Email delivery failed. Please download your wallpaper.";
+  }
+
+  if (status === 429) {
+    return "Too many email attempts. Please wait and try again.";
+  }
+
+  if (status === 413) {
+    return "This wallpaper is too large to email. Please use the download button.";
+  }
+
+  return data.message || data.error || "Unable to send email.";
 }
