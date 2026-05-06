@@ -128,8 +128,7 @@ export const verifyPaymentSchema = z
 
 export const emailWallpaperSchema = z.object({
   email: z.string().email().max(254),
-  imageUrl: z.string().min(40).max(8_000_000),
-  orderToken: z.string().min(24).max(12000).optional(),
+  finalGenerationToken: z.string().min(24).max(12000),
   website: z.string().max(0).optional().or(z.literal("")),
 });
 

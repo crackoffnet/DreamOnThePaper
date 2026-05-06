@@ -24,6 +24,7 @@ export function ResultPreview() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [orderToken, setOrderToken] = useState("");
+  const [orderId, setOrderId] = useState("");
 
   useEffect(() => {
     const imageUrl = getEphemeralImage("finalImageUrl");
@@ -34,6 +35,7 @@ export function ResultPreview() {
 
     setResult({ imageUrl, input, meta });
     setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
+    setOrderId(sessionStorage.getItem("dreamOrderId") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => window.clearTimeout(timer);
   }, []);
@@ -67,6 +69,9 @@ export function ResultPreview() {
   }
 
   const meta = result.meta;
+  const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
+  const protectedImageUrl = withDownloadToken(result.imageUrl, orderToken);
+  const filename = `dream-on-the-paper-wallpaper-${orderIdShort}.png`;
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[0.42fr_0.58fr]">
@@ -92,8 +97,8 @@ export function ResultPreview() {
 
         <div className="mt-6 grid gap-3">
           <a
-            href={result.imageUrl}
-            download="dream-on-the-paper-wallpaper.png"
+            href={protectedImageUrl}
+            download={filename}
             className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa"
           >
             <Download aria-hidden className="h-4 w-4" />
@@ -107,9 +112,12 @@ export function ResultPreview() {
             Try Different Style
           </Link>
         </div>
+        <p className="mt-3 text-xs leading-5 text-taupe">
+          Your private wallpaper is only available through this paid session.
+        </p>
         <div className="mt-4 grid gap-3">
-          <SharePanel imageUrl={result.imageUrl} />
-          <EmailDeliveryForm imageUrl={result.imageUrl} orderToken={orderToken} />
+          <SharePanel />
+          <EmailDeliveryForm finalGenerationToken={orderToken} />
         </div>
       </div>
 
@@ -122,7 +130,7 @@ export function ResultPreview() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={result.imageUrl}
+            src={protectedImageUrl}
             alt="Generated Dream On The Paper wallpaper"
             className="h-full w-full object-cover"
           />
@@ -130,6 +138,15 @@ export function ResultPreview() {
       </div>
     </section>
   );
+}
+
+function withDownloadToken(imageUrl: string, token: string) {
+  if (!imageUrl || !token || !imageUrl.includes("/api/wallpaper-image/finals")) {
+    return imageUrl;
+  }
+
+  const separator = imageUrl.includes("?") ? "&" : "?";
+  return `${imageUrl}${separator}token=${encodeURIComponent(token)}`;
 }
 
 function parseJson<T>(value: string | null): T | null {

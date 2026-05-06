@@ -4,11 +4,10 @@ import { FormEvent, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
 
 type EmailDeliveryFormProps = {
-  imageUrl: string;
-  orderToken: string;
+  finalGenerationToken: string;
 };
 
-export function EmailDeliveryForm({ imageUrl, orderToken }: EmailDeliveryFormProps) {
+export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormProps) {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState("");
@@ -23,15 +22,24 @@ export function EmailDeliveryForm({ imageUrl, orderToken }: EmailDeliveryFormPro
       const response = await fetch("/api/send-wallpaper-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, imageUrl, orderToken, website }),
+        body: JSON.stringify({ email, finalGenerationToken, website }),
       });
-      const data = (await response.json()) as { error?: string; mock?: boolean };
+      const data = (await response.json()) as {
+        error?: string;
+        message?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(data.error || "Unable to send email.");
+        throw new Error(
+          response.status === 503
+            ? "Email delivery is not available yet. Please download your wallpaper."
+            : response.status === 429
+              ? "Too many email attempts. Please wait and try again."
+              : data.message || data.error || "Unable to send email.",
+        );
       }
 
-      setStatus(data.mock ? "Email mock sent in development." : "Wallpaper sent.");
+      setStatus("Wallpaper sent. Check your inbox.");
       setEmail("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to send email.");
@@ -68,7 +76,7 @@ export function EmailDeliveryForm({ imageUrl, orderToken }: EmailDeliveryFormPro
       />
       <button
         type="submit"
-        disabled={isSending || !imageUrl}
+        disabled={isSending || !finalGenerationToken}
         className="focus-ring mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-ink transition hover:bg-pearl disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSending ? (
@@ -76,9 +84,15 @@ export function EmailDeliveryForm({ imageUrl, orderToken }: EmailDeliveryFormPro
         ) : (
           <Mail aria-hidden className="h-4 w-4" />
         )}
-        Send Wallpaper
+        {isSending ? "Sending..." : "Send Wallpaper"}
       </button>
       {status ? <p className="mt-2 text-xs text-taupe">{status}</p> : null}
+      {!status ? (
+        <p className="mt-2 text-xs leading-5 text-taupe">
+          Email delivery uses your verified paid wallpaper only. Please download
+          your PNG as the primary copy.
+        </p>
+      ) : null}
     </form>
   );
 }

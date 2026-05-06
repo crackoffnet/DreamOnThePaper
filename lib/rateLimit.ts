@@ -18,10 +18,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const CHECKOUT_LIMIT_PER_HOUR = 20;
 const PREVIEW_LIMIT_PER_DAY = 3;
+const EMAIL_IP_LIMIT_PER_HOUR = 5;
+const EMAIL_ORDER_LIMIT = 3;
 
 export const rateLimitConfig = {
   checkoutLimitPerHour: CHECKOUT_LIMIT_PER_HOUR,
   previewLimitPerDay: PREVIEW_LIMIT_PER_DAY,
+  emailIpLimitPerHour: EMAIL_IP_LIMIT_PER_HOUR,
+  emailOrderLimit: EMAIL_ORDER_LIMIT,
 };
 
 export async function checkPreviewRateLimit(ipOrSession: string) {
@@ -34,6 +38,14 @@ export async function checkCheckoutRateLimit(ip: string) {
 
 export async function checkCheckoutRateLimitDetailed(ip: string) {
   return checkRateLimitKey(checkoutIpKey(ip), CHECKOUT_LIMIT_PER_HOUR, HOUR_MS);
+}
+
+export async function checkEmailIpRateLimit(ip: string) {
+  return checkRateLimitKey(emailIpKey(ip), EMAIL_IP_LIMIT_PER_HOUR, HOUR_MS);
+}
+
+export async function checkEmailOrderRateLimit(orderId: string) {
+  return checkRateLimitKey(`email-order:${orderId}`, EMAIL_ORDER_LIMIT, DAY_MS * 30);
 }
 
 export async function recordPreviewUse(ipOrSession: string) {
@@ -125,6 +137,10 @@ function checkoutIpKey(ip: string) {
 
 function previewIpKey(ip: string) {
   return `preview:${ip}:${dateBucket()}`;
+}
+
+function emailIpKey(ip: string) {
+  return `email:${ip}:${hourBucket()}`;
 }
 
 function hourBucket() {

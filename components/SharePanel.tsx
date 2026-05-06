@@ -3,20 +3,22 @@
 import { useState } from "react";
 import { Copy, Share2 } from "lucide-react";
 
-type SharePanelProps = {
-  imageUrl: string;
-};
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
 
-export function SharePanel({ imageUrl }: SharePanelProps) {
+export function SharePanel() {
   const [message, setMessage] = useState("");
+
+  function siteUrl() {
+    return configuredSiteUrl || window.location.origin;
+  }
 
   async function share() {
     try {
-      const shareUrl = window.location.origin;
+      const shareUrl = siteUrl();
       if (navigator.share) {
         await navigator.share({
-          title: "Dream On The Paper wallpaper",
-          text: "My personalized wallpaper is ready.",
+          title: "Dream On The Paper",
+          text: "Create your own personalized AI wallpaper.",
           url: shareUrl,
         });
         setMessage("Shared.");
@@ -24,16 +26,16 @@ export function SharePanel({ imageUrl }: SharePanelProps) {
       }
 
       await navigator.clipboard.writeText(shareUrl);
-      setMessage("Link copied.");
+      setMessage("Site link copied.");
     } catch {
       setMessage("Unable to share right now.");
     }
   }
 
-  async function copyLink() {
+  async function copySiteLink() {
     try {
-      await navigator.clipboard.writeText(window.location.origin);
-      setMessage("Link copied.");
+      await navigator.clipboard.writeText(siteUrl());
+      setMessage("Site link copied.");
     } catch {
       setMessage("Unable to copy link.");
     }
@@ -48,21 +50,20 @@ export function SharePanel({ imageUrl }: SharePanelProps) {
           className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-ink transition hover:bg-pearl"
         >
           <Share2 aria-hidden className="h-4 w-4" />
-          Share
+          Share Site
         </button>
         <button
           type="button"
-          onClick={copyLink}
+          onClick={copySiteLink}
           className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-ink transition hover:bg-pearl"
         >
           <Copy aria-hidden className="h-4 w-4" />
-          Copy Link
+          Copy Site Link
         </button>
       </div>
-      <p className="mt-2 text-xs text-taupe">
-        {message || "Sharing never includes your private answers."}
+      <p className="mt-2 text-xs leading-5 text-taupe">
+        {message || "Private wallpaper links are not shared for your privacy."}
       </p>
-      <span className="sr-only">{imageUrl ? "Wallpaper ready" : ""}</span>
     </div>
   );
 }

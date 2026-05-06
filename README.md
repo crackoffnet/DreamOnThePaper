@@ -10,7 +10,7 @@ A premium AI wallpaper generator for personalized phone, desktop, and tablet vis
 - Cloudflare Workers + Wrangler
 - OpenAI image generation through a server-only route
 - Stripe Checkout
-- Resend email delivery
+- Brevo transactional email delivery
 
 ## Local Setup
 
@@ -35,36 +35,40 @@ CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
-RESEND_API_KEY=
+BREVO_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
+FROM_NAME=Dream On The Paper
 TURNSTILE_SECRET_KEY=
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 NODE_VERSION=22
 ```
 
-`OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `ORDER_TOKEN_SECRET`, and `TURNSTILE_SECRET_KEY` must never be exposed to the frontend.
+`OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BREVO_API_KEY`, `ORDER_TOKEN_SECRET`, and `TURNSTILE_SECRET_KEY` must never be exposed to the frontend.
 
 ## Preview-First Payment Flow
 
 1. User completes `/create`.
 2. `/api/generate-preview` creates a low-quality, watermarked preview without payment.
-3. The app returns a safe signed checkout `orderToken` plus a temporary
-   browser-session snapshot used for final generation.
+3. The app returns a safe signed checkout `orderToken` for restoring the
+   preview/order on checkout.
 4. `/checkout?orderToken=...` verifies the token server-side and shows the
    low-quality preview and package options without relying on Worker memory.
 5. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
 6. Stripe redirects to `/success?session_id=...`.
-7. `/api/verify-payment` retrieves the Stripe session server-side, checks the original order metadata, and returns a short-lived signed order token.
+7. `/api/verify-checkout-session` retrieves the Stripe session server-side,
+   confirms payment, loads the D1 order, marks it paid, and returns a
+   short-lived final generation token.
 8. `/success` uses that token to call `/api/generate-final`.
 9. `/thank-you` shows the high-resolution wallpaper with download, share, and email actions.
 
 If Stripe is not configured, mock checkout is allowed only in development.
 
-Final generation never trusts a client-side `paid` flag or new generation parameters after payment. It requires a server-verified Stripe session and signed order token tied to the original preview/order.
+Final generation never trusts a client-side `paid` flag or new generation parameters after payment. It requires a server-verified Stripe session, D1 order state, and a signed final generation token tied to the original preview/order.
 
 Cloudflare Workers are stateless, so checkout restoration uses the signed
-`orderToken` first and session storage only as a browser fallback. Temporary
-order/image storage still has TODOs for Cloudflare D1/KV and R2.
+`orderToken` first and session storage only as a browser fallback. Production
+order state lives in D1, rate limits live in KV, and generated images live in
+R2.
 
 ## Stripe Setup
 
@@ -102,15 +106,30 @@ Use `STRIPE_SECRET_KEY`, not `STRIPE_KEY`, in Cloudflare. Use `sk_test_...`
 while Stripe is in test mode. Use `sk_live_...` only after the Stripe account is
 activated, and do not mix test keys with live-mode webhooks or products.
 
-## Resend Setup
+## Brevo Setup
 
-In Resend:
+In Brevo:
 
-- Verify `dreamonthepaper.com` or your sending domain.
-- Create an API key and set `RESEND_API_KEY`.
-- Set `FROM_EMAIL=hello@dreamonthepaper.com` or another verified sender.
+- Create a Brevo account.
+- Add `dreamonthepaper.com` or your sending domain.
+- Add the Brevo DNS records in Cloudflare.
+- Verify the domain in Brevo.
+- Create a Brevo API key and add the Cloudflare secret `BREVO_API_KEY`.
+- Add `FROM_EMAIL=hello@dreamonthepaper.com`.
+- Add `FROM_NAME=Dream On The Paper`.
 
-Email sends the generated wallpaper as an attachment when available. Persistent download links should be added later with Cloudflare R2.
+Email sends the paid final PNG from R2 as a Brevo transactional attachment when
+the file is small enough for email delivery. Until `BREVO_API_KEY`,
+`FROM_EMAIL`, and `FROM_NAME` are configured, email delivery is disabled and
+users should download the PNG.
+
+Brevo's free plan currently includes 300 email sends/day, which is enough for
+the MVP.
+
+Generated wallpapers are private customer assets. R2 is not public. The app
+does not expose permanent public final-image links; final image API requests
+require the signed paid-session token. If longer-lived direct links are added
+later, use signed links that expire within 24-48 hours.
 
 ## Cloudflare Environment Variables
 
@@ -126,8 +145,9 @@ STRIPE_PREMIUM_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
-RESEND_API_KEY=
+BREVO_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
+FROM_NAME=Dream On The Paper
 TURNSTILE_SECRET_KEY=
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```

@@ -9,6 +9,9 @@ export type RuntimeEnv = {
   STRIPE_PREMIUM_PRICE_ID?: string;
   NEXT_PUBLIC_SITE_URL?: string;
   CHECKOUT_RATE_LIMIT_BYPASS_TOKEN?: string;
+  BREVO_API_KEY?: string;
+  FROM_EMAIL?: string;
+  FROM_NAME?: string;
 };
 
 const runtimeEnvNames = [
@@ -20,6 +23,9 @@ const runtimeEnvNames = [
   "STRIPE_PREMIUM_PRICE_ID",
   "NEXT_PUBLIC_SITE_URL",
   "CHECKOUT_RATE_LIMIT_BYPASS_TOKEN",
+  "BREVO_API_KEY",
+  "FROM_EMAIL",
+  "FROM_NAME",
 ] as const satisfies readonly (keyof RuntimeEnv)[];
 
 export function getRuntimeEnv(): RuntimeEnv {
