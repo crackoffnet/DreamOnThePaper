@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import type { PackageId } from "@/lib/plans";
 import { packages } from "@/lib/plans";
+import { getRuntimeEnv } from "@/lib/env";
 import {
   fromBase64Url,
   getSiteUrl,
@@ -45,12 +46,13 @@ export function isPaymentConfigured() {
 
 export function getMissingCheckoutEnv(_packageId?: PackageId) {
   const missing: string[] = [];
+  const env = getRuntimeEnv();
 
-  if (!getStripeSecretKey()) {
+  if (!env.STRIPE_SECRET_KEY) {
     missing.push("STRIPE_SECRET_KEY");
   }
 
-  if (!process.env.NEXT_PUBLIC_SITE_URL) {
+  if (!env.NEXT_PUBLIC_SITE_URL) {
     missing.push("NEXT_PUBLIC_SITE_URL");
   }
 
@@ -58,11 +60,11 @@ export function getMissingCheckoutEnv(_packageId?: PackageId) {
 }
 
 export function getStripeSecretKey() {
-  return process.env.STRIPE_SECRET_KEY || "";
+  return getRuntimeEnv().STRIPE_SECRET_KEY || "";
 }
 
 export function getSiteUrlFromEnv() {
-  return process.env.NEXT_PUBLIC_SITE_URL || "";
+  return getRuntimeEnv().NEXT_PUBLIC_SITE_URL || "";
 }
 
 export async function createCheckoutSession(
@@ -207,7 +209,7 @@ export async function verifyOrderToken(token: string) {
 
 async function signValue(value: string) {
   const secret =
-    process.env.ORDER_TOKEN_SECRET ||
+    getRuntimeEnv().ORDER_TOKEN_SECRET ||
     (process.env.NODE_ENV !== "production" ? "dev-order-token-secret" : "");
 
   if (!secret) {

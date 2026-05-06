@@ -28,6 +28,9 @@ Copy `.env.example` to `.env.local`.
 ```bash
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
+STRIPE_SINGLE_PRICE_ID=
+STRIPE_BUNDLE_PRICE_ID=
+STRIPE_PREMIUM_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
@@ -73,11 +76,13 @@ In Stripe Dashboard:
   - Events: `checkout.session.completed`, `payment_intent.payment_failed`
 - Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 
-Checkout uses inline Stripe `price_data` for:
+Checkout uses Stripe Price IDs from Cloudflare variables:
 
-- Single wallpaper: `$4.99`
-- Mobile + desktop bundle: `$6.99`
-- Premium 3-version pack: `$11.99`
+- `STRIPE_SINGLE_PRICE_ID` for Single wallpaper: `$4.99`
+- `STRIPE_BUNDLE_PRICE_ID` for Mobile + desktop bundle: `$6.99`
+- `STRIPE_PREMIUM_PRICE_ID` for Premium 3-version pack: `$11.99`
+
+Each value must start with `price_`, not `prod_`.
 
 Stripe Tax is enabled in hosted Checkout with `automatic_tax`. To collect tax,
 confirm these Stripe Dashboard settings:
@@ -114,6 +119,9 @@ Set these in your Cloudflare Workers production build/deploy environment:
 NODE_VERSION=22
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
+STRIPE_SINGLE_PRICE_ID=
+STRIPE_BUNDLE_PRICE_ID=
+STRIPE_PREMIUM_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
@@ -123,8 +131,9 @@ TURNSTILE_SECRET_KEY=
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```
 
-Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`, and
-`ORDER_TOKEN_SECRET`. Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
+Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`,
+`ORDER_TOKEN_SECRET`, `STRIPE_SINGLE_PRICE_ID`, `STRIPE_BUNDLE_PRICE_ID`, and
+`STRIPE_PREMIUM_PRICE_ID`. Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
 
 The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
 

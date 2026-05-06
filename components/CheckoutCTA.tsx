@@ -37,9 +37,9 @@ export function CheckoutCTA({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           packageType: packageId,
-          orderId,
-          orderToken,
-          orderSnapshotToken,
+          orderId: orderId || undefined,
+          orderToken: orderToken || undefined,
+          orderSnapshotToken: orderSnapshotToken || undefined,
           website: "",
         }),
       });

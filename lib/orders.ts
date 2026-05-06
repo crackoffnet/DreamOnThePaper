@@ -136,6 +136,14 @@ export async function markOrderPaid(orderId: string, stripeSessionId: string) {
   return getOrder(orderId);
 }
 
+export async function markOrderPendingPayment(
+  orderId: string,
+  stripeSessionId: string,
+  packageType: PackageId,
+) {
+  return attachStripeSession(orderId, stripeSessionId, packageType);
+}
+
 export async function startFinalGeneration(orderId: string) {
   const now = Date.now();
   const result = await getDb()

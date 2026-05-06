@@ -74,4 +74,11 @@ interface CloudflareEnv {
   DB?: D1Database;
   DREAM_RATE_LIMITS?: KVNamespace;
   WALLPAPER_BUCKET?: R2Bucket;
+  OPENAI_API_KEY?: string;
+  ORDER_TOKEN_SECRET?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_SINGLE_PRICE_ID?: string;
+  STRIPE_BUNDLE_PRICE_ID?: string;
+  STRIPE_PREMIUM_PRICE_ID?: string;
+  NEXT_PUBLIC_SITE_URL?: string;
 }

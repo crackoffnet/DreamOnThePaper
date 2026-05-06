@@ -1,5 +1,6 @@
 import type { PackageId } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
+import { getRuntimeEnv } from "@/lib/env";
 import { fromBase64Url, timingSafeStringEqual, toBase64Url } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
@@ -302,7 +303,7 @@ async function verifySignedPayload<T>(token: string) {
 
 async function signValue(value: string) {
   const secret =
-    process.env.ORDER_TOKEN_SECRET ||
+    getRuntimeEnv().ORDER_TOKEN_SECRET ||
     (process.env.NODE_ENV !== "production" ? "dev-order-token-secret" : "");
 
   if (!secret) {

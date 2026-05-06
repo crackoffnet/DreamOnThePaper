@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createMockWallpaperSvg } from "@/lib/mock";
 import { containsAbusiveInput, hasMeaningfulInput, orderTokenSchema } from "@/lib/schemas";
 import { assertSameOrigin, jsonError, safeLog } from "@/lib/security";
+import { getRuntimeEnv } from "@/lib/env";
 import { verifyOrderToken } from "@/lib/payment";
 import { consumeFinalSession, releaseFinalSession } from "@/lib/rateLimit";
 import type { OrderSnapshot } from "@/lib/order-state";
@@ -18,8 +19,8 @@ import {
   getWallpaperMeta,
 } from "@/lib/wallpaper";
 import {
-  saveGeneratedImageFromBase64,
   saveGeneratedImageFromDataUrl,
+  saveFinalImageFromBase64,
 } from "@/lib/storage";
 
 type OpenAIImageResponse = {
@@ -78,6 +79,7 @@ export async function POST(request: Request) {
     }
 
     const input = order.input;
+    const env = getRuntimeEnv();
     if (!hasMeaningfulInput(input)) {
       return jsonError("Please add a little more detail first.");
     }
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
     const prompt = buildWallpaperPrompt(input);
 
     try {
-      if (!process.env.OPENAI_API_KEY) {
+      if (!env.OPENAI_API_KEY) {
         if (process.env.NODE_ENV === "production") {
           markOrderPaid(generatingOrder, tokenOrder.sessionId);
           markOrderFailed(generatingOrder);
@@ -138,7 +140,7 @@ export async function POST(request: Request) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
@@ -165,7 +167,7 @@ export async function POST(request: Request) {
       const result = (await response.json()) as OpenAIImageResponse;
       const image = result.data?.[0];
       const imageUrl = image?.b64_json
-        ? await saveGeneratedImageFromBase64(image.b64_json, "image/png")
+        ? (await saveFinalImageFromBase64(order.orderId, image.b64_json, "image/png")).url
         : image?.url;
 
       if (!imageUrl) {

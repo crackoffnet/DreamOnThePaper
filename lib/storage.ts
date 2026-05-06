@@ -18,12 +18,37 @@ export async function savePreviewImage(
   return saveImageAtKey(`previews/${orderId}.webp`, bytes, contentType);
 }
 
+export async function savePreviewImageFromBase64(
+  orderId: string,
+  content: string,
+  contentType = "image/png",
+) {
+  return savePreviewImage(orderId, base64ToBytes(content), contentType);
+}
+
+export async function savePreviewImageFromDataUrl(orderId: string, dataUrl: string) {
+  const match = dataUrl.match(/^data:(image\/(?:png|svg\+xml|jpeg|webp));base64,(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return savePreviewImageFromBase64(orderId, match[2], match[1]);
+}
+
 export async function saveFinalImage(
   orderId: string,
   bytes: Uint8Array,
   contentType: string,
 ) {
   return saveImageAtKey(`finals/${orderId}.png`, bytes, contentType);
+}
+
+export async function saveFinalImageFromBase64(
+  orderId: string,
+  content: string,
+  contentType = "image/png",
+) {
+  return saveFinalImage(orderId, base64ToBytes(content), contentType);
 }
 
 export async function saveImage(bytes: Uint8Array, contentType = "image/png") {

@@ -10,6 +10,24 @@ function getEnv() {
   return getCloudflareContext().env as DreamCloudflareEnv;
 }
 
+export function getOptionalCloudflareBindings() {
+  try {
+    const env = getEnv();
+
+    return {
+      DB: env.DB,
+      DREAM_RATE_LIMITS: env.DREAM_RATE_LIMITS,
+      WALLPAPER_BUCKET: env.WALLPAPER_BUCKET,
+    };
+  } catch {
+    return {
+      DB: undefined,
+      DREAM_RATE_LIMITS: undefined,
+      WALLPAPER_BUCKET: undefined,
+    };
+  }
+}
+
 export function getDb() {
   const db = getEnv().DB;
 
