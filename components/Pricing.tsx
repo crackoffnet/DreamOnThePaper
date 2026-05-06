@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
+import { StartOverButton } from "@/components/StartOverButton";
 import { TrustBadges } from "@/components/TrustBadges";
 import type { CheckoutOrderToken } from "@/lib/order-state";
 import type { PackageId } from "@/lib/plans";
@@ -38,7 +39,10 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
   });
 
   useEffect(() => {
-    try {
+    let cancelled = false;
+
+    async function loadPricingState() {
+      try {
       if (initialOrder?.previewImageUrl) {
         const meta = metaFromCheckoutOrder(initialOrder);
         sessionStorage.setItem("dreamOrderId", initialOrder.orderId);
@@ -51,13 +55,15 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
           hasOrderToken: Boolean(orderToken),
           orderId: initialOrder.orderId,
         });
-        setState({
+        if (!cancelled) {
+          setState({
           imageUrl: initialOrder.previewImageUrl,
           meta,
           orderId: initialOrder.orderId,
           orderToken: orderToken || null,
           orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
-        });
+          });
+        }
         return;
       }
 
@@ -66,20 +72,40 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
       const activeOrderToken =
         orderToken || draft.orderToken || sessionStorage.getItem("dreamCheckoutOrderToken");
 
+      if (activeOrderToken) {
+        const restored = await validateStoredOrderToken(activeOrderToken);
+        if (restored?.previewImageUrl) {
+          const meta = metaFromCheckoutOrder(restored);
+          if (!cancelled) {
+            setState({
+              imageUrl: restored.previewImageUrl,
+              meta,
+              orderId: restored.orderId,
+              orderToken: activeOrderToken,
+              orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
+            });
+          }
+          return;
+        }
+      }
+
       if (!activeOrderId || draft.orderId !== activeOrderId) {
         console.info("Checkout preview missing", {
           hasOrderToken: Boolean(activeOrderToken),
           hasOrderId: Boolean(activeOrderId),
         });
-        setState((current) => ({
-          ...current,
-          orderId: activeOrderId || null,
-          orderToken: activeOrderToken || null,
-        }));
+        if (!cancelled) {
+          setState((current) => ({
+            ...current,
+            orderId: activeOrderId || null,
+            orderToken: activeOrderToken || null,
+          }));
+        }
         return;
       }
 
-      setState({
+      if (!cancelled) {
+        setState({
         imageUrl: draft.previewImageUrl || sessionStorage.getItem("previewImageUrl") || "",
         meta: draft.previewMeta || null,
         orderId: draft.orderId || activeOrderId,
@@ -87,16 +113,25 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         orderSnapshotToken:
           draft.orderSnapshotToken ||
           sessionStorage.getItem("dreamOrderSnapshotToken"),
-      });
-    } catch {
-      setState({
+        });
+      }
+      } catch {
+        if (!cancelled) {
+          setState({
         imageUrl: "",
         meta: null,
         orderId: orderId || null,
         orderToken: orderToken || null,
         orderSnapshotToken: null,
-      });
+          });
+        }
+      }
     }
+
+    void loadPricingState();
+    return () => {
+      cancelled = true;
+    };
   }, [initialOrder, orderId, orderToken]);
 
   if (!state.orderId || !state.imageUrl || !state.meta) {
@@ -108,19 +143,22 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         </h2>
         <p className="mt-3 text-sm leading-6 text-taupe">
           {tokenExpired
-            ? "Please create a new preview before choosing a package."
+            ? "This preview expired or can't be restored. Please create a new preview before choosing a package."
             : "Generate a low-quality preview before choosing a package and starting secure checkout."}
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            clearBrokenCheckoutState();
-            window.location.href = "/create";
-          }}
-          className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-pearl"
-        >
-          Back to Create
-        </button>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <StartOverButton />
+          <button
+            type="button"
+            onClick={() => {
+              clearBrokenCheckoutState();
+              window.location.href = "/create";
+            }}
+            className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-5 text-sm font-semibold text-pearl"
+          >
+            Back to Create
+          </button>
+        </div>
       </div>
     );
   }
@@ -194,4 +232,22 @@ function metaFromCheckoutOrder(order: CheckoutOrderToken): WallpaperMeta {
     imageSize: `${order.width}x${order.height}`,
     aspectRatio: `${order.width} / ${order.height}`,
   };
+}
+
+async function validateStoredOrderToken(orderToken: string) {
+  try {
+    const response = await fetch("/api/validate-order-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderToken }),
+    });
+    const data = (await response.json()) as {
+      valid?: boolean;
+      order?: CheckoutOrderToken;
+    };
+
+    return response.ok && data.valid ? data.order || null : null;
+  } catch {
+    return null;
+  }
 }

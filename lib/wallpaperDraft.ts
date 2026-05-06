@@ -120,6 +120,7 @@ export function markDraftFailed() {
 }
 
 export function createNewWallpaperDraft() {
+  clearDreamWallpaperState();
   const now = new Date().toISOString();
   const draft: WallpaperDraft = {
     id: crypto.randomUUID(),
@@ -137,16 +138,6 @@ export function createNewWallpaperDraft() {
 
   sessionStorage.setItem(draftKey, JSON.stringify(draft));
   sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(draft.input));
-  sessionStorage.removeItem("dreamPreviewMeta");
-  sessionStorage.removeItem("previewImageUrl");
-  sessionStorage.removeItem("finalImageUrl");
-  sessionStorage.removeItem("dreamWallpaperMeta");
-  sessionStorage.removeItem("dreamOrderToken");
-  sessionStorage.removeItem("dreamCheckoutOrderToken");
-  sessionStorage.removeItem("dreamOrderSnapshotToken");
-  sessionStorage.removeItem("dreamOrderId");
-  sessionStorage.removeItem("dreamPreviewImageId");
-  sessionStorage.removeItem("dreamPreviewCreated");
   return draft;
 }
 
@@ -250,6 +241,63 @@ export function clearBrokenCheckoutState() {
   sessionStorage.removeItem("dreamPreviewCreated");
   sessionStorage.removeItem("dreamPreviewMeta");
   sessionStorage.removeItem("previewImageUrl");
+}
+
+export function clearDreamWallpaperState() {
+  const explicitKeys = [
+    "dreamPreviewCreated",
+    "dreamOrderId",
+    "dreamOrderToken",
+    "dreamPreviewImageUrl",
+    "dreamPreviewImageId",
+    "dreamWallpaperAnswers",
+    "dreamWallpaperDraft",
+    "dreamCheckoutPackage",
+    "dreamFinalGenerationToken",
+    "dreamFinalImageUrl",
+    "dreamSelectedDevice",
+    "dreamSelectedRatio",
+    "dreamSelectedTheme",
+    "dreamSelectedStyle",
+    "dreamQuoteTone",
+    "dreamCurrentDraft",
+    "dreamCurrentDraftId",
+    "dreamPreviewPolicy",
+    "dreamPreviewGenerated",
+    "dreamPreviewGenerationId",
+    "dreamCheckoutOrderToken",
+    "dreamOrderSnapshotToken",
+    "dreamWallpaperInput",
+    "dreamPreviewMeta",
+    "dreamWallpaperMeta",
+    "dreamPackageId",
+    "dreamCustomerEmail",
+    "dreamFinalSessionId",
+    "previewImageUrl",
+    "finalImageUrl",
+  ];
+
+  clearStorageKeys(sessionStorage, explicitKeys);
+  clearStorageKeys(localStorage, explicitKeys);
+}
+
+function clearStorageKeys(storage: Storage, explicitKeys: string[]) {
+  const matchers = ["dream", "wallpaper", "preview", "order", "checkout"];
+  const keys = new Set(explicitKeys);
+
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key) {
+      continue;
+    }
+
+    const normalized = key.toLowerCase();
+    if (matchers.some((matcher) => normalized.includes(matcher))) {
+      keys.add(key);
+    }
+  }
+
+  keys.forEach((key) => storage.removeItem(key));
 }
 
 function readJson<T>(key: string) {

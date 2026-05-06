@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
+import { StartOverButton } from "@/components/StartOverButton";
 import { getEphemeralImage, imageUrlFromPayload, setEphemeralImage } from "@/lib/client-images";
 import type { GenerateResponse } from "@/lib/types";
 
@@ -115,6 +116,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           >
             View Wallpaper
           </Link>
+          <div className="mt-3">
+            <StartOverButton />
+          </div>
           <span className="sr-only">{orderToken}</span>
         </div>
       </section>
@@ -137,6 +141,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
             >
               Retry
             </Link>
+            <div className="mt-3">
+              <StartOverButton />
+            </div>
           </>
         ) : (
           <>

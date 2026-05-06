@@ -23,6 +23,10 @@ export function CheckoutCTA({
   const [error, setError] = useState("");
 
   async function startCheckout() {
+    if (isLoading) {
+      return;
+    }
+
     if (!orderId && !orderToken) {
       setError("Create your preview first.");
       return;
@@ -55,9 +59,7 @@ export function CheckoutCTA({
       if (
         !response.ok ||
         data.success === false ||
-        !data.url ||
-        !data.orderSnapshotToken &&
-        !orderSnapshotToken
+        !data.url
       ) {
         if (process.env.NODE_ENV !== "production") {
           console.error("Checkout session failed", {
@@ -106,8 +108,13 @@ export function CheckoutCTA({
         ) : (
           <Lock aria-hidden className="h-4 w-4" />
         )}
-        {label}
+        {isLoading ? "Opening secure checkout..." : label}
       </button>
+      {error && process.env.NODE_ENV !== "production" ? (
+        <p className="mt-2 text-center text-[11px] text-taupe">
+          Checkout could not start. Please try again.
+        </p>
+      ) : null}
       <div className="mt-3 text-center text-[11px] font-medium text-taupe">
         <p>Secure checkout</p>
       </div>

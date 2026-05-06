@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
+import { StartOverButton } from "@/components/StartOverButton";
 import { getEphemeralImage } from "@/lib/client-images";
 import { createNewWallpaperDraft, getCurrentDraft } from "@/lib/wallpaperDraft";
 import type { PackageId } from "@/lib/plans";
@@ -100,6 +101,9 @@ export function PreviewUnlock() {
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[0.48fr_0.52fr]">
       <div className="rounded-[1.75rem] border border-white/70 bg-white/50 p-4 shadow-soft backdrop-blur-xl">
+        <div className="mb-3 flex justify-end">
+          <StartOverButton />
+        </div>
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
             Low-quality preview

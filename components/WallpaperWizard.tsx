@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, HelpCircle, Loader2, Sparkles } from "lucide-rea
 import { DeviceSelector } from "@/components/DeviceSelector";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { ProgressSteps } from "@/components/ProgressSteps";
+import { StartOverButton } from "@/components/StartOverButton";
 import {
   imageUrlFromPayload,
   removeEphemeralImage,
@@ -298,6 +299,9 @@ export function WallpaperWizard() {
           <div className="rounded-full border border-cocoa/10 bg-white/65 px-3 py-1 text-xs text-taupe">
             {getAspectRatioLabel(form)}
           </div>
+        </div>
+        <div className="-mt-2 mb-4 flex justify-end">
+          <StartOverButton />
         </div>
 
         <div className="mb-5">
