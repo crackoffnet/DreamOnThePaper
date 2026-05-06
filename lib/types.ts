@@ -57,6 +57,7 @@ export type GenerateResponse = {
   orderToken?: string;
   orderSnapshotToken?: string;
   imageUrl?: string;
+  finalImageUrl?: string;
   imageBase64?: string;
   mimeType?: string;
   meta?: WallpaperMeta;

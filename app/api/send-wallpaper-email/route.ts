@@ -6,8 +6,8 @@ import {
   safeLog,
 } from "@/lib/security";
 import { checkIpRateLimit } from "@/lib/rateLimit";
-import { verifyOrderToken } from "@/lib/payment";
-import { getOrderById } from "@/lib/order-state";
+import { verifyFinalGenerationToken } from "@/lib/payment";
+import { getOrder } from "@/lib/orders";
 import {
   dataUrlToAttachment,
   isTrustedGeneratedImage,
@@ -36,15 +36,18 @@ export async function POST(request: Request) {
     }
 
     const orderToken = parsed.data.orderToken
-      ? await verifyOrderToken(parsed.data.orderToken)
+      ? await verifyFinalGenerationToken(parsed.data.orderToken)
       : null;
-    const order = orderToken ? getOrderById(orderToken.orderId) : null;
+    const order = orderToken ? await getOrder(orderToken.orderId) : null;
+    const expectedFinalUrl = order?.final_r2_key
+      ? `/api/wallpaper-image/${encodeURIComponent(order.final_r2_key)}`
+      : "";
 
     if (
       !orderToken ||
       !order ||
       order.status !== "final_generated" ||
-      order.finalImageUrl !== parsed.data.imageUrl
+      expectedFinalUrl !== parsed.data.imageUrl
     ) {
       return jsonError("Please confirm payment before emailing.", 402);
     }

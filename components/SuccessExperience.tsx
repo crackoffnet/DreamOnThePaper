@@ -1,26 +1,37 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
+import { ResultPreview } from "@/components/ResultPreview";
 import { StartOverButton } from "@/components/StartOverButton";
-import { getEphemeralImage, imageUrlFromPayload, setEphemeralImage } from "@/lib/client-images";
+import {
+  getEphemeralImage,
+  imageUrlFromPayload,
+  setEphemeralImage,
+} from "@/lib/client-images";
 import type { GenerateResponse } from "@/lib/types";
 
 type Step = "verifying" | "generating" | "done" | "error";
 
 export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [step, setStep] = useState<Step>("verifying");
-  const [message, setMessage] = useState("Payment confirmed. Preparing generation...");
+  const [message, setMessage] = useState("Verifying payment...");
   const [error, setError] = useState("");
-  const [orderToken, setOrderToken] = useState("");
-  const orderSnapshotToken = useMemo(() => getStoredOrderSnapshotToken(), []);
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    if (!sessionId || !orderSnapshotToken) {
+    console.info("[success] sessionId present", Boolean(sessionId));
+
+    if (hasStartedRef.current) {
+      return;
+    }
+    hasStartedRef.current = true;
+
+    if (!sessionId) {
       setStep("error");
-      setError("Missing payment or wallpaper details.");
+      setError("We could not find your checkout session.");
       return;
     }
 
@@ -38,38 +49,58 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
 
     async function verifyAndGenerate() {
       try {
+        console.info("[success] verifying payment");
         setStep("verifying");
+        setMessage("Verifying payment...");
         const verifyResponse = await fetch("/api/verify-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, orderSnapshotToken }),
+          body: JSON.stringify({ sessionId }),
         });
         const verified = (await verifyResponse.json()) as {
-          orderToken?: string;
+          success?: boolean;
+          finalGenerationToken?: string;
+          orderId?: string;
           packageId?: string;
           customerEmail?: string | null;
+          message?: string;
           error?: string;
         };
 
-        if (!verifyResponse.ok || !verified.orderToken) {
-          throw new Error(verified.error || "Unable to verify payment.");
+        if (!verifyResponse.ok || !verified.finalGenerationToken) {
+          throw new Error(
+            verified.message ||
+              verified.error ||
+              "Payment is not verified yet. Please wait a moment and retry.",
+          );
         }
 
-        sessionStorage.setItem("dreamOrderToken", verified.orderToken);
+        sessionStorage.setItem(
+          "dreamFinalGenerationToken",
+          verified.finalGenerationToken,
+        );
+        sessionStorage.setItem("dreamOrderToken", verified.finalGenerationToken);
+        if (verified.orderId) {
+          sessionStorage.setItem("dreamOrderId", verified.orderId);
+        }
         sessionStorage.setItem("dreamPackageId", verified.packageId || "single");
         if (verified.customerEmail) {
           sessionStorage.setItem("dreamCustomerEmail", verified.customerEmail);
         }
-        setOrderToken(verified.orderToken);
 
         setStep("generating");
-        setMessage("Creating your high-quality wallpaper...");
+        setMessage("Creating your final wallpaper...");
+        console.info("[success] generating final");
         const generationResponse = await fetch("/api/generate-final", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderToken: verified.orderToken }),
+          body: JSON.stringify({
+            finalGenerationToken: verified.finalGenerationToken,
+          }),
         });
-        const generated = (await generationResponse.json()) as GenerateResponse | undefined;
+        const generated = (await generationResponse.json()) as
+          | GenerateResponse
+          | undefined;
         const imageUrl = generated ? await imageUrlFromPayload(generated) : "";
 
         if (
@@ -81,7 +112,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           throw new Error(
             generated?.message ||
               generated?.error ||
-              "Unable to generate wallpaper.",
+              "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
           );
         }
 
@@ -90,6 +121,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
         setStep("done");
         setMessage("Your full-resolution wallpaper is ready.");
+        console.info("[success] final ready");
       } catch (successError) {
         setStep("error");
         setError(
@@ -99,30 +131,10 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
     }
-  }, [orderSnapshotToken, sessionId]);
+  }, [sessionId]);
 
   if (step === "done") {
-    return (
-      <section className="mx-auto max-w-3xl px-4 py-10">
-        <div className="rounded-[1.75rem] border border-white/70 bg-white/60 p-6 text-center shadow-soft">
-          <CheckCircle2 aria-hidden className="mx-auto h-10 w-10 text-gold" />
-          <h1 className="mt-4 text-3xl font-semibold text-ink">{message}</h1>
-          <p className="mt-2 text-sm text-taupe">
-            Payment verified. Your secure download is unlocked.
-          </p>
-          <Link
-            href="/thank-you"
-            className="focus-ring mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-6 text-sm font-semibold text-pearl"
-          >
-            View Wallpaper
-          </Link>
-          <div className="mt-3">
-            <StartOverButton />
-          </div>
-          <span className="sr-only">{orderToken}</span>
-        </div>
-      </section>
-    );
+    return <ResultPreview />;
   }
 
   return (
@@ -135,12 +147,14 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
               We could not finish generation.
             </h1>
             <p className="mt-2 text-sm leading-6 text-taupe">{error}</p>
-            <Link
-              href={`/success?session_id=${encodeURIComponent(sessionId)}`}
-              className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-6 text-sm font-semibold text-pearl"
-            >
-              Retry
-            </Link>
+            {sessionId ? (
+              <Link
+                href={`/success?session_id=${encodeURIComponent(sessionId)}`}
+                className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-6 text-sm font-semibold text-pearl"
+              >
+                Retry
+              </Link>
+            ) : null}
             <div className="mt-3">
               <StartOverButton />
             </div>
@@ -149,7 +163,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           <>
             <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-gold">
               <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-              Payment confirmed
+              {step === "verifying" ? "Verifying payment" : "Payment confirmed"}
             </div>
             <h1 className="text-3xl font-semibold text-ink">{message}</h1>
             <div className="mt-5">
@@ -160,12 +174,4 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       </div>
     </section>
   );
-}
-
-function getStoredOrderSnapshotToken() {
-  try {
-    return sessionStorage.getItem("dreamOrderSnapshotToken") || "";
-  } catch {
-    return "";
-  }
 }

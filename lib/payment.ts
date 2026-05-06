@@ -27,6 +27,14 @@ type OrderTokenPayload = {
   exp: number;
 };
 
+export type FinalGenerationTokenPayload = {
+  sessionId: string;
+  orderId: string;
+  packageId: PackageId;
+  promptHash: string;
+  exp: number;
+};
+
 const TOKEN_TTL_SECONDS = 60 * 60 * 6;
 export function getStripe() {
   const secretKey = getStripeSecretKey();
@@ -176,6 +184,27 @@ export async function signOrderToken(status: PaymentStatus, order: OrderSnapshot
   return `${encodedPayload}.${signature}`;
 }
 
+export async function signFinalGenerationToken(input: {
+  sessionId: string;
+  orderId: string;
+  packageId: PackageId;
+  promptHash: string;
+}) {
+  const payload: FinalGenerationTokenPayload = {
+    sessionId: input.sessionId,
+    orderId: input.orderId,
+    packageId: input.packageId,
+    promptHash: input.promptHash,
+    exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
+  };
+  const encodedPayload = toBase64Url(
+    new TextEncoder().encode(JSON.stringify(payload)),
+  );
+  const signature = await signValue(encodedPayload);
+
+  return `${encodedPayload}.${signature}`;
+}
+
 export async function verifyOrderToken(token: string) {
   const [encodedPayload, signature] = token.split(".");
 
@@ -192,6 +221,37 @@ export async function verifyOrderToken(token: string) {
     const payload = JSON.parse(
       new TextDecoder().decode(fromBase64Url(encodedPayload)),
     ) as OrderTokenPayload;
+
+    if (payload.exp <= Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+
+    if (!(payload.packageId in packages)) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyFinalGenerationToken(token: string) {
+  const [encodedPayload, signature] = token.split(".");
+
+  if (!encodedPayload || !signature) {
+    return null;
+  }
+
+  const expected = await signValue(encodedPayload);
+  if (!timingSafeStringEqual(expected, signature)) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(
+      new TextDecoder().decode(fromBase64Url(encodedPayload)),
+    ) as FinalGenerationTokenPayload;
 
     if (payload.exp <= Math.floor(Date.now() / 1000)) {
       return null;

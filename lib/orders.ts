@@ -1,7 +1,14 @@
 import type { PackageId } from "@/lib/plans";
 import type { OrderStatus } from "@/lib/order-state";
 import { hashOrderInput } from "@/lib/order-state";
-import type { WallpaperInput } from "@/lib/types";
+import type {
+  DeviceType,
+  QuoteTone,
+  RatioType,
+  ThemeType,
+  WallpaperInput,
+  WallpaperStyle,
+} from "@/lib/types";
 import { getDb } from "@/lib/cloudflare";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
@@ -79,6 +86,13 @@ export async function getOrder(orderId: string) {
     .first<DbOrder>();
 }
 
+export async function getOrderByStripeSessionId(stripeSessionId: string) {
+  return getDb()
+    .prepare("SELECT * FROM orders WHERE stripe_session_id = ?")
+    .bind(stripeSessionId)
+    .first<DbOrder>();
+}
+
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const now = Date.now();
   await getDb()
@@ -126,11 +140,36 @@ export async function markOrderPaid(orderId: string, stripeSessionId: string) {
   await getDb()
     .prepare(
       `UPDATE orders
-       SET stripe_session_id = ?, stripe_payment_status = ?, status = ?,
+       SET stripe_session_id = ?, stripe_payment_status = ?,
+           status = CASE
+             WHEN status IN ('final_generating', 'final_generated', 'failed')
+             THEN status
+             ELSE ?
+           END,
            paid_at = ?, updated_at = ?
        WHERE id = ?`,
     )
     .bind(stripeSessionId, "paid", "paid", now, now, orderId)
+    .run();
+
+  return getOrder(orderId);
+}
+
+export async function attachStripeSessionIfMissing(
+  orderId: string,
+  stripeSessionId: string,
+  packageType: PackageId | null,
+) {
+  const now = Date.now();
+  await getDb()
+    .prepare(
+      `UPDATE orders
+       SET stripe_session_id = COALESCE(stripe_session_id, ?),
+           package_type = COALESCE(package_type, ?),
+           updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(stripeSessionId, packageType, now, orderId)
     .run();
 
   return getOrder(orderId);
@@ -208,6 +247,60 @@ function sanitizeAnswers(input: WallpaperInput) {
     feelingWords: sanitizeText(input.feelingWords),
     reminder: sanitizeText(input.reminder),
   };
+}
+
+export function inputFromDbOrder(order: DbOrder): WallpaperInput {
+  const answers = parseAnswers(order.sanitized_answers_json);
+
+  return {
+    device: order.device as DeviceType,
+    ratio: order.ratio as RatioType,
+    theme: order.theme as ThemeType,
+    style: order.style as WallpaperStyle,
+    goals: answers.goals,
+    lifestyle: answers.lifestyle,
+    career: answers.career,
+    personalLife: answers.personalLife,
+    health: answers.health,
+    place: answers.place,
+    feelingWords: answers.feelingWords,
+    reminder: answers.reminder,
+    quoteTone: order.quote_tone as QuoteTone,
+    customWidth: order.device === "custom" ? order.width : undefined,
+    customHeight: order.device === "custom" ? order.height : undefined,
+  };
+}
+
+function parseAnswers(value: string) {
+  try {
+    const parsed = JSON.parse(value) as Partial<Record<keyof WallpaperInput, unknown>>;
+
+    return {
+      goals: stringValue(parsed.goals),
+      lifestyle: stringValue(parsed.lifestyle),
+      career: stringValue(parsed.career),
+      personalLife: stringValue(parsed.personalLife),
+      health: stringValue(parsed.health),
+      place: stringValue(parsed.place),
+      feelingWords: stringValue(parsed.feelingWords),
+      reminder: stringValue(parsed.reminder),
+    };
+  } catch {
+    return {
+      goals: "",
+      lifestyle: "",
+      career: "",
+      personalLife: "",
+      health: "",
+      place: "",
+      feelingWords: "",
+      reminder: "",
+    };
+  }
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.slice(0, 300) : "";
 }
 
 function sanitizeText(value: string) {

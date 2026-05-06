@@ -143,6 +143,7 @@ export async function POST(request: Request) {
     };
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
+      payment_method_types: ["card"],
       automatic_tax: { enabled: true },
       billing_address_collection: "auto",
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
