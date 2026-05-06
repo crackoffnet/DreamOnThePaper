@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { checkoutSchema } from "@/lib/schemas";
 import { assertSameOrigin, getClientIp } from "@/lib/security";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
-import { checkCheckoutRateLimit } from "@/lib/rateLimit";
+import { checkCheckoutRateLimitDetailed } from "@/lib/rateLimit";
 import { markOrderPendingPayment, getOrder } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 import type { PackageId } from "@/lib/plans";
@@ -24,12 +24,28 @@ export async function POST(request: Request) {
       return checkoutError("Request origin is not allowed.", 403);
     }
 
-    if (!(await checkCheckoutRateLimit(getClientIp(request)))) {
-      logCheckoutFailure({
+    const env = getRuntimeEnv();
+    const bypassToken = request.headers.get("x-admin-bypass-token");
+    const hasRateLimitBypass =
+      Boolean(env.CHECKOUT_RATE_LIMIT_BYPASS_TOKEN) &&
+      bypassToken === env.CHECKOUT_RATE_LIMIT_BYPASS_TOKEN;
+
+    if (!hasRateLimitBypass) {
+      const rateLimit = await checkCheckoutRateLimitDetailed(getClientIp(request));
+      if (!rateLimit.allowed) {
+        logCheckoutFailure({
+          requestId,
+          failureReason: "Checkout rate limit exceeded",
+        });
+        return checkoutRateLimitError(rateLimit.retryAfterSeconds);
+      }
+    }
+
+    if (hasRateLimitBypass) {
+      console.info("[checkout]", {
         requestId,
-        failureReason: "Checkout rate limit exceeded",
+        failureReason: "Checkout rate limit bypass used",
       });
-      return checkoutError("Too many checkout attempts. Please wait a moment.", 429);
     }
 
     const body = await request.json().catch(() => null);
@@ -54,7 +70,6 @@ export async function POST(request: Request) {
       return checkoutError("Create your preview first.", 400);
     }
 
-    const env = getRuntimeEnv();
     const missingEnv = getMissingCheckoutEnv(env);
     if (missingEnv.length > 0) {
       logCheckoutFailure({
@@ -126,11 +141,8 @@ export async function POST(request: Request) {
       quoteTone: order.quote_tone,
       promptHash: order.prompt_hash,
     };
-    const sessionParams: Stripe.Checkout.SessionCreateParams & {
-      automatic_payment_methods?: { enabled: true };
-    } = {
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
-      automatic_payment_methods: { enabled: true },
       automatic_tax: { enabled: true },
       billing_address_collection: "auto",
       success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -255,5 +267,22 @@ function checkoutError(message: string, status = 400) {
       error: message,
     },
     { status },
+  );
+}
+
+function checkoutRateLimitError(retryAfterSeconds: number) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Too many checkout attempts. Please wait a moment.",
+      error: "Too many checkout attempts. Please wait a moment.",
+      retryAfterSeconds,
+    },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(retryAfterSeconds),
+      },
+    },
   );
 }

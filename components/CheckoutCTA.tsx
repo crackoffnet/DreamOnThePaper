@@ -54,6 +54,7 @@ export function CheckoutCTA({
         missing?: string[];
         message?: string;
         error?: string;
+        retryAfterSeconds?: number;
       };
 
       if (
@@ -70,7 +71,9 @@ export function CheckoutCTA({
         }
 
         throw new Error(
-          response.status === 503
+          response.status === 429
+            ? rateLimitMessage(data.retryAfterSeconds)
+            : response.status === 503
             ? "Checkout is temporarily unavailable. Please try again soon."
             : data.message || data.error || "Unable to start checkout.",
         );
@@ -120,4 +123,15 @@ export function CheckoutCTA({
       </div>
     </div>
   );
+}
+
+function rateLimitMessage(retryAfterSeconds?: number) {
+  const base = "Too many checkout attempts. Please wait a moment and try again.";
+
+  if (!retryAfterSeconds) {
+    return base;
+  }
+
+  const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+  return `${base} Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
 }

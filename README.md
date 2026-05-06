@@ -31,6 +31,7 @@ STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
 STRIPE_BUNDLE_PRICE_ID=
 STRIPE_PREMIUM_PRICE_ID=
+CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
@@ -134,6 +135,19 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`,
 `ORDER_TOKEN_SECRET`, `STRIPE_SINGLE_PRICE_ID`, `STRIPE_BUNDLE_PRICE_ID`, and
 `STRIPE_PREMIUM_PRICE_ID`. Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
+`CHECKOUT_RATE_LIMIT_BYPASS_TOKEN` is optional for manual testing only; never
+send it from customer-facing browser code.
+
+Checkout creation is limited to 20 attempts per IP/hour. Preview generation
+stays stricter at 3 per IP/day plus one browser-session preview. Rate-limit KV
+keys are bucketed for easier testing cleanup:
+
+- Checkout: `checkout:{ip}:{YYYY-MM-DDTHH}`
+- Preview: `preview:{ip}:{YYYY-MM-DD}`
+
+During testing, use the Cloudflare KV dashboard for `DREAM_RATE_LIMITS` to
+delete the current checkout key for your IP/hour bucket if you need to unblock
+manual retries.
 
 The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
 
