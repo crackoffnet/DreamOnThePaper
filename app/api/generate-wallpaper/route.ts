@@ -5,6 +5,7 @@ import { assertSameOrigin, jsonError, safeLog } from "@/lib/security";
 import { getRuntimeEnv } from "@/lib/env";
 import { verifyOrderToken } from "@/lib/payment";
 import { consumeFinalSession, releaseFinalSession } from "@/lib/rateLimit";
+import { getOpenAIImageSize } from "@/lib/openaiImageSize";
 import type { OrderSnapshot } from "@/lib/order-state";
 import {
   getOrderById,
@@ -15,7 +16,6 @@ import {
 } from "@/lib/order-state";
 import {
   buildWallpaperPrompt,
-  getFinalImageSize,
   getWallpaperMeta,
 } from "@/lib/wallpaper";
 import {
@@ -106,6 +106,10 @@ export async function POST(request: Request) {
     const generatingOrder = markFinalGenerating(order);
     const meta = getWallpaperMeta(input);
     const prompt = buildWallpaperPrompt(input);
+    const [requestedWidth, requestedHeight] = meta.imageSize
+      .split("x")
+      .map((value) => Number(value));
+    const openAiSize = getOpenAIImageSize(requestedWidth, requestedHeight);
 
     try {
       if (!env.OPENAI_API_KEY) {
@@ -145,7 +149,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
           prompt,
-          size: getFinalImageSize(input),
+          size: openAiSize,
           quality: "high",
           output_format: "png",
           moderation: "auto",

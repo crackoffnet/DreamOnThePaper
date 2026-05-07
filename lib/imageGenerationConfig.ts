@@ -1,4 +1,8 @@
 import { getRuntimeEnv } from "@/lib/env";
+import {
+  getOpenAIImageDimensions,
+  getOpenAIImageSize,
+} from "@/lib/openaiImageSize";
 
 export type ImageQuality = "low" | "medium" | "high" | "auto";
 export type ImageOutputFormat = "png" | "jpeg" | "webp";
@@ -48,25 +52,17 @@ export function normalizeGenerationSize(
   height: number,
   purpose: GenerationPurpose,
 ) {
-  const ratio = width / height;
-  const supported =
-    purpose === "preview"
-      ? ["1024x1024", "1024x1536", "1536x1024"]
-      : ["1024x1024", "1024x1536", "1536x1024"];
-  const apiSize = supported.reduce((best, size) => {
-    const [candidateWidth, candidateHeight] = size.split("x").map(Number);
-    const [bestWidth, bestHeight] = best.split("x").map(Number);
-    const candidateDifference = Math.abs(candidateWidth / candidateHeight - ratio);
-    const bestDifference = Math.abs(bestWidth / bestHeight - ratio);
-
-    return candidateDifference < bestDifference ? size : best;
-  }, supported[0]);
-  const [actualWidth, actualHeight] = apiSize.split("x").map(Number);
+  const apiSize = getOpenAIImageSize(width, height);
+  const actualDimensions = getOpenAIImageDimensions(apiSize) ?? {
+    width: 1024,
+    height: 1024,
+  };
 
   return {
     apiSize,
-    width: actualWidth,
-    height: actualHeight,
+    width: actualDimensions.width,
+    height: actualDimensions.height,
+    purpose,
   };
 }
 

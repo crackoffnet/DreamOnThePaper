@@ -7,6 +7,7 @@ import {
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
 import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
+import { getOpenAIImageSize } from "@/lib/openaiImageSize";
 import {
   attachPreviewImage,
   createOrder,
@@ -54,7 +55,6 @@ import {
 } from "@/lib/wallpaperProducts";
 import {
   buildPreviewWallpaperPrompt,
-  getPreviewImageSize,
   getWallpaperMeta,
   isValidRatioForDevice,
 } from "@/lib/wallpaper";
@@ -494,75 +494,96 @@ async function generatePreviewImage(input: {
   imageConfig: ReturnType<typeof getImageGenerationConfig>["preview"];
   input: WallpaperInput;
 }): Promise<PreviewGenerationSuccess | PreviewGenerationFailure> {
+  const meta = getWallpaperMeta(input.input);
+  const [requestedWidth, requestedHeight] = meta.imageSize
+    .split("x")
+    .map((value) => Number(value));
   const models = [input.imageConfig.model];
   if (input.imageConfig.model !== "gpt-image-1") {
     models.push("gpt-image-1");
   }
+  const sizes = [getOpenAIImageSize(requestedWidth, requestedHeight)];
+  if (!sizes.includes("auto")) {
+    sizes.push("auto");
+  }
 
-  for (let index = 0; index < models.length; index += 1) {
-    const model = models[index];
-    console.info("[generate-preview]", {
-      requestId: input.requestId,
-      step: "openai_preview_request",
-      model,
-      size: getPreviewImageSize(input.input),
-      quality: input.imageConfig.quality,
-    });
+  for (let modelIndex = 0; modelIndex < models.length; modelIndex += 1) {
+    const model = models[modelIndex];
 
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${input.apiKey}`,
-      },
-      body: JSON.stringify({
+    for (let sizeIndex = 0; sizeIndex < sizes.length; sizeIndex += 1) {
+      const openAiSize = sizes[sizeIndex];
+      console.info("[generate-preview]", {
+        requestId: input.requestId,
+        step: "openai_preview_request",
         model,
-        prompt: input.prompt,
-        size: getPreviewImageSize(input.input),
+        requestedWidth,
+        requestedHeight,
+        openAiSize,
         quality: input.imageConfig.quality,
-        output_format: input.imageConfig.outputFormat,
-        output_compression: input.imageConfig.compression,
-        moderation: "auto",
-        n: 1,
-      }),
-    });
+      });
 
-    if (response.ok) {
-      return {
-        success: true,
-        result: (await response.json()) as OpenAIImageResponse,
-      };
-    }
+      const response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${input.apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          prompt: input.prompt,
+          size: openAiSize,
+          quality: input.imageConfig.quality,
+          output_format: input.imageConfig.outputFormat,
+          output_compression: input.imageConfig.compression,
+          moderation: "auto",
+          n: 1,
+        }),
+      });
 
-    const responseText = await response.text().catch(() => "");
-    console.error("[generate-preview]", {
-      requestId: input.requestId,
-      failureReason: "OpenAI preview generation failed",
-      model,
-      providerStatus: response.status,
-      errorMessage: responseText.slice(0, 300),
-    });
+      if (response.ok) {
+        return {
+          success: true,
+          result: (await response.json()) as OpenAIImageResponse,
+        };
+      }
 
-    if (response.status === 401 || response.status === 403) {
+      const responseText = await response.text().catch(() => "");
+      console.error("[generate-preview]", {
+        requestId: input.requestId,
+        failureReason: "OpenAI preview generation failed",
+        model,
+        requestedWidth,
+        requestedHeight,
+        openAiSize,
+        providerStatus: response.status,
+        errorMessage: responseText.slice(0, 300),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        return {
+          success: false,
+          status: 503,
+          code: "PREVIEW_AI_UNAVAILABLE",
+          message:
+            "Preview generation is temporarily unavailable. Please try again soon.",
+        };
+      }
+
+      if (response.status === 400) {
+        const canTryAnotherSize = sizeIndex < sizes.length - 1;
+        const canTryAnotherModel = modelIndex < models.length - 1;
+        if (canTryAnotherSize || canTryAnotherModel) {
+          continue;
+        }
+      }
+
       return {
         success: false,
-        status: 503,
-        code: "PREVIEW_AI_UNAVAILABLE",
-        message:
-          "Preview generation is temporarily unavailable. Please try again soon.",
+        status: 502,
+        code: "PREVIEW_GENERATION_FAILED",
+        message: "We couldn't create your preview right now. Please try again.",
       };
     }
-
-    if (response.status === 400 && index < models.length - 1) {
-      continue;
-    }
-
-    return {
-      success: false,
-      status: 502,
-      code: "PREVIEW_GENERATION_FAILED",
-      message: "We couldn't create your preview right now. Please try again.",
-    };
   }
 
   return {

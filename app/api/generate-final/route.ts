@@ -28,6 +28,10 @@ import type { FinalAssetResult } from "@/lib/types";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import { patchOrderTracking, trackOrderEvent } from "@/lib/orderEvents";
 import { getImageGenerationConfig, type ImageQuality } from "@/lib/imageGenerationConfig";
+import {
+  getOpenAIImageDimensions,
+  getOpenAIImageSize,
+} from "@/lib/openaiImageSize";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -500,6 +504,7 @@ async function generateFinalAsset(input: {
   });
 
   const openAiStartedAt = Date.now();
+  const openAiSize = getOpenAIImageSize(item.width, item.height);
   logFinalTiming({
     requestId,
     orderId,
@@ -508,8 +513,9 @@ async function generateFinalAsset(input: {
     assetType: item.assetType,
     width: item.width,
     height: item.height,
-    quality: imageConfig.quality,
     model: imageConfig.model,
+    quality: imageConfig.quality,
+    openAiSize,
   });
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
@@ -520,7 +526,7 @@ async function generateFinalAsset(input: {
     body: JSON.stringify({
       model: imageConfig.model,
       prompt,
-      size: `${item.width}x${item.height}`,
+      size: openAiSize,
       quality: imageConfig.quality,
       output_format: imageConfig.outputFormat,
       moderation: "auto",
@@ -537,6 +543,7 @@ async function generateFinalAsset(input: {
     height: item.height,
     quality: imageConfig.quality,
     model: imageConfig.model,
+    openAiSize,
     durationMs: Date.now() - openAiStartedAt,
     providerStatus: response.status,
   });
@@ -597,11 +604,13 @@ async function generateFinalAsset(input: {
   }
 
   const d1StartedAt = Date.now();
+  const actualDimensions =
+    getOpenAIImageDimensions(openAiSize) || { width: item.width, height: item.height };
   await insertFinalAsset({
     orderId,
     assetType: item.assetType,
-    width: item.width,
-    height: item.height,
+    width: actualDimensions.width,
+    height: actualDimensions.height,
     r2Key: savedFinal.key,
     fileSizeBytes: savedFinal.size,
     promptHash,
@@ -747,6 +756,7 @@ function logFinalTiming(details: {
   height?: number;
   quality?: string;
   model?: string;
+  openAiSize?: string;
   durationMs?: number;
   providerStatus?: number;
   expectedAssets?: number;

@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { exampleWallpapers } from "../lib/exampleWallpapers";
+import { getOpenAIImageSize } from "../lib/openaiImageSize";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string }>;
@@ -42,7 +43,7 @@ async function main() {
       body: JSON.stringify({
         model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
         prompt: prompts[example.id],
-        size: "1024x1536",
+        size: getOpenAIImageSize(1024, 1536),
         quality: "high",
         output_format: "jpeg",
         output_compression: 82,

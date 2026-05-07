@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
 
-export function GET() {
+export async function GET() {
   const env = getRuntimeEnv();
   const bindings = getOptionalCloudflareBindings();
+  const supportsWallpaperTypeColumn = await hasOrdersColumn(
+    bindings.DB,
+    "wallpaper_type",
+  );
 
   return NextResponse.json(
     {
@@ -21,6 +25,8 @@ export function GET() {
       previewModelConfigured: Boolean(
         env.OPENAI_PREVIEW_IMAGE_MODEL || "gpt-image-1-mini",
       ),
+      supportsWallpaperTypeColumn,
+      supportedImageSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"],
     },
     {
       headers: {
@@ -29,4 +35,31 @@ export function GET() {
       },
     },
   );
+}
+
+async function hasOrdersColumn(
+  db: D1Database | undefined,
+  columnName: string,
+) {
+  if (!db) {
+    return false;
+  }
+
+  try {
+    const statement = db.prepare("PRAGMA table_info(orders);");
+    const result = await (
+      statement as unknown as { all<T>(): Promise<{ results?: T[] }> }
+    ).all<{ name?: string }>();
+
+    return (
+      result.results?.some((row) => row.name?.toLowerCase() === columnName.toLowerCase()) ||
+      false
+    );
+  } catch (error) {
+    console.warn("[preview-health]", {
+      failureReason: "Unable to inspect orders schema",
+      errorMessage: error instanceof Error ? error.message : "Unknown schema error",
+    });
+    return false;
+  }
 }

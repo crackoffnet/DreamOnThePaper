@@ -7,6 +7,7 @@ import type {
   WallpaperMeta,
   WallpaperStyle,
 } from "@/lib/types";
+import { getOpenAIImageSize } from "@/lib/openaiImageSize";
 
 export const devices = ["mobile", "desktop", "tablet", "custom"] as const satisfies readonly DeviceType[];
 export const themes = ["light", "dark"] as const satisfies readonly ThemeType[];
@@ -91,40 +92,6 @@ const ratioMeta: Record<
   custom: { aspectRatio: "2 / 3", imageSize: "1200x1800" },
 };
 
-const previewImageSizes: Record<RatioType, string> = {
-  "iphone-17-pro-max": "704x1520",
-  iphone: "768x1360",
-  android: "768x1360",
-  "desktop-16-9": "1280x720",
-  "desktop-16-10": "1280x800",
-  "desktop-4k": "1280x720",
-  ipad: "1024x768",
-  "tablet-vertical": "768x1024",
-  custom: "768x1152",
-};
-
-const supportedPreviewSizes = [
-  "1024x1024",
-  "1024x1536",
-  "1536x1024",
-  "1280x720",
-  "1280x800",
-  "768x1024",
-  "1024x768",
-  "768x1360",
-  "704x1520",
-];
-
-const supportedFinalSizes = [
-  "1024x1024",
-  "1024x1536",
-  "1536x1024",
-  "2048x2048",
-  "2048x1152",
-  "3840x2160",
-  "2160x3840",
-];
-
 export const defaultWallpaperInput: WallpaperInput = {
   device: "mobile",
   ratio: "iphone-17-pro-max",
@@ -167,27 +134,15 @@ export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
 }
 
 export function getPreviewImageSize(input: WallpaperInput) {
-  if (isCustomWallpaper(input)) {
-    return findClosestSupportedSize(
-      input.customWidth,
-      input.customHeight,
-      supportedPreviewSizes,
-    );
-  }
-
-  return previewImageSizes[input.ratio];
+  const meta = getWallpaperMeta(input);
+  const [width, height] = meta.imageSize.split("x").map(Number);
+  return getOpenAIImageSize(width, height);
 }
 
 export function getFinalImageSize(input: WallpaperInput) {
-  if (isCustomWallpaper(input)) {
-    return findClosestSupportedSize(
-      input.customWidth,
-      input.customHeight,
-      supportedFinalSizes,
-    );
-  }
-
-  return getWallpaperMeta(input).imageSize;
+  const meta = getWallpaperMeta(input);
+  const [width, height] = meta.imageSize.split("x").map(Number);
+  return getOpenAIImageSize(width, height);
 }
 
 export function getResolutionLabel(input: WallpaperInput) {
@@ -308,22 +263,4 @@ function gcd(a: number, b: number): number {
   }
 
   return x || 1;
-}
-
-function findClosestSupportedSize(
-  targetWidth: number,
-  targetHeight: number,
-  supportedSizes: readonly string[],
-) {
-  const targetRatio = targetWidth / targetHeight;
-
-  return supportedSizes.reduce((best, size) => {
-    const [width, height] = size.split("x").map(Number);
-    const ratio = width / height;
-    const currentDifference = Math.abs(ratio - targetRatio);
-    const [bestWidth, bestHeight] = best.split("x").map(Number);
-    const bestDifference = Math.abs(bestWidth / bestHeight - targetRatio);
-
-    return currentDifference < bestDifference ? size : best;
-  }, supportedSizes[0]);
 }
