@@ -40,7 +40,7 @@ export const labels = {
     mobile: "Mobile wallpaper",
     desktop: "Desktop wallpaper",
     tablet: "Tablet wallpaper",
-    custom: "Custom size",
+    custom: "Custom size wallpaper",
   },
   ratios: {
     "iphone-17-pro-max": "iPhone 17 Pro Max / 9:19.5",

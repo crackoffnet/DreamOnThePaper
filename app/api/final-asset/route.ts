@@ -84,10 +84,9 @@ export async function GET(request: Request) {
 function filenameForAsset(assetType: string, orderId: string) {
   const shortId = orderId.slice(0, 8);
   if (assetType === "mobile") return `dream-on-the-paper-mobile-${shortId}.png`;
+  if (assetType === "tablet") return `dream-on-the-paper-tablet-${shortId}.png`;
   if (assetType === "desktop") return `dream-on-the-paper-desktop-${shortId}.png`;
-  if (assetType === "version_1") return `dream-on-the-paper-version-1-${shortId}.png`;
-  if (assetType === "version_2") return `dream-on-the-paper-version-2-${shortId}.png`;
-  if (assetType === "version_3") return `dream-on-the-paper-version-3-${shortId}.png`;
+  if (assetType === "custom") return `dream-on-the-paper-custom-${shortId}.png`;
   return `dream-on-the-paper-wallpaper-${shortId}.png`;
 }
 

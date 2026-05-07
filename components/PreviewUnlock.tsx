@@ -5,13 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
-import { PricingCard } from "@/components/PricingCard";
 import { StartOverButton } from "@/components/StartOverButton";
 import { getEphemeralImage } from "@/lib/client-images";
 import { createNewWallpaperDraft, getCurrentDraft } from "@/lib/wallpaperDraft";
-import type { PackageId } from "@/lib/plans";
-import { packageIds, packages } from "@/lib/plans";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
+import { wallpaperProductFromDevice, wallpaperProducts } from "@/lib/wallpaperProducts";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
 type PreviewState = {
@@ -33,8 +31,6 @@ export function PreviewUnlock() {
     orderToken: null,
     orderSnapshotToken: null,
   });
-  const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
-
   useEffect(() => {
     const draft = getCurrentDraft();
     const draftHasPreview = draft.previewStatus === "ready";
@@ -91,7 +87,8 @@ export function PreviewUnlock() {
     );
   }
 
-  const packageConfig = packages[selectedPackage];
+  const wallpaperType = wallpaperProductFromDevice(preview.meta.device);
+  const product = wallpaperProducts[wallpaperType];
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[0.48fr_0.52fr]">
@@ -137,7 +134,7 @@ export function PreviewUnlock() {
         </div>
 
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
-          <p>Device: {labels.devices[preview.meta.device]}</p>
+          <p>Wallpaper type: {labels.devices[preview.meta.device]}</p>
           <p>Ratio: {preview.input ? getAspectRatioLabel(preview.input) : labels.ratios[preview.meta.ratio]}</p>
           <p>Style: {labels.styles[preview.meta.style]}</p>
           <p>Theme: {labels.themes[preview.meta.theme]}</p>
@@ -167,14 +164,14 @@ export function PreviewUnlock() {
           <div className="mb-3 flex items-center gap-2">
             <Lock aria-hidden className="h-4 w-4 text-gold" />
             <h2 className="text-xl font-semibold text-ink">
-              Unlock Full Wallpaper
+              Unlock final wallpaper
             </h2>
           </div>
           <p className="text-sm leading-6 text-taupe">
-            {packageConfig.priceLabel} unlocks {packageConfig.name.toLowerCase()}.
+            {product.priceLabel} unlocks one final PNG wallpaper.
           </p>
           <div className="mt-4 grid gap-2">
-            {packageConfig.checkoutBullets.map((feature) => (
+            {product.checkoutBullets.map((feature) => (
               <div key={feature} className="flex items-center gap-2 text-sm text-cocoa">
                 <Check aria-hidden className="h-4 w-4 text-gold" />
                 {feature}
@@ -183,19 +180,8 @@ export function PreviewUnlock() {
           </div>
         </div>
 
-        <div className="grid gap-3">
-          {packageIds.map((packageId) => (
-            <PricingCard
-              key={packageId}
-              packageId={packageId}
-              selected={selectedPackage === packageId}
-              onSelect={setSelectedPackage}
-            />
-          ))}
-        </div>
-
         <CheckoutCTA
-          packageId={selectedPackage}
+          wallpaperType={wallpaperType}
           orderId={preview.orderId}
           orderToken={preview.orderToken}
           orderSnapshotToken={preview.orderSnapshotToken}

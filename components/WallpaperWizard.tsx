@@ -105,7 +105,7 @@ const questions: Array<{
 ];
 
 const stepTitles = [
-  "Choose device",
+  "Choose wallpaper",
   "Choose ratio",
   "Choose theme",
   "Choose style",
@@ -793,6 +793,10 @@ function getCustomSizeIssue(form: WallpaperInput) {
 
   if (width > 3840 || height > 3840) {
     return "Custom size cannot exceed 3840px on either side.";
+  }
+
+  if (width * height > 3840 * 2160) {
+    return "Custom size is too large. Keep total pixels at or below 3840 x 2160.";
   }
 
   return "";

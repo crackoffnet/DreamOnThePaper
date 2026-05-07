@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import type { PackageId } from "@/lib/packages";
-import { packages } from "@/lib/packages";
+import { normalizePackageId, packages } from "@/lib/packages";
 import { getRuntimeEnv } from "@/lib/env";
 import {
   fromBase64Url,
@@ -153,12 +153,9 @@ export async function verifyStripePayment(sessionId: string): Promise<PaymentSta
   }
 
   const session = await stripe.checkout.sessions.retrieve(sessionId);
-  const packageId = (session.metadata?.packageType ||
-    session.metadata?.packageId) as PackageId | undefined;
-
-  if (!packageId || !(packageId in packages)) {
-    throw new Error("Invalid package metadata.");
-  }
+  const packageId = normalizePackageId(
+    session.metadata?.packageType || session.metadata?.packageId,
+  );
 
   return {
     paid: session.payment_status === "paid",
@@ -228,9 +225,7 @@ export async function verifyOrderToken(token: string) {
       return null;
     }
 
-    if (!(payload.packageId in packages)) {
-      return null;
-    }
+    payload.packageId = normalizePackageId(payload.packageId);
 
     return payload;
   } catch {
@@ -259,9 +254,7 @@ export async function verifyFinalGenerationToken(token: string) {
       return null;
     }
 
-    if (!(payload.packageId in packages)) {
-      return null;
-    }
+    payload.packageId = normalizePackageId(payload.packageId);
 
     return payload;
   } catch {

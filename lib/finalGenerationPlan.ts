@@ -1,6 +1,10 @@
 import type { DbOrder, FinalAssetType } from "@/lib/orders";
 import type { PackageId } from "@/lib/packages";
 import type { WallpaperInput } from "@/lib/types";
+import {
+  labelForWallpaperType,
+  wallpaperProductFromDevice,
+} from "@/lib/wallpaperProducts";
 import { inputFromDbOrder } from "@/lib/orders";
 import { normalizeGenerationSize } from "@/lib/imageGenerationConfig";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
@@ -16,93 +20,23 @@ export type FinalGenerationPlanItem = {
 
 export function buildFinalGenerationPlan(
   order: DbOrder,
-  packageType: PackageId,
+  _packageType: PackageId,
 ): FinalGenerationPlanItem[] {
   const baseInput = inputFromDbOrder(order);
-
-  if (packageType === "bundle") {
-    const mobileSize = normalizeGenerationSize(1290, 2796, "final");
-    const desktopSize = normalizeGenerationSize(2560, 1440, "final");
-
-    return [
-      {
-        assetType: "mobile",
-        label: "Mobile wallpaper",
-        width: mobileSize.width,
-        height: mobileSize.height,
-        input: {
-          ...baseInput,
-          device: "mobile",
-          ratio: "iphone-17-pro-max",
-          customWidth: undefined,
-          customHeight: undefined,
-        },
-        variationPrompt:
-          "Mobile wallpaper composition, vertical, generous negative space for app icons, adapted from the same concept and quote.",
-      },
-      {
-        assetType: "desktop",
-        label: "Desktop wallpaper",
-        width: desktopSize.width,
-        height: desktopSize.height,
-        input: {
-          ...baseInput,
-          device: "desktop",
-          ratio: "desktop-16-9",
-          customWidth: undefined,
-          customHeight: undefined,
-        },
-        variationPrompt:
-          "Desktop wallpaper composition, horizontal widescreen, spacious layout for desktop folders, matching the same concept and quote.",
-      },
-    ];
-  }
-
-  if (packageType === "premium") {
-    const selectedSize = normalizeGenerationSize(order.width, order.height, "final");
-
-    return [
-      {
-        assetType: "version_1",
-        label: "Version 1",
-        width: selectedSize.width,
-        height: selectedSize.height,
-        input: baseInput,
-        variationPrompt:
-          "Version 1: closest to the selected style, balanced, polished, and faithful to the preview concept.",
-      },
-      {
-        assetType: "version_2",
-        label: "Version 2",
-        width: selectedSize.width,
-        height: selectedSize.height,
-        input: baseInput,
-        variationPrompt:
-          "Version 2: softer and more minimal interpretation with extra negative space, quieter palette, and refined restraint.",
-      },
-      {
-        assetType: "version_3",
-        label: "Version 3",
-        width: selectedSize.width,
-        height: selectedSize.height,
-        input: baseInput,
-        variationPrompt:
-          "Version 3: more cinematic and editorial interpretation with premium depth, richer light, and a distinct visual direction.",
-      },
-    ];
-  }
-
   const selectedSize = normalizeGenerationSize(order.width, order.height, "final");
+  const wallpaperType = wallpaperProductFromDevice(
+    order.wallpaper_type || order.device,
+  );
 
   return [
     {
-      assetType: "single",
-      label: "Wallpaper",
+      assetType: wallpaperType,
+      label: labelForWallpaperType(wallpaperType),
       width: selectedSize.width,
       height: selectedSize.height,
       input: baseInput,
       variationPrompt:
-        "Single final wallpaper: polished, refined, and optimized for the selected device or custom size.",
+        "Single final PNG wallpaper: polished, refined, and optimized for the selected device or custom size.",
     },
   ];
 }

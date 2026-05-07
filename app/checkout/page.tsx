@@ -42,10 +42,10 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
             Secure checkout
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-ink sm:text-5xl">
-            Choose your package.
+            Unlock your final wallpaper.
           </h1>
           <p className="mt-3 text-sm leading-6 text-taupe sm:text-base">
-            Payment is verified server-side before final generation and download.
+            Pay once to generate and download your high-resolution final PNG wallpaper.
           </p>
         </div>
         <Pricing

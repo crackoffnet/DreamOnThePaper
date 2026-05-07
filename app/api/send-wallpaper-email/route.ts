@@ -8,6 +8,7 @@ import { verifyFinalGenerationToken } from "@/lib/payment";
 import { getFinalAssets, getOrder } from "@/lib/orders";
 import { getRuntimeEnv, isFromNameUsingFallback } from "@/lib/env";
 import { getImage } from "@/lib/storage";
+import { wallpaperProductFromDevice } from "@/lib/wallpaperProducts";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   createEmailEvent,
@@ -126,18 +127,27 @@ export async function POST(request: Request) {
     }
 
     const assets = await getFinalAssets(order.id);
-    const assetInputs = assets.length
-      ? assets.map((asset) => ({
-          assetType: asset.asset_type,
-          r2Key: asset.r2_key,
-          filename: filenameForAsset(asset.asset_type, order.id.slice(0, 8)),
-        }))
+    const preferredAssetType = wallpaperProductFromDevice(
+      order.wallpaper_type || order.device,
+    );
+    const selectedAsset =
+      assets.find((asset) => asset.asset_type === preferredAssetType) ||
+      assets.find((asset) => asset.asset_type === "single") ||
+      assets[0];
+    const assetInputs = selectedAsset
+      ? [
+          {
+            assetType: selectedAsset.asset_type,
+            r2Key: selectedAsset.r2_key,
+            filename: filenameForAsset(preferredAssetType, order.id.slice(0, 8)),
+          },
+        ]
       : order.final_r2_key
         ? [
             {
-              assetType: "single",
+              assetType: preferredAssetType,
               r2Key: order.final_r2_key,
-              filename: `dream-on-the-paper-wallpaper-${order.id.slice(0, 8)}.png`,
+              filename: filenameForAsset(preferredAssetType, order.id.slice(0, 8)),
             },
           ]
         : [];
@@ -223,9 +233,9 @@ export async function POST(request: Request) {
         to: [{ email: parsed.data.email }],
         subject: "Your Dream On The Paper wallpaper is ready",
         htmlContent:
-          "<p>Your personalized wallpaper file(s) are attached.</p><p>If your email provider blocks the attachment, return to your checkout success page and use the Download button.</p>",
+          "<p>Your personalized wallpaper is ready.</p><p>Your final PNG wallpaper is attached.</p><p>If your email provider blocks the attachment, return to your checkout success page and use Download Wallpaper.</p>",
         textContent:
-          "Your personalized wallpaper file(s) are attached.\nIf your email provider blocks the attachment, return to your checkout success page and use the Download button.",
+          "Your personalized wallpaper is ready.\nYour final PNG wallpaper is attached.\nIf your email provider blocks the attachment, return to your checkout success page and use Download Wallpaper.",
         attachment: attachments,
       }),
     });
@@ -311,17 +321,14 @@ function filenameForAsset(assetType: string, orderIdShort: string) {
   if (assetType === "mobile") {
     return `dream-on-the-paper-mobile-${orderIdShort}.png`;
   }
+  if (assetType === "tablet") {
+    return `dream-on-the-paper-tablet-${orderIdShort}.png`;
+  }
   if (assetType === "desktop") {
     return `dream-on-the-paper-desktop-${orderIdShort}.png`;
   }
-  if (assetType === "version_1") {
-    return `dream-on-the-paper-version-1-${orderIdShort}.png`;
-  }
-  if (assetType === "version_2") {
-    return `dream-on-the-paper-version-2-${orderIdShort}.png`;
-  }
-  if (assetType === "version_3") {
-    return `dream-on-the-paper-version-3-${orderIdShort}.png`;
+  if (assetType === "custom") {
+    return `dream-on-the-paper-custom-${orderIdShort}.png`;
   }
   return `dream-on-the-paper-wallpaper-${orderIdShort}.png`;
 }

@@ -9,7 +9,8 @@ import {
 } from "@/lib/orders";
 import { signFinalGenerationToken } from "@/lib/payment";
 import type { PackageId } from "@/lib/plans";
-import { packageIds } from "@/lib/plans";
+import { normalizePackageId } from "@/lib/packages";
+import { wallpaperProductFromDevice } from "@/lib/wallpaperProducts";
 import { assertSameOrigin } from "@/lib/security";
 import { getDb } from "@/lib/cloudflare";
 import {
@@ -206,6 +207,7 @@ export async function POST(request: Request) {
       stripe_payment_status: session.payment_status,
       stripe_mode: stripeModeFromSecret(),
       package_type: packageId || paidOrder.package_type || "single",
+      wallpaper_type: session.metadata?.wallpaperType || paidOrder.wallpaper_type || paidOrder.device,
       amount_cents: amountCents,
       currency: session.currency || "usd",
       paid_at: Date.now(),
@@ -249,6 +251,9 @@ export async function POST(request: Request) {
       paid: true,
       orderId,
       packageId: packageId || paidOrder.package_type || "single",
+      wallpaperType: wallpaperProductFromDevice(
+        session.metadata?.wallpaperType || paidOrder.wallpaper_type || paidOrder.device,
+      ),
       customerEmail: customerEmail || null,
       finalGenerationToken,
     });
@@ -283,10 +288,6 @@ function stripeId(value: unknown) {
   }
 
   return "";
-}
-
-function normalizePackageId(value: string | null | undefined): PackageId | null {
-  return packageIds.includes(value as PackageId) ? (value as PackageId) : null;
 }
 
 function logVerifyFailure(details: {

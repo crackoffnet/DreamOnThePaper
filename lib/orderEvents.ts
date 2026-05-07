@@ -27,6 +27,7 @@ const orderUpdateColumns = new Set([
   "customer_id",
   "order_token_hash",
   "package_type",
+  "wallpaper_type",
   "package_name",
   "amount_cents",
   "currency",

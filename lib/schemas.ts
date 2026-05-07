@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { packageIds } from "@/lib/plans";
+import { wallpaperProductIds } from "@/lib/wallpaperProducts";
 import {
   devices,
   isValidRatioForDevice,
@@ -85,6 +85,16 @@ export const wallpaperInputSchema = z
         message: "Please enter a custom width and height between 512 and 3840px.",
         path: ["customWidth"],
       });
+      return;
+    }
+
+    if (input.customWidth * input.customHeight > 3840 * 2160) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Custom size is too large. Keep total pixels at or below 3840 x 2160.",
+        path: ["customWidth"],
+      });
     }
   });
 
@@ -93,7 +103,8 @@ export const previewGenerationSchema = wallpaperInputSchema.extend({
 });
 
 export const checkoutSchema = z.object({
-  packageType: z.enum(packageIds),
+  wallpaperType: z.enum(wallpaperProductIds).optional(),
+  packageType: z.string().max(40).optional(),
   orderId: z.string().min(8).max(120).optional(),
   orderToken: z.string().min(24).max(12000).optional(),
   orderSnapshotToken: z.string().min(24).max(12000).optional(),

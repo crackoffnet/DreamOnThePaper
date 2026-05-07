@@ -10,7 +10,11 @@ import { getEphemeralImage } from "@/lib/client-images";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
 import type { FinalAssetResult } from "@/lib/types";
 import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
-import { packages, type PackageId } from "@/lib/packages";
+import {
+  labelForWallpaperType,
+  wallpaperProductFromDevice,
+  type WallpaperProductId,
+} from "@/lib/wallpaperProducts";
 
 type StoredResult = {
   imageUrl: string;
@@ -18,7 +22,7 @@ type StoredResult = {
   meta: WallpaperMeta | null;
   dimensions: WallpaperDimensions | null;
   finalAssets: FinalAssetResult[];
-  packageId: PackageId;
+  wallpaperType: WallpaperProductId;
 };
 
 type WallpaperDimensions = {
@@ -33,7 +37,7 @@ export function ResultPreview() {
     meta: null,
     dimensions: null,
     finalAssets: [],
-    packageId: "single",
+    wallpaperType: "mobile",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [orderToken, setOrderToken] = useState("");
@@ -50,9 +54,12 @@ export function ResultPreview() {
     );
     const finalAssets =
       parseJson<FinalAssetResult[]>(sessionStorage.getItem("dreamFinalAssets")) || [];
-    const packageId = packageIdFromStorage(sessionStorage.getItem("dreamPackageId"));
+    const storedWallpaperType = sessionStorage.getItem("dreamWallpaperType");
+    const wallpaperType = wallpaperProductFromDevice(
+      storedWallpaperType || meta?.device,
+    );
 
-    setResult({ imageUrl, input, meta, dimensions, finalAssets, packageId });
+    setResult({ imageUrl, input, meta, dimensions, finalAssets, wallpaperType });
     setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
     setOrderId(sessionStorage.getItem("dreamOrderId") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 500);
@@ -91,8 +98,7 @@ export function ResultPreview() {
   const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
   const dimensions = result.dimensions || dimensionsFromMeta(meta);
   const dimensionsLabel = `${dimensions.width} \u00d7 ${dimensions.height} px`;
-  const packageConfig = packages[result.packageId];
-  const assets = result.finalAssets.length
+  const rawAssets = result.finalAssets.length
     ? result.finalAssets
     : [
         {
@@ -105,13 +111,16 @@ export function ResultPreview() {
           format: "PNG" as const,
         },
       ];
+  const preferredAsset =
+    rawAssets.find((asset) => asset.assetType === result.wallpaperType) ||
+    rawAssets.find((asset) => asset.assetType === "single") ||
+    rawAssets[0];
+  const assets = preferredAsset ? [preferredAsset] : [];
   const primaryAsset = assets[0];
-  const heading =
-    result.packageId === "bundle"
-      ? "Your wallpaper pair is ready."
-      : result.packageId === "premium"
-        ? "Your 3 wallpaper versions are ready."
-        : "Ready to download.";
+  const heading = "Ready to download.";
+  const wallpaperTypeLabel = labelForWallpaperType(
+    result.wallpaperType || meta.device,
+  );
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[0.42fr_0.58fr]">
@@ -123,8 +132,7 @@ export function ResultPreview() {
           {heading}
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
-          <DetailRow label="Package" value={packageConfig.name} />
-          <DetailRow label="Device" value={labels.devices[meta.device]} />
+          <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
           <DetailRow
             label="Ratio"
             value={
@@ -152,7 +160,7 @@ export function ResultPreview() {
             PNG {"\u00b7"}{" "}
             {assets.length === 1
               ? `${assets[0].width} \u00d7 ${assets[0].height} px`
-              : `${assets.length} final PNG files`}
+              : `${primaryAsset.width} \u00d7 ${primaryAsset.height} px`}
           </p>
           <Link
             href="/create"
@@ -174,9 +182,7 @@ export function ResultPreview() {
       <div className="rounded-[1.75rem] border border-white/70 bg-white/45 p-4 shadow-soft backdrop-blur-xl">
         <div
           className={
-            assets.length === 1
-              ? "flex justify-center"
-              : "grid gap-4 md:grid-cols-2"
+            "flex justify-center"
           }
         >
           {assets.map((asset) => (
@@ -185,8 +191,8 @@ export function ResultPreview() {
               asset={asset}
               orderToken={orderToken}
               orderIdShort={orderIdShort}
-              single={assets.length === 1}
-              aspectRatio={assets.length === 1 ? meta.aspectRatio : undefined}
+              single
+              aspectRatio={meta.aspectRatio}
             />
           ))}
         </div>
@@ -308,26 +314,16 @@ function filenameForAsset(asset: FinalAssetResult, orderIdShort: string) {
   if (asset.assetType === "mobile") {
     return `dream-on-the-paper-mobile-${orderIdShort}.png`;
   }
+  if (asset.assetType === "tablet") {
+    return `dream-on-the-paper-tablet-${orderIdShort}.png`;
+  }
   if (asset.assetType === "desktop") {
     return `dream-on-the-paper-desktop-${orderIdShort}.png`;
   }
-  if (asset.assetType === "version_1") {
-    return `dream-on-the-paper-version-1-${orderIdShort}.png`;
-  }
-  if (asset.assetType === "version_2") {
-    return `dream-on-the-paper-version-2-${orderIdShort}.png`;
-  }
-  if (asset.assetType === "version_3") {
-    return `dream-on-the-paper-version-3-${orderIdShort}.png`;
+  if (asset.assetType === "custom") {
+    return `dream-on-the-paper-custom-${orderIdShort}.png`;
   }
   return `dream-on-the-paper-wallpaper-${orderIdShort}.png`;
-}
-
-function packageIdFromStorage(value: string | null): PackageId {
-  if (value === "bundle" || value === "premium" || value === "single") {
-    return value;
-  }
-  return "single";
 }
 
 function parseJson<T>(value: string | null): T | null {

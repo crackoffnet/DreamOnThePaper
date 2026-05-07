@@ -18,6 +18,7 @@ type Step = "verifying" | "generating" | "done" | "error";
 type FinalGenerationResponse = GenerateResponse & {
   status?: "ready" | "generating" | "failed" | string;
   packageType?: string;
+  wallpaperType?: string;
   expectedAssets?: number;
   completedAssets?: number;
   failedAssets?: number;
@@ -83,7 +84,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         });
         const status = (await response.json()) as FinalGenerationResponse;
         const elapsed = Date.now() - startedAt;
-        const expectedAssets = status.expectedAssets || expectedAssetCount(packageType);
+        const expectedAssets = status.expectedAssets || expectedAssetCount();
         const completedAssets = status.completedAssets || status.finalAssets?.length || 0;
 
         if (status.status === "final_generated" || status.status === "ready") {
@@ -141,7 +142,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
 
-      setMessage(progressMessage(packageType, started.completedAssets || 0, started.expectedAssets || expectedAssetCount(packageType), 0));
+      setMessage(progressMessage(packageType, started.completedAssets || 0, started.expectedAssets || expectedAssetCount(), 0));
       return pollFinalStatus(finalGenerationToken, packageType, signal);
     },
     [pollFinalStatus],
@@ -170,6 +171,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           "dreamFinalAssets",
           JSON.stringify(generated.finalAssets),
         );
+      }
+      if (generated.wallpaperType) {
+        sessionStorage.setItem("dreamWallpaperType", generated.wallpaperType);
       }
     },
     [sessionId],
@@ -224,6 +228,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           finalGenerationToken?: string;
           orderId?: string;
           packageId?: string;
+          wallpaperType?: string;
           customerEmail?: string | null;
           message?: string;
           error?: string;
@@ -246,12 +251,15 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           sessionStorage.setItem("dreamOrderId", verified.orderId);
         }
         sessionStorage.setItem("dreamPackageId", verified.packageId || "single");
+        if (verified.wallpaperType) {
+          sessionStorage.setItem("dreamWallpaperType", verified.wallpaperType);
+        }
         if (verified.customerEmail) {
           sessionStorage.setItem("dreamCustomerEmail", verified.customerEmail);
         }
 
         setStep("generating");
-        setMessage(progressMessage(verified.packageId || "single", 0, expectedAssetCount(verified.packageId || "single"), 0));
+        setMessage(progressMessage(verified.packageId || "single", 0, expectedAssetCount(), 0));
         console.info("[success] generating final");
         const generated = await startAndPollFinal(
           verified.finalGenerationToken,
@@ -321,9 +329,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
   );
 }
 
-function expectedAssetCount(packageType: string) {
-  if (packageType === "bundle") return 2;
-  if (packageType === "premium") return 3;
+function expectedAssetCount() {
   return 1;
 }
 
@@ -333,12 +339,7 @@ function progressMessage(
   expectedAssets: number,
   elapsedMs: number,
 ) {
-  const base =
-    packageType === "bundle"
-      ? `Creating ${Math.min(completedAssets + 1, expectedAssets)} of ${expectedAssets} wallpapers...`
-      : packageType === "premium"
-        ? `Creating ${Math.min(completedAssets + 1, expectedAssets)} of ${expectedAssets} versions...`
-        : "Creating your wallpaper...";
+  const base = "Creating your wallpaper...";
 
   if (elapsedMs > 8 * 60 * 1000) {
     return "Generation is taking longer than expected. You can retry without another payment.";

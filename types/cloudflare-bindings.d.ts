@@ -81,8 +81,6 @@ interface CloudflareEnv {
   ORDER_TOKEN_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_SINGLE_PRICE_ID?: string;
-  STRIPE_BUNDLE_PRICE_ID?: string;
-  STRIPE_PREMIUM_PRICE_ID?: string;
   NEXT_PUBLIC_SITE_URL?: string;
   CHECKOUT_RATE_LIMIT_BYPASS_TOKEN?: string;
   PREVIEW_RATE_LIMIT_BYPASS_TOKEN?: string;

@@ -19,7 +19,7 @@ type DeviceSelectorProps = {
 export function DeviceSelector({ value, onChange }: DeviceSelectorProps) {
   return (
     <div className="grid gap-2 sm:grid-cols-4">
-      {(["mobile", "desktop", "tablet", "custom"] as const).map((device) => {
+      {(["mobile", "tablet", "desktop", "custom"] as const).map((device) => {
         const Icon = deviceIcons[device];
         const active = value === device;
 

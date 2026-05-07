@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
-import { PricingCard } from "@/components/PricingCard";
 import { StartOverButton } from "@/components/StartOverButton";
 import { TrustBadges } from "@/components/TrustBadges";
 import { ensureAppStateVersion } from "@/lib/clientState";
 import type { CheckoutOrderToken } from "@/lib/order-state";
-import type { PackageId } from "@/lib/plans";
-import { packageIds } from "@/lib/plans";
 import type { DeviceType, QuoteTone, RatioType, ThemeType, WallpaperMeta, WallpaperStyle } from "@/lib/types";
+import {
+  wallpaperProductFromDevice,
+  wallpaperProducts,
+  type WallpaperProductId,
+} from "@/lib/wallpaperProducts";
 import { clearBrokenCheckoutState, getCurrentDraft } from "@/lib/wallpaperDraft";
 import { labels } from "@/lib/wallpaper";
 
@@ -30,7 +32,6 @@ type PricingProps = {
 };
 
 export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: PricingProps) {
-  const [selectedPackage, setSelectedPackage] = useState<PackageId>("single");
   const [state, setState] = useState<PricingState>({
     imageUrl: "",
     meta: null,
@@ -145,8 +146,8 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         </h2>
         <p className="mt-3 text-sm leading-6 text-taupe">
           {tokenExpired
-            ? "This preview expired or can't be restored. Please create a new preview before choosing a package."
-            : "Generate a low-quality preview before choosing a package and starting secure checkout."}
+            ? "This preview expired or can't be restored. Please create a new preview before checkout."
+            : "Generate a low-quality preview before starting secure checkout."}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <StartOverButton />
@@ -164,6 +165,11 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
       </div>
     );
   }
+
+  const wallpaperType = state.meta
+    ? wallpaperProductFromDevice(state.meta.device)
+    : ("mobile" as WallpaperProductId);
+  const product = wallpaperProducts[wallpaperType];
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[0.48fr_0.52fr]">
@@ -194,7 +200,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
           </div>
         </div>
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
-          <p>Device: {labels.devices[state.meta.device]}</p>
+          <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
           <p>Ratio: {labels.ratios[state.meta.ratio]}</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
@@ -204,25 +210,47 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
       <aside className="space-y-3">
         <div className="rounded-[1.5rem] border border-white/70 bg-white/50 p-4">
           <h2 className="text-2xl font-semibold tracking-[-0.03em] text-ink">
-            Choose your package.
+            Unlock your final wallpaper.
           </h2>
           <p className="mt-1 text-sm leading-6 text-taupe">
-            Select how many final wallpapers you want after your free preview.
+            Pay once to generate and download your high-resolution final PNG wallpaper.
           </p>
         </div>
-        <div className="grid gap-3">
-          {packageIds.map((packageId) => (
-            <PricingCard
-              key={packageId}
-              packageId={packageId}
-              selected={selectedPackage === packageId}
-              onSelect={setSelectedPackage}
-            />
-          ))}
+        <div className="rounded-2xl border border-gold/30 bg-white p-4 shadow-soft">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-ink">
+                {product.label}
+              </h2>
+              <p className="mt-1 text-sm leading-5 text-taupe">
+                {product.description}
+              </p>
+            </div>
+            <p className="shrink-0 text-xl font-semibold text-ink">
+              {product.priceLabel}
+            </p>
+          </div>
+          <div className="mt-4 grid gap-2">
+            {product.checkoutBullets.map((feature) => (
+              <div key={feature} className="flex items-center gap-2 text-sm text-cocoa">
+                <Check aria-hidden className="h-4 w-4 text-gold" />
+                {feature}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/create";
+            }}
+            className="focus-ring mt-4 inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-semibold text-ink"
+          >
+            Edit size or answers
+          </button>
         </div>
         <TrustBadges />
         <CheckoutCTA
-          packageId={selectedPackage}
+          wallpaperType={wallpaperType}
           orderId={state.orderId}
           orderToken={state.orderToken}
           orderSnapshotToken={state.orderSnapshotToken}

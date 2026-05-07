@@ -7,11 +7,16 @@ import { checkCheckoutRateLimitDetailed } from "@/lib/rateLimit";
 import { markOrderPendingPayment, getOrder, isUnpaidOrderExpired } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 import {
-  isPackageId,
   packages,
   type PackageId,
   type RuntimeStripePriceEnv,
 } from "@/lib/packages";
+import {
+  isWallpaperProductId,
+  wallpaperProductFromDevice,
+  wallpaperProducts,
+  type WallpaperProductId,
+} from "@/lib/wallpaperProducts";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   patchOrderTracking,
@@ -25,7 +30,8 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const requestMetadata = await getRequestMetadata(request);
   let orderId: string | undefined;
-  let packageType: PackageId | undefined;
+  const packageType: PackageId = "single";
+  let wallpaperType: WallpaperProductId | undefined;
   let selectedPriceEnvName: RuntimeStripePriceEnv | undefined;
 
   try {
@@ -77,16 +83,6 @@ export async function POST(request: Request) {
       return checkoutError("Please check your order details and try again.", 400);
     }
 
-    packageType = parsed.data.packageType;
-    if (!isPackageId(packageType)) {
-      logCheckoutFailure({
-        requestId,
-        packageType,
-        failureReason: "Invalid packageType",
-      });
-      return checkoutError("Selected package is not available.", 400);
-    }
-
     if (!parsed.data.orderToken) {
       logCheckoutFailure({
         requestId,
@@ -113,7 +109,7 @@ export async function POST(request: Request) {
       return checkoutError(safeCheckoutMessage, 503);
     }
 
-    selectedPriceEnvName = packages[packageType].stripePriceEnv;
+    selectedPriceEnvName = packages.single.stripePriceEnv;
     const priceId = env[selectedPriceEnvName];
     const invalidPriceReason = validatePriceId(priceId);
     if (invalidPriceReason) {
@@ -176,6 +172,13 @@ export async function POST(request: Request) {
       return checkoutError("Your preview expired. Please create a new preview.", 404);
     }
 
+    wallpaperType = wallpaperProductFromDevice(
+      order.wallpaper_type ||
+        (isWallpaperProductId(parsed.data.wallpaperType)
+          ? parsed.data.wallpaperType
+          : order.device),
+    );
+    const product = wallpaperProducts[wallpaperType];
     const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
       httpClient: Stripe.createFetchHttpClient(),
     });
@@ -183,12 +186,16 @@ export async function POST(request: Request) {
     const metadata = {
       orderId,
       packageType,
+      wallpaperType,
       device: order.device,
       ratio: order.ratio,
       width: String(order.width),
       height: String(order.height),
+      customWidth: String(order.device === "custom" ? order.width : ""),
+      customHeight: String(order.device === "custom" ? order.height : ""),
       theme: order.theme,
       style: order.style,
+      mood: order.mood || order.style,
       quoteTone: order.quote_tone,
       promptHash: order.prompt_hash,
     };
@@ -211,7 +218,7 @@ export async function POST(request: Request) {
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams, {
-      idempotencyKey: `checkout:${orderId}:${packageType}`,
+      idempotencyKey: `checkout:${orderId}:single:${wallpaperType}`,
     });
 
     if (!session.url) {
@@ -227,8 +234,9 @@ export async function POST(request: Request) {
     await markOrderPendingPayment(orderId, session.id, packageType);
     void patchOrderTracking(orderId, {
       package_type: packageType,
-      package_name: packages[packageType].name,
-      amount_cents: packages[packageType].amount,
+      wallpaper_type: wallpaperType,
+      package_name: product.label,
+      amount_cents: product.amount,
       currency: "usd",
       stripe_checkout_session_id: session.id,
       stripe_payment_status: session.payment_status || "unpaid",
@@ -253,6 +261,7 @@ export async function POST(request: Request) {
       metadata: {
         requestId,
         selectedPriceEnvName,
+        wallpaperType,
         stripeMode: stripeModeFromSecret(),
       },
     });
@@ -294,8 +303,6 @@ function getMissingCheckoutEnv(env: ReturnType<typeof getRuntimeEnv>) {
     ["STRIPE_SECRET_KEY", env.STRIPE_SECRET_KEY],
     ["NEXT_PUBLIC_SITE_URL", env.NEXT_PUBLIC_SITE_URL],
     ["STRIPE_SINGLE_PRICE_ID", env.STRIPE_SINGLE_PRICE_ID],
-    ["STRIPE_BUNDLE_PRICE_ID", env.STRIPE_BUNDLE_PRICE_ID],
-    ["STRIPE_PREMIUM_PRICE_ID", env.STRIPE_PREMIUM_PRICE_ID],
     ["ORDER_TOKEN_SECRET", env.ORDER_TOKEN_SECRET],
   ]
     .filter(([, value]) => !value)
@@ -322,6 +329,7 @@ function logCheckoutFailure(details: {
   requestId: string;
   orderId?: string;
   packageType?: string;
+  wallpaperType?: string;
   selectedPriceEnvName?: string;
   failureReason: string;
   stripeCode?: string;

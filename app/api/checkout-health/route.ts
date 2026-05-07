@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
-import { packages } from "@/lib/packages";
 
 export function GET() {
   const env = getRuntimeEnv();
@@ -11,16 +10,12 @@ export function GET() {
     : env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
       ? "test"
       : "unknown";
-  const singlePriceId = env[packages.single.stripePriceEnv];
-  const bundlePriceId = env[packages.bundle.stripePriceEnv];
-  const premiumPriceId = env[packages.premium.stripePriceEnv];
+  const singlePriceId = env.STRIPE_SINGLE_PRICE_ID;
   const response = {
     ok: Boolean(
       env.STRIPE_SECRET_KEY &&
         env.NEXT_PUBLIC_SITE_URL &&
         singlePriceId &&
-        bundlePriceId &&
-        premiumPriceId &&
         env.ORDER_TOKEN_SECRET &&
         bindings.DB &&
         bindings.DREAM_RATE_LIMITS &&
@@ -30,8 +25,6 @@ export function GET() {
       hasStripeSecretKey: Boolean(env.STRIPE_SECRET_KEY),
       hasSiteUrl: Boolean(env.NEXT_PUBLIC_SITE_URL),
       hasSinglePriceId: Boolean(singlePriceId),
-      hasBundlePriceId: Boolean(bundlePriceId),
-      hasPremiumPriceId: Boolean(premiumPriceId),
       hasOrderTokenSecret: Boolean(env.ORDER_TOKEN_SECRET),
       stripeMode,
     },
@@ -42,8 +35,6 @@ export function GET() {
     },
     priceIdFormat: {
       singleStartsWithPrice: singlePriceId?.startsWith("price_") || false,
-      bundleStartsWithPrice: bundlePriceId?.startsWith("price_") || false,
-      premiumStartsWithPrice: premiumPriceId?.startsWith("price_") || false,
     },
   };
 

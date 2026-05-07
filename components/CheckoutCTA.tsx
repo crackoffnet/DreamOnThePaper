@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import type { PackageId } from "@/lib/plans";
+import type { WallpaperProductId } from "@/lib/wallpaperProducts";
 
 type CheckoutCTAProps = {
-  packageId: PackageId;
+  packageId?: PackageId;
+  wallpaperType: WallpaperProductId;
   orderId: string | null;
   orderToken?: string | null;
   orderSnapshotToken?: string | null;
@@ -13,7 +15,8 @@ type CheckoutCTAProps = {
 };
 
 export function CheckoutCTA({
-  packageId,
+  packageId = "single",
+  wallpaperType,
   orderId,
   orderToken,
   orderSnapshotToken,
@@ -41,6 +44,7 @@ export function CheckoutCTA({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           packageType: packageId,
+          wallpaperType,
           orderId: orderId || undefined,
           orderToken: orderToken || undefined,
           orderSnapshotToken: orderSnapshotToken || undefined,

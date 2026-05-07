@@ -41,6 +41,7 @@ import {
   patchOrderTracking,
   trackOrderEvent,
 } from "@/lib/orderEvents";
+import { wallpaperProducts, wallpaperTypeFromDevice } from "@/lib/wallpaperProducts";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -88,7 +89,9 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null);
     if (hasOversizedCustomDimensions(body)) {
-      return previewError("Custom size cannot exceed 3840px on either side.");
+      return previewError(
+        "Custom size is too large. Keep it within 3840px per side and 3840 x 2160 total pixels.",
+      );
     }
 
     const parsed = previewGenerationSchema.safeParse(body);
@@ -142,6 +145,8 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data as WallpaperInput;
+    const wallpaperType = wallpaperTypeFromDevice(input.device);
+    const product = wallpaperProducts[wallpaperType];
     const imageConfig = getImageGenerationConfig().preview;
     const meta = getWallpaperMeta(input);
     const prompt = buildPreviewWallpaperPrompt(input);
@@ -184,7 +189,9 @@ export async function POST(request: Request) {
       utm_campaign: requestMetadata.utmCampaign,
       landing_path: requestMetadata.landingPath,
       package_type: "single",
-      package_name: "Single wallpaper",
+      wallpaper_type: wallpaperType,
+      package_name: product.label,
+      amount_cents: product.amount,
       currency: "usd",
       custom_width: input.customWidth || null,
       custom_height: input.customHeight || null,
@@ -464,8 +471,10 @@ function hasOversizedCustomDimensions(body: unknown) {
   }
 
   const customBody = body as { customWidth?: unknown; customHeight?: unknown };
-  return (
-    (typeof customBody.customWidth === "number" && customBody.customWidth > 3840) ||
-    (typeof customBody.customHeight === "number" && customBody.customHeight > 3840)
-  );
+  const width =
+    typeof customBody.customWidth === "number" ? customBody.customWidth : 0;
+  const height =
+    typeof customBody.customHeight === "number" ? customBody.customHeight : 0;
+
+  return width > 3840 || height > 3840 || width * height > 3840 * 2160;
 }

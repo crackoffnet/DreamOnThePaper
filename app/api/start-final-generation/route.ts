@@ -5,7 +5,7 @@ import { getFinalAssets, getOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
-import { packages, type PackageId } from "@/lib/packages";
+import type { PackageId } from "@/lib/packages";
 
 const startFinalSchema = z.object({
   finalGenerationToken: z.string().min(24).max(12000),
@@ -39,10 +39,8 @@ export async function POST(request: Request) {
     return startError("Unable to verify this paid order.", 400);
   }
 
-  const packageType = (order.package_type || token.packageId || "single") as PackageId;
-  const expectedAssets = packages[packageType]
-    ? buildFinalGenerationPlan(order, packageType).length
-    : 1;
+  const packageType: PackageId = "single";
+  const expectedAssets = buildFinalGenerationPlan(order, packageType).length;
   const completedAssets = (await getFinalAssets(order.id)).length;
 
   console.info("[final-generation-timing]", {

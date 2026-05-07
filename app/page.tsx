@@ -16,20 +16,26 @@ const structuredData = {
       offers: [
         {
           "@type": "Offer",
-          name: "Single wallpaper",
+          name: "Mobile wallpaper",
           price: "4.99",
           priceCurrency: "USD",
         },
         {
           "@type": "Offer",
-          name: "Mobile + desktop bundle",
-          price: "6.99",
+          name: "Tablet wallpaper",
+          price: "4.99",
           priceCurrency: "USD",
         },
         {
           "@type": "Offer",
-          name: "Premium 3-version pack",
-          price: "11.99",
+          name: "Desktop wallpaper",
+          price: "4.99",
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Custom size wallpaper",
+          price: "4.99",
           priceCurrency: "USD",
         },
       ],

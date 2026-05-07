@@ -12,7 +12,6 @@ import {
   resetFailedFinalGeneration,
   resetStaleFinalGeneration,
   startFinalGeneration,
-  updateOrderStatus,
 } from "@/lib/orders";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { verifyFinalGenerationToken } from "@/lib/payment";
@@ -118,7 +117,7 @@ export async function POST(request: Request) {
       return finalError("Unable to verify this paid order.", 400);
     }
 
-    const packageType = (order.package_type || token.packageId || "single") as PackageId;
+    const packageType: PackageId = "single";
     const readyAssets = await getReadyAssets(order, packageType);
     if (readyAssets) {
       console.info("[generate-final]", {
@@ -129,14 +128,6 @@ export async function POST(request: Request) {
         event: "existing_final_returned",
       });
       return finalAssetsSuccess(order, readyAssets, true);
-    }
-
-    if (
-      order.status === "final_generated" &&
-      order.stripe_payment_status === "paid" &&
-      packages[packageType].finalAssetCount > 1
-    ) {
-      await updateOrderStatus(orderId, "paid");
     }
 
     if (order.status === "final_generating") {
@@ -191,9 +182,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const claimablePackageType = (claimableOrder.package_type ||
-      token.packageId ||
-      "single") as PackageId;
+    const claimablePackageType: PackageId = "single";
     const claimableReadyAssets = await getReadyAssets(
       claimableOrder,
       claimablePackageType,
@@ -224,9 +213,7 @@ export async function POST(request: Request) {
       finalGenerationAttempts = latest?.final_generation_attempts;
 
       if (latest?.status === "final_generated" && latest.final_r2_key) {
-        const latestPackageType = (latest.package_type ||
-          token.packageId ||
-          "single") as PackageId;
+        const latestPackageType: PackageId = "single";
         const latestAssets = await getReadyAssets(latest, latestPackageType);
         if (latestAssets) {
           return finalAssetsSuccess(latest, latestAssets, true);
@@ -300,7 +287,7 @@ export async function POST(request: Request) {
     );
 
     const imageConfig = getImageGenerationConfig().final;
-    const concurrency = claimablePackageType === "premium" ? 2 : missingItems.length || 1;
+    const concurrency = 1;
     const assetResults = await runWithConcurrency(missingItems, concurrency, (item) =>
       generateFinalAsset({
         item,
@@ -445,8 +432,9 @@ async function finalAssetsSuccess(
     finalWidth: primary?.width,
     finalHeight: primary?.height,
     finalAssets,
-    packageType: order.package_type || "single",
-    packageName: packages[(order.package_type || "single") as PackageId].name,
+    packageType: "single",
+    wallpaperType: order.wallpaper_type || order.device,
+    packageName: packages.single.name,
     meta: getWallpaperMeta(input),
     reused,
   });
@@ -680,6 +668,7 @@ function assetToResult(asset: FinalAsset): FinalAssetResult {
 async function getReadyAssets(order: DbOrder, packageType: PackageId) {
   const plan = buildFinalGenerationPlan(order, packageType);
   const assets = await getFinalAssets(order.id);
+  const plannedTypes = new Set(plan.map((item) => item.assetType));
 
   if (
     plan.every((item) =>
@@ -690,7 +679,11 @@ async function getReadyAssets(order: DbOrder, packageType: PackageId) {
       ),
     )
   ) {
-    return assets.filter((asset) => (asset.generation_status || "generated") === "generated");
+    return assets.filter(
+      (asset) =>
+        plannedTypes.has(asset.asset_type) &&
+        (asset.generation_status || "generated") === "generated",
+    );
   }
 
   if (
@@ -712,15 +705,23 @@ async function getReadyAssets(order: DbOrder, packageType: PackageId) {
     ];
   }
 
+  if (order.status === "final_generated") {
+    const generated = assets.find(
+      (asset) => (asset.generation_status || "generated") === "generated",
+    );
+    if (generated) {
+      return [generated];
+    }
+  }
+
   return null;
 }
 
 function labelForAsset(assetType: string) {
   if (assetType === "mobile") return "Mobile wallpaper";
+  if (assetType === "tablet") return "Tablet wallpaper";
   if (assetType === "desktop") return "Desktop wallpaper";
-  if (assetType === "version_1") return "Version 1";
-  if (assetType === "version_2") return "Version 2";
-  if (assetType === "version_3") return "Version 3";
+  if (assetType === "custom") return "Custom size wallpaper";
   return "Wallpaper";
 }
 

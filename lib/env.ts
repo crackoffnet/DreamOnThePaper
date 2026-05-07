@@ -10,8 +10,6 @@ export type RuntimeEnv = {
   ORDER_TOKEN_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_SINGLE_PRICE_ID?: string;
-  STRIPE_BUNDLE_PRICE_ID?: string;
-  STRIPE_PREMIUM_PRICE_ID?: string;
   NEXT_PUBLIC_SITE_URL?: string;
   CHECKOUT_RATE_LIMIT_BYPASS_TOKEN?: string;
   PREVIEW_RATE_LIMIT_BYPASS_TOKEN?: string;
@@ -31,8 +29,6 @@ const runtimeEnvNames = [
   "ORDER_TOKEN_SECRET",
   "STRIPE_SECRET_KEY",
   "STRIPE_SINGLE_PRICE_ID",
-  "STRIPE_BUNDLE_PRICE_ID",
-  "STRIPE_PREMIUM_PRICE_ID",
   "NEXT_PUBLIC_SITE_URL",
   "CHECKOUT_RATE_LIMIT_BYPASS_TOKEN",
   "PREVIEW_RATE_LIMIT_BYPASS_TOKEN",
@@ -68,8 +64,6 @@ export function getRuntimeEnvPresence() {
     hasOrderTokenSecret: Boolean(env.ORDER_TOKEN_SECRET),
     hasStripeSecretKey: Boolean(env.STRIPE_SECRET_KEY),
     hasSinglePriceId: Boolean(env.STRIPE_SINGLE_PRICE_ID),
-    hasBundlePriceId: Boolean(env.STRIPE_BUNDLE_PRICE_ID),
-    hasPremiumPriceId: Boolean(env.STRIPE_PREMIUM_PRICE_ID),
     hasSiteUrl: Boolean(env.NEXT_PUBLIC_SITE_URL),
     hasBrevoApiKey: Boolean(env.BREVO_API_KEY),
     hasFromEmail: Boolean(env.FROM_EMAIL),

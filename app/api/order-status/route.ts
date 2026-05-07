@@ -5,7 +5,7 @@ import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 import { buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
-import { packages, type PackageId } from "@/lib/packages";
+import type { PackageId } from "@/lib/packages";
 
 const orderStatusSchema = z.object({
   finalGenerationToken: z.string().min(24).max(12000),
@@ -54,17 +54,18 @@ export async function POST(request: Request) {
     }
 
     const assets = await getFinalAssets(order.id);
-    const packageType = (order.package_type || token.packageId || "single") as PackageId;
-    const expectedAssets = packages[packageType]
-      ? buildFinalGenerationPlan(order, packageType).length
-      : 1;
-    const completedAssets = assets.filter(
+    const packageType: PackageId = "single";
+    const plan = buildFinalGenerationPlan(order, packageType);
+    const plannedTypes = new Set(plan.map((item) => item.assetType));
+    const expectedAssets = plan.length;
+    const plannedAssets = assets.filter((asset) => plannedTypes.has(asset.asset_type));
+    const completedAssets = plannedAssets.filter(
       (asset) => (asset.generation_status || "generated") === "generated",
     ).length;
-    const failedAssets = assets.filter(
+    const failedAssets = plannedAssets.filter(
       (asset) => asset.generation_status === "failed",
     ).length;
-    const finalAssets = assets.map((asset) => ({
+    const finalAssets = plannedAssets.map((asset) => ({
       id: asset.id,
       assetType: asset.asset_type,
       label: labelForAsset(asset.asset_type),
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
       imageUrl: finalImageUrl,
       finalAssets,
       packageType,
+      wallpaperType: order.wallpaper_type || order.device,
       expectedAssets,
       completedAssets,
       failedAssets,
@@ -105,10 +107,9 @@ export async function POST(request: Request) {
 
 function labelForAsset(assetType: string) {
   if (assetType === "mobile") return "Mobile wallpaper";
+  if (assetType === "tablet") return "Tablet wallpaper";
   if (assetType === "desktop") return "Desktop wallpaper";
-  if (assetType === "version_1") return "Version 1";
-  if (assetType === "version_2") return "Version 2";
-  if (assetType === "version_3") return "Version 3";
+  if (assetType === "custom") return "Custom size wallpaper";
   return "Wallpaper";
 }
 

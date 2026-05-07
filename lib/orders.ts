@@ -1,5 +1,6 @@
 import type { PackageId } from "@/lib/plans";
 import type { OrderStatus } from "@/lib/order-state";
+import type { WallpaperProductId } from "@/lib/wallpaperProducts";
 import { hashOrderInput } from "@/lib/order-state";
 import type {
   DeviceType,
@@ -15,7 +16,9 @@ import { getWallpaperMeta } from "@/lib/wallpaper";
 export type FinalAssetType =
   | "single"
   | "mobile"
+  | "tablet"
   | "desktop"
+  | "custom"
   | "version_1"
   | "version_2"
   | "version_3";
@@ -41,6 +44,7 @@ export type DbOrder = {
   id: string;
   status: OrderStatus;
   package_type: PackageId | null;
+  wallpaper_type?: WallpaperProductId | string | null;
   package_name?: string | null;
   amount_cents?: number | null;
   currency?: string | null;
@@ -48,8 +52,11 @@ export type DbOrder = {
   ratio: string;
   width: number;
   height: number;
+  custom_width?: number | null;
+  custom_height?: number | null;
   theme: string;
   style: string;
+  mood?: string | null;
   quote_tone: string;
   prompt_hash: string;
   sanitized_answers_json: string;
@@ -92,15 +99,16 @@ export async function createOrder(input: WallpaperInput) {
   await db
     .prepare(
       `INSERT INTO orders (
-        id, status, package_type, device, ratio, width, height, theme, style,
+        id, status, package_type, wallpaper_type, device, ratio, width, height, theme, style,
         quote_tone, prompt_hash, sanitized_answers_json, created_at, updated_at,
         expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
       "preview_created",
       "single",
+      input.device,
       input.device,
       input.ratio,
       width,

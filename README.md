@@ -32,8 +32,6 @@ OPENAI_FINAL_IMAGE_MODEL=gpt-image-1
 OPENAI_FINAL_IMAGE_QUALITY=medium
 STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
-STRIPE_BUNDLE_PRICE_ID=
-STRIPE_PREMIUM_PRICE_ID=
 CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
 PREVIEW_RATE_LIMIT_BYPASS_TOKEN=
 IP_HASH_SECRET=
@@ -61,9 +59,9 @@ Image generation speed is controlled by optional server-side variables:
 
 Final generation uses launch-friendly normalized sizes (`1024x1024`,
 `1024x1536`, or `1536x1024`) and stores those actual output dimensions with the
-generated assets. Bundle and premium assets are generated concurrently with a
-small concurrency cap, and the success page starts generation in the background
-then polls order status for progress.
+generated asset. One payment creates one final PNG for the selected mobile,
+tablet, desktop, or custom wallpaper type. The success page starts generation in
+the background then polls order status for progress.
 
 ## Preview-First Payment Flow
 
@@ -72,7 +70,7 @@ then polls order status for progress.
 3. The app returns a safe signed checkout `orderToken` for restoring the
    preview/order on checkout.
 4. `/checkout?orderToken=...` verifies the token server-side and shows the
-   low-quality preview and package options without relying on Worker memory.
+   low-quality preview and the selected wallpaper type without relying on Worker memory.
 5. `/api/create-checkout-session` creates a Stripe Checkout Session server-side.
 6. Stripe redirects to `/success?session_id=...`.
 7. `/api/verify-checkout-session` retrieves the Stripe session server-side,
@@ -108,13 +106,13 @@ In Stripe Dashboard:
   - Events: `checkout.session.completed`, `payment_intent.payment_failed`
 - Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 
-Checkout uses Stripe Price IDs from Cloudflare variables:
+Checkout uses one Stripe Price ID from Cloudflare variables:
 
-- `STRIPE_SINGLE_PRICE_ID` for Single wallpaper: `$4.99`
-- `STRIPE_BUNDLE_PRICE_ID` for Mobile + desktop bundle: `$6.99`
-- `STRIPE_PREMIUM_PRICE_ID` for Premium 3-version pack: `$11.99`
+- `STRIPE_SINGLE_PRICE_ID` for Dream On The Paper Final Wallpaper: `$4.99`
 
-Each value must start with `price_`, not `prod_`.
+The value must start with `price_`, not `prod_`. The selected wallpaper type
+(`mobile`, `tablet`, `desktop`, or `custom`) is stored in Stripe metadata and
+D1 order tracking.
 
 Stripe Tax is enabled in hosted Checkout with `automatic_tax`. To collect tax,
 confirm these Stripe Dashboard settings:
@@ -174,8 +172,6 @@ OPENAI_FINAL_IMAGE_MODEL=gpt-image-1
 OPENAI_FINAL_IMAGE_QUALITY=medium
 STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
-STRIPE_BUNDLE_PRICE_ID=
-STRIPE_PREMIUM_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
@@ -187,8 +183,8 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```
 
 Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`,
-`ORDER_TOKEN_SECRET`, `STRIPE_SINGLE_PRICE_ID`, `STRIPE_BUNDLE_PRICE_ID`, and
-`STRIPE_PREMIUM_PRICE_ID`. Add `STRIPE_WEBHOOK_SECRET` when webhooks are enabled.
+`ORDER_TOKEN_SECRET`, and `STRIPE_SINGLE_PRICE_ID`. Add `STRIPE_WEBHOOK_SECRET`
+when webhooks are enabled.
 `CHECKOUT_RATE_LIMIT_BYPASS_TOKEN` is optional for manual testing only; never
 send it from customer-facing browser code.
 
@@ -217,7 +213,7 @@ The free preview limit uses one browser-session token plus an IP/day limit. The 
 
 Cloudflare D1 stores privacy-conscious order tracking for fulfillment, refunds,
 fraud prevention, payment operations, and support. Tracking captures safe order
-metadata such as package, amount, Stripe Checkout Session ID, payment status,
+metadata such as wallpaper type, amount, Stripe Checkout Session ID, payment status,
 customer email, selected device/size/style/theme, generated final asset rows,
 email delivery attempts, and download events.
 

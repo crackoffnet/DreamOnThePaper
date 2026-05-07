@@ -32,6 +32,8 @@ const explicitStateKeys = [
   "dreamWallpaperMeta",
   "dreamWallpaperDimensions",
   "dreamPackageId",
+  "dreamWallpaperType",
+  "dreamCheckoutWallpaperType",
   "dreamCustomerEmail",
   "dreamFinalSessionId",
   "dreamFinalAssets",
