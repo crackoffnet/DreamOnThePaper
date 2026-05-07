@@ -1,7 +1,11 @@
 "use client";
 
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { clearDreamState } from "@/lib/clientState";
+import {
+  clearDreamState,
+  ensureFreshDreamState,
+  saveDreamState,
+} from "@/lib/clientState";
 import { defaultWallpaperInput } from "@/lib/wallpaper";
 
 export type WallpaperDraft = {
@@ -49,6 +53,7 @@ export function savePreviewPolicy(policy: PreviewPolicy) {
 }
 
 export function getCurrentDraft() {
+  ensureFreshDreamState();
   const stored = readJson<WallpaperDraft>(draftKey);
   if (stored) {
     const repaired = repairDraft(stored);
@@ -68,6 +73,23 @@ export function saveCurrentDraft(draft: WallpaperDraft) {
   };
   sessionStorage.setItem(draftKey, JSON.stringify(next));
   syncLegacyStorage(next);
+  saveDreamState({
+    draftId: next.id,
+    draftCreatedAt: Date.parse(next.createdAt),
+    draftUpdatedAt: Date.parse(next.updatedAt),
+    orderId: next.orderId || null,
+    orderToken: next.orderToken || null,
+    orderSnapshotToken: next.orderSnapshotToken || null,
+    previewImageUrl: next.previewImageUrl || null,
+    previewImageId: next.previewImageId || null,
+    wallpaperType: next.input.device,
+    status:
+      next.previewStatus === "ready"
+        ? "preview_created"
+        : next.previewStatus === "not_started" || next.previewStatus === "generating"
+          ? "draft"
+          : "error",
+  });
   return next;
 }
 
@@ -110,6 +132,16 @@ export function markDraftReady(
     freePreviewUsed: true,
     freePreviewDraftId: ready.id,
   });
+  saveDreamState({
+    orderId: ready.orderId || null,
+    orderToken: ready.orderToken || null,
+    orderSnapshotToken: ready.orderSnapshotToken || null,
+    previewImageUrl: ready.previewImageUrl || null,
+    previewImageId: ready.previewImageId || null,
+    previewCreatedAt: Date.now(),
+    wallpaperType: ready.input.device,
+    status: "preview_created",
+  });
   return ready;
 }
 
@@ -139,6 +171,13 @@ export function createNewWallpaperDraft() {
 
   sessionStorage.setItem(draftKey, JSON.stringify(draft));
   sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(draft.input));
+  saveDreamState({
+    draftId: draft.id,
+    draftCreatedAt: Date.parse(draft.createdAt),
+    draftUpdatedAt: Date.parse(draft.updatedAt),
+    wallpaperType: draft.input.device,
+    status: "draft",
+  });
   return draft;
 }
 
@@ -170,6 +209,8 @@ function hydrateLegacyDraft(): WallpaperDraft {
 }
 
 function syncLegacyStorage(draft: WallpaperDraft) {
+  sessionStorage.setItem("dreamDraftCreatedAt", String(Date.parse(draft.createdAt)));
+  sessionStorage.setItem("dreamDraftUpdatedAt", String(Date.parse(draft.updatedAt)));
   sessionStorage.setItem("dreamCurrentDraftId", draft.id);
   sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(draft.input));
 
@@ -191,6 +232,7 @@ function syncLegacyStorage(draft: WallpaperDraft) {
 
   if (draft.previewImageUrl) {
     sessionStorage.setItem("previewImageUrl", draft.previewImageUrl);
+    sessionStorage.setItem("dreamPreviewCreatedAt", String(Date.now()));
   }
 
   if (draft.previewMeta) {

@@ -10,6 +10,7 @@ import { getEphemeralImage } from "@/lib/client-images";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
 import type { FinalAssetResult } from "@/lib/types";
 import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
+import { getTargetDimensionsLabel } from "@/lib/wallpaperDimensions";
 import {
   labelForWallpaperType,
   wallpaperProductFromDevice,
@@ -97,7 +98,10 @@ export function ResultPreview() {
   const meta = result.meta;
   const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
   const dimensions = result.dimensions || dimensionsFromMeta(meta);
-  const dimensionsLabel = `${dimensions.width} \u00d7 ${dimensions.height} px`;
+  const actualDimensionsLabel = `${dimensions.width} \u00d7 ${dimensions.height} px`;
+  const targetDimensionsLabel = result.input
+    ? getTargetDimensionsLabel(result.input)
+    : `${meta.imageSize.replace("x", " × ")} px`;
   const rawAssets = result.finalAssets.length
     ? result.finalAssets
     : [
@@ -133,6 +137,7 @@ export function ResultPreview() {
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
+          <DetailRow label="Selected size" value={labels.ratios[meta.ratio]} />
           <DetailRow
             label="Ratio"
             value={
@@ -141,7 +146,8 @@ export function ResultPreview() {
                 : labels.ratios[meta.ratio]
             }
           />
-          <DetailRow label="Dimensions" value={dimensionsLabel} />
+          <DetailRow label="Target dimensions" value={targetDimensionsLabel} />
+          <DetailRow label="Downloaded file" value={`PNG · ${actualDimensionsLabel}`} />
           <DetailRow label="Style" value={labels.styles[meta.style]} />
           <DetailRow label="Theme" value={labels.themes[meta.theme]} />
           <DetailRow label="Format" value="PNG" />
@@ -157,7 +163,7 @@ export function ResultPreview() {
             />
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            PNG {"\u00b7"}{" "}
+            Optimized for {labels.ratios[meta.ratio]} {"\u00b7"}{" "}
             {assets.length === 1
               ? `${assets[0].width} \u00d7 ${assets[0].height} px`
               : `${primaryAsset.width} \u00d7 ${primaryAsset.height} px`}

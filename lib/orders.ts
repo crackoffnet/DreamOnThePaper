@@ -87,6 +87,7 @@ export type DbOrder = {
 
 const ORDER_TTL_SECONDS = 60 * 60 * 24;
 export const STALE_FINAL_GENERATION_MS = 10 * 60 * 1000;
+const expirableOrderStatuses = new Set(["draft", "preview_created", "pending_payment"]);
 
 export async function createOrder(input: WallpaperInput) {
   const db = getDb();
@@ -174,10 +175,35 @@ export async function getOrder(orderId: string) {
 
 export function isUnpaidOrderExpired(order: DbOrder) {
   return (
-    (order.status === "preview_created" || order.status === "pending_payment") &&
+    expirableOrderStatuses.has(order.status) &&
     typeof order.expires_at === "number" &&
     order.expires_at <= Date.now()
   );
+}
+
+export function isOrderExpired(order: DbOrder) {
+  return isUnpaidOrderExpired(order);
+}
+
+export async function expireOrderIfNeeded(order: DbOrder) {
+  if (!isOrderExpired(order)) {
+    return order;
+  }
+
+  const now = Date.now();
+  await getDb()
+    .prepare(
+      `UPDATE orders
+       SET status = 'expired',
+           expired_at = COALESCE(expired_at, ?),
+           updated_at = ?
+       WHERE id = ?
+         AND status IN ('draft', 'preview_created', 'pending_payment')`,
+    )
+    .bind(new Date(now).toISOString(), now, order.id)
+    .run();
+
+  return getOrder(order.id);
 }
 
 export async function getOrderByStripeSessionId(stripeSessionId: string) {

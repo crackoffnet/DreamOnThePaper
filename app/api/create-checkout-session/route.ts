@@ -4,7 +4,12 @@ import { checkoutSchema } from "@/lib/schemas";
 import { assertSameOrigin, getClientIp } from "@/lib/security";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { checkCheckoutRateLimitDetailed } from "@/lib/rateLimit";
-import { markOrderPendingPayment, getOrder, isUnpaidOrderExpired } from "@/lib/orders";
+import {
+  expireOrderIfNeeded,
+  getOrder,
+  isUnpaidOrderExpired,
+  markOrderPendingPayment,
+} from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 import {
   packages,
@@ -152,7 +157,8 @@ export async function POST(request: Request) {
       return checkoutError(safeCheckoutMessage, 503);
     }
 
-    if (isUnpaidOrderExpired(order)) {
+    const activeOrder = await expireOrderIfNeeded(order);
+    if (!activeOrder || isUnpaidOrderExpired(activeOrder)) {
       logCheckoutFailure({
         requestId,
         orderId,
@@ -162,7 +168,7 @@ export async function POST(request: Request) {
       return checkoutError("Your preview expired. Please create a new preview.", 404);
     }
 
-    if (order.prompt_hash !== checkoutToken.promptHash) {
+    if (activeOrder.prompt_hash !== checkoutToken.promptHash) {
       logCheckoutFailure({
         requestId,
         orderId,
@@ -173,10 +179,10 @@ export async function POST(request: Request) {
     }
 
     wallpaperType = wallpaperProductFromDevice(
-      order.wallpaper_type ||
+      activeOrder.wallpaper_type ||
         (isWallpaperProductId(parsed.data.wallpaperType)
           ? parsed.data.wallpaperType
-          : order.device),
+          : activeOrder.device),
     );
     const product = wallpaperProducts[wallpaperType];
     const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
@@ -187,17 +193,17 @@ export async function POST(request: Request) {
       orderId,
       packageType,
       wallpaperType,
-      device: order.device,
-      ratio: order.ratio,
-      width: String(order.width),
-      height: String(order.height),
-      customWidth: String(order.device === "custom" ? order.width : ""),
-      customHeight: String(order.device === "custom" ? order.height : ""),
-      theme: order.theme,
-      style: order.style,
-      mood: order.mood || order.style,
-      quoteTone: order.quote_tone,
-      promptHash: order.prompt_hash,
+      device: activeOrder.device,
+      ratio: activeOrder.ratio,
+      width: String(activeOrder.width),
+      height: String(activeOrder.height),
+      customWidth: String(activeOrder.device === "custom" ? activeOrder.width : ""),
+      customHeight: String(activeOrder.device === "custom" ? activeOrder.height : ""),
+      theme: activeOrder.theme,
+      style: activeOrder.style,
+      mood: activeOrder.mood || activeOrder.style,
+      quoteTone: activeOrder.quote_tone,
+      promptHash: activeOrder.prompt_hash,
     };
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
@@ -254,7 +260,7 @@ export async function POST(request: Request) {
     void trackOrderEvent({
       orderId,
       eventType: "checkout_session_created",
-      statusBefore: order.status,
+      statusBefore: activeOrder.status,
       statusAfter: "pending_payment",
       packageType,
       requestMetadata,

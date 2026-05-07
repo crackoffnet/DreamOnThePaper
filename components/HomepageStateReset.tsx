@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StartOverButton } from "@/components/StartOverButton";
-import { ensureAppStateVersion } from "@/lib/clientState";
+import { ensureFreshDreamState } from "@/lib/clientState";
 
 export function HomepageStateReset() {
   const [hasDraft, setHasDraft] = useState(false);
 
   useEffect(() => {
-    ensureAppStateVersion();
+    const state = ensureFreshDreamState();
     setHasDraft(
       Boolean(
-        sessionStorage.getItem("dreamCurrentDraft") ||
-          sessionStorage.getItem("dreamOrderId") ||
-          sessionStorage.getItem("dreamCheckoutOrderToken"),
+        state?.orderToken &&
+          state.status !== "paid" &&
+          state.status !== "final_generated",
       ),
     );
   }, []);

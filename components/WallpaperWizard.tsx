@@ -25,7 +25,11 @@ import {
   type PreviewPolicy,
   type WallpaperDraft,
 } from "@/lib/wallpaperDraft";
-import { ensureAppStateVersion } from "@/lib/clientState";
+import {
+  consumeDreamStateMessage,
+  ensureAppStateVersion,
+  saveDreamState,
+} from "@/lib/clientState";
 import type {
   DeviceType,
   QuoteTone,
@@ -38,7 +42,6 @@ import type {
 import {
   defaultWallpaperInput,
   getAspectRatioLabel,
-  getResolutionLabel,
   getWallpaperMeta,
   labels,
   quoteTones,
@@ -46,6 +49,10 @@ import {
   styles,
   themes,
 } from "@/lib/wallpaper";
+import {
+  getPreviewOptimizedLabel,
+  getTargetDimensionsLabel,
+} from "@/lib/wallpaperDimensions";
 
 const questions: Array<{
   key: keyof Pick<
@@ -131,6 +138,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
 
   useEffect(() => {
     ensureAppStateVersion();
+    const stateMessage = consumeDreamStateMessage();
+    if (stateMessage) {
+      setError(stateMessage);
+    }
     const moodPreset = getMoodPreset(initialMood);
 
     if (moodPreset && !appliedMoodRef.current) {
@@ -294,6 +305,16 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
 
       sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
       sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
+      saveDreamState({
+        orderId: data.orderId || null,
+        orderToken: data.orderToken || null,
+        orderSnapshotToken: data.orderSnapshotToken || null,
+        previewImageUrl: imageUrl,
+        previewImageId: data.previewImageId || null,
+        previewCreatedAt: Date.now(),
+        wallpaperType: form.device,
+        status: "preview_created",
+      });
       const readyDraft = markDraftReady(imageUrl, data.meta, {
         orderId: data.orderId,
         previewImageId: data.previewImageId,
@@ -621,10 +642,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           <p className="font-semibold text-cocoa">Preview frame</p>
           <p>{labels.devices[form.device]}</p>
           <p>{getAspectRatioLabel(form)}</p>
-          <p>{meta.imageSize}</p>
-          {form.device === "custom" ? (
-            <p className="text-gold">{getResolutionLabel(form)}</p>
-          ) : null}
+          <p>Target: {getTargetDimensionsLabel(form)}</p>
+          <p className="text-gold">{getPreviewOptimizedLabel(form)}</p>
         </div>
       </aside>
     </form>

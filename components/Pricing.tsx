@@ -5,7 +5,12 @@ import { Check, Sparkles } from "lucide-react";
 import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { StartOverButton } from "@/components/StartOverButton";
 import { TrustBadges } from "@/components/TrustBadges";
-import { ensureAppStateVersion } from "@/lib/clientState";
+import {
+  clearDreamState,
+  ensureFreshDreamState,
+  saveDreamState,
+  setDreamStateMessage,
+} from "@/lib/clientState";
 import type { CheckoutOrderToken } from "@/lib/order-state";
 import type { DeviceType, QuoteTone, RatioType, ThemeType, WallpaperMeta, WallpaperStyle } from "@/lib/types";
 import {
@@ -13,6 +18,7 @@ import {
   wallpaperProducts,
   type WallpaperProductId,
 } from "@/lib/wallpaperProducts";
+import { getTargetDimensionsLabel } from "@/lib/wallpaperDimensions";
 import { clearBrokenCheckoutState, getCurrentDraft } from "@/lib/wallpaperDraft";
 import { labels } from "@/lib/wallpaper";
 
@@ -45,9 +51,35 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
 
     async function loadPricingState() {
       try {
-        ensureAppStateVersion();
+        if (tokenExpired) {
+          clearDreamState();
+          setDreamStateMessage("Your preview expired. Please create a new one.");
+        }
+
+        const freshState = ensureFreshDreamState();
+        if (!freshState && !initialOrder && !orderToken && !orderId) {
+          if (!cancelled) {
+            setState({
+              imageUrl: "",
+              meta: null,
+              orderId: null,
+              orderToken: null,
+              orderSnapshotToken: null,
+            });
+          }
+          return;
+        }
         if (initialOrder?.previewImageUrl) {
           const meta = metaFromCheckoutOrder(initialOrder);
+          saveDreamState({
+            orderId: initialOrder.orderId,
+            orderToken: orderToken || null,
+            previewImageUrl: initialOrder.previewImageUrl,
+            previewImageId: initialOrder.previewImageId || null,
+            previewCreatedAt: Date.now(),
+            wallpaperType: initialOrder.device,
+            status: "preview_created",
+          });
           sessionStorage.setItem("dreamOrderId", initialOrder.orderId);
           sessionStorage.setItem("dreamCheckoutOrderToken", orderToken || "");
           sessionStorage.setItem("previewImageUrl", initialOrder.previewImageUrl);
@@ -79,6 +111,15 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
           const restored = await validateStoredOrderToken(activeOrderToken);
           if (restored?.previewImageUrl) {
             const meta = metaFromCheckoutOrder(restored);
+            saveDreamState({
+              orderId: restored.orderId,
+              orderToken: activeOrderToken,
+              previewImageUrl: restored.previewImageUrl,
+              previewImageId: restored.previewImageId || null,
+              previewCreatedAt: Date.now(),
+              wallpaperType: restored.device,
+              status: "preview_created",
+            });
             if (!cancelled) {
               setState({
                 imageUrl: restored.previewImageUrl,
@@ -135,7 +176,20 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
     return () => {
       cancelled = true;
     };
-  }, [initialOrder, orderId, orderToken]);
+  }, [initialOrder, orderId, orderToken, tokenExpired]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !state.orderId ||
+      !state.orderToken ||
+      !window.location.search.includes("orderToken=")
+    ) {
+      return;
+    }
+
+    window.history.replaceState(null, "", "/checkout");
+  }, [state.orderId, state.orderToken]);
 
   if (!state.orderId || !state.imageUrl || !state.meta) {
     return (
@@ -154,6 +208,8 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
           <button
             type="button"
             onClick={() => {
+              clearDreamState();
+              setDreamStateMessage("Your preview expired. Please create a new one.");
               clearBrokenCheckoutState();
               window.location.href = "/create";
             }}
@@ -201,7 +257,8 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         </div>
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
-          <p>Ratio: {labels.ratios[state.meta.ratio]}</p>
+          <p>Selected size: {labels.ratios[state.meta.ratio]}</p>
+          <p>Target dimensions: {getTargetDimensionsLabel(inputFromMeta(state.meta))}</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>
@@ -270,6 +327,24 @@ function metaFromCheckoutOrder(order: CheckoutOrderToken): WallpaperMeta {
     imageSize: `${order.width}x${order.height}`,
     aspectRatio: `${order.width} / ${order.height}`,
   };
+}
+
+function inputFromMeta(meta: WallpaperMeta) {
+  return {
+    device: meta.device,
+    ratio: meta.ratio,
+    theme: meta.theme,
+    style: meta.style,
+    quoteTone: meta.quoteTone,
+    goals: "",
+    lifestyle: "",
+    career: "",
+    personalLife: "",
+    health: "",
+    place: "",
+    feelingWords: "",
+    reminder: "",
+  } as const;
 }
 
 async function validateStoredOrderToken(orderToken: string) {

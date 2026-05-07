@@ -32,6 +32,7 @@ import {
   getOpenAIImageDimensions,
   getOpenAIImageSize,
 } from "@/lib/openaiImageSize";
+import { readImageDimensions } from "@/lib/imageDimensions";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -477,7 +478,11 @@ async function saveRemoteFinalImage(orderId: string, assetType: string, url: str
 
   const bytes = new Uint8Array(await response.arrayBuffer());
   const contentType = response.headers.get("content-type") || "image/png";
-  return saveFinalAssetImage(orderId, assetType, bytes, contentType);
+  const saved = await saveFinalAssetImage(orderId, assetType, bytes, contentType);
+  return {
+    ...saved,
+    dimensions: readImageDimensions(bytes, contentType),
+  };
 }
 
 async function generateFinalAsset(input: {
@@ -555,10 +560,12 @@ async function generateFinalAsset(input: {
   const result = (await response.json()) as OpenAIImageResponse;
   const image = result.data?.[0];
   let savedFinal: Awaited<ReturnType<typeof saveFinalAssetImage>> | null = null;
+  let actualDimensions: { width: number; height: number } | null = null;
 
   if (image?.b64_json) {
     const decodeStartedAt = Date.now();
     const bytes = base64ToBytes(image.b64_json);
+    actualDimensions = readImageDimensions(bytes, "image/png");
     logFinalTiming({
       requestId,
       orderId,
@@ -587,7 +594,9 @@ async function generateFinalAsset(input: {
     });
   } else if (image?.url) {
     const uploadStartedAt = Date.now();
-    savedFinal = await saveRemoteFinalImage(orderId, item.assetType, image.url);
+    const remoteSaved = await saveRemoteFinalImage(orderId, item.assetType, image.url);
+    savedFinal = remoteSaved;
+    actualDimensions = remoteSaved?.dimensions || null;
     logFinalTiming({
       requestId,
       orderId,
@@ -604,13 +613,14 @@ async function generateFinalAsset(input: {
   }
 
   const d1StartedAt = Date.now();
-  const actualDimensions =
+  const resolvedDimensions =
+    actualDimensions ||
     getOpenAIImageDimensions(openAiSize) || { width: item.width, height: item.height };
   await insertFinalAsset({
     orderId,
     assetType: item.assetType,
-    width: actualDimensions.width,
-    height: actualDimensions.height,
+    width: resolvedDimensions.width,
+    height: resolvedDimensions.height,
     r2Key: savedFinal.key,
     fileSizeBytes: savedFinal.size,
     promptHash,

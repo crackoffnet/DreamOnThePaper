@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Lock } from "lucide-react";
+import { saveDreamState } from "@/lib/clientState";
 import type { PackageId } from "@/lib/plans";
 import type { WallpaperProductId } from "@/lib/wallpaperProducts";
 
@@ -86,6 +87,14 @@ export function CheckoutCTA({
       if (data.orderSnapshotToken) {
         sessionStorage.setItem("dreamOrderSnapshotToken", data.orderSnapshotToken);
       }
+      saveDreamState({
+        orderId,
+        orderToken: orderToken || null,
+        orderSnapshotToken: data.orderSnapshotToken || orderSnapshotToken || null,
+        checkoutStartedAt: Date.now(),
+        wallpaperType,
+        status: "pending_payment",
+      });
       window.location.href = data.url;
     } catch (checkoutError) {
       if (process.env.NODE_ENV !== "production") {

@@ -6,7 +6,12 @@ import { Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { ResultPreview } from "@/components/ResultPreview";
 import { StartOverButton } from "@/components/StartOverButton";
-import { ensureAppStateVersion } from "@/lib/clientState";
+import {
+  clearDreamState,
+  ensureAppStateVersion,
+  ensureFreshDreamState,
+  saveDreamState,
+} from "@/lib/clientState";
 import {
   getEphemeralImage,
   imageUrlFromPayload,
@@ -175,12 +180,21 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       if (generated.wallpaperType) {
         sessionStorage.setItem("dreamWallpaperType", generated.wallpaperType);
       }
+      saveDreamState({
+        finalImageUrl: imageUrl,
+        finalGenerationToken:
+          sessionStorage.getItem("dreamFinalGenerationToken") || null,
+        finalSessionId: sessionId,
+        wallpaperType: generated.wallpaperType || null,
+        status: "final_generated",
+      });
     },
     [sessionId],
   );
 
   useEffect(() => {
     ensureAppStateVersion();
+    ensureFreshDreamState();
     console.info("[success] sessionId present", Boolean(sessionId));
 
     if (hasStartedRef.current) {
@@ -189,6 +203,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
     hasStartedRef.current = true;
 
     if (!sessionId) {
+      clearDreamState();
       setStep("error");
       setError("We could not find your checkout session.");
       return;
@@ -257,6 +272,14 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         if (verified.customerEmail) {
           sessionStorage.setItem("dreamCustomerEmail", verified.customerEmail);
         }
+        saveDreamState({
+          orderId: verified.orderId || null,
+          finalGenerationToken: verified.finalGenerationToken,
+          finalSessionId: sessionId,
+          customerEmail: verified.customerEmail || null,
+          wallpaperType: verified.wallpaperType || null,
+          status: "paid",
+        });
 
         setStep("generating");
         setMessage(progressMessage(verified.packageId || "single", 0, expectedAssetCount(), 0));

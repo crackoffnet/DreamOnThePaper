@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "generate:examples": "tsx scripts/generate-example-wallpapers.ts",
+    "generate:examples": "tsx scripts/generate-example-images.ts",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && wrangler versions upload",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"

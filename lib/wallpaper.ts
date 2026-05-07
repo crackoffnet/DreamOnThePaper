@@ -8,6 +8,10 @@ import type {
   WallpaperStyle,
 } from "@/lib/types";
 import { getOpenAIImageSize } from "@/lib/openaiImageSize";
+import {
+  getTargetDimensionsLabel,
+  getWallpaperDimensionConfig,
+} from "@/lib/wallpaperDimensions";
 
 export const devices = ["mobile", "desktop", "tablet", "custom"] as const satisfies readonly DeviceType[];
 export const themes = ["light", "dark"] as const satisfies readonly ThemeType[];
@@ -77,21 +81,6 @@ export const labels = {
   },
 } as const;
 
-const ratioMeta: Record<
-  RatioType,
-  Pick<WallpaperMeta, "aspectRatio" | "imageSize">
-> = {
-  "iphone-17-pro-max": { aspectRatio: "9 / 19.5", imageSize: "1072x2320" },
-  iphone: { aspectRatio: "9 / 16", imageSize: "1008x1792" },
-  android: { aspectRatio: "9 / 16", imageSize: "1008x1792" },
-  "desktop-16-9": { aspectRatio: "16 / 9", imageSize: "1792x1008" },
-  "desktop-16-10": { aspectRatio: "16 / 10", imageSize: "1920x1200" },
-  "desktop-4k": { aspectRatio: "16 / 9", imageSize: "3840x2160" },
-  ipad: { aspectRatio: "4 / 3", imageSize: "1536x1152" },
-  "tablet-vertical": { aspectRatio: "3 / 4", imageSize: "1152x1536" },
-  custom: { aspectRatio: "2 / 3", imageSize: "1200x1800" },
-};
-
 export const defaultWallpaperInput: WallpaperInput = {
   device: "mobile",
   ratio: "iphone-17-pro-max",
@@ -111,17 +100,7 @@ export const defaultWallpaperInput: WallpaperInput = {
 };
 
 export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
-  if (isCustomWallpaper(input)) {
-    return {
-      device: input.device,
-      ratio: input.ratio,
-      theme: input.theme,
-      style: input.style,
-      quoteTone: input.quoteTone,
-      aspectRatio: `${input.customWidth} / ${input.customHeight}`,
-      imageSize: `${input.customWidth}x${input.customHeight}`,
-    };
-  }
+  const dimensions = getWallpaperDimensionConfig(input);
 
   return {
     device: input.device,
@@ -129,7 +108,8 @@ export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
     theme: input.theme,
     style: input.style,
     quoteTone: input.quoteTone,
-    ...ratioMeta[input.ratio],
+    aspectRatio: dimensions.aspectRatio,
+    imageSize: `${dimensions.targetWidth}x${dimensions.targetHeight}`,
   };
 }
 
@@ -146,11 +126,7 @@ export function getFinalImageSize(input: WallpaperInput) {
 }
 
 export function getResolutionLabel(input: WallpaperInput) {
-  if (isCustomWallpaper(input)) {
-    return `Custom - ${input.customWidth} x ${input.customHeight}`;
-  }
-
-  return labels.ratios[input.ratio];
+  return getTargetDimensionsLabel(input);
 }
 
 export function getAspectRatioLabel(input: WallpaperInput) {

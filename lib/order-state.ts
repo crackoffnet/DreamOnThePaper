@@ -5,12 +5,17 @@ import { fromBase64Url, timingSafeStringEqual, toBase64Url } from "@/lib/securit
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type OrderStatus =
+  | "draft"
   | "preview_created"
   | "pending_payment"
   | "paid"
   | "final_generating"
   | "final_generated"
-  | "failed";
+  | "failed"
+  | "abandoned"
+  | "expired"
+  | "refunded"
+  | "disputed";
 
 export type OrderSnapshot = {
   orderId: string;
@@ -54,6 +59,7 @@ export type CheckoutOrderToken = {
 
 const orderStore = new Map<string, OrderSnapshot>();
 const SNAPSHOT_TOKEN_TTL_SECONDS = 60 * 60 * 2;
+const CHECKOUT_ORDER_TOKEN_TTL_SECONDS = 60 * 60 * 24;
 
 // TODO: Replace this in-memory map with Cloudflare D1/KV for order metadata and
 // R2 for final images so idempotency survives isolate restarts and redeploys.
@@ -216,7 +222,7 @@ function createCheckoutTokenPayload(order: OrderSnapshot): CheckoutOrderToken {
   const createdAt = order.createdAt || new Date().toISOString();
   const expiresAt =
     order.expiresAt ||
-    new Date(Date.now() + SNAPSHOT_TOKEN_TTL_SECONDS * 1000).toISOString();
+    new Date(Date.now() + CHECKOUT_ORDER_TOKEN_TTL_SECONDS * 1000).toISOString();
 
   return {
     orderId: order.orderId,

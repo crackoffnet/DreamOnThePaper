@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder, isUnpaidOrderExpired } from "@/lib/orders";
+import { expireOrderIfNeeded, getOrder, isUnpaidOrderExpired } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 
 const validateOrderTokenSchema = z.object({
@@ -21,24 +21,29 @@ export async function POST(request: Request) {
   }
 
   const order = await getOrder(token.orderId);
-  if (!order || order.prompt_hash !== token.promptHash || isUnpaidOrderExpired(order)) {
+  const activeOrder = order ? await expireOrderIfNeeded(order) : null;
+  if (
+    !activeOrder ||
+    activeOrder.prompt_hash !== token.promptHash ||
+    isUnpaidOrderExpired(activeOrder)
+  ) {
     return NextResponse.json({ valid: false }, { status: 404 });
   }
 
   return NextResponse.json({
     valid: true,
     order: {
-      orderId: order.id,
-      previewImageId: order.preview_r2_key,
+      orderId: activeOrder.id,
+      previewImageId: activeOrder.preview_r2_key,
       previewImageUrl: token.previewImageUrl,
-      device: order.device,
-      ratio: order.ratio,
-      width: String(order.width),
-      height: String(order.height),
-      theme: order.theme,
-      style: order.style,
-      quoteTone: order.quote_tone,
-      promptHash: order.prompt_hash,
+      device: activeOrder.device,
+      ratio: activeOrder.ratio,
+      width: String(activeOrder.width),
+      height: String(activeOrder.height),
+      theme: activeOrder.theme,
+      style: activeOrder.style,
+      quoteTone: activeOrder.quote_tone,
+      promptHash: activeOrder.prompt_hash,
       createdAt: token.createdAt,
       expiresAt: token.expiresAt,
     },
