@@ -34,7 +34,7 @@ import { packages, type PackageId } from "@/lib/packages";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import { patchOrderTracking, trackOrderEvent } from "@/lib/orderEvents";
 import { getImageGenerationConfig, type ImageQuality } from "@/lib/imageGenerationConfig";
-import { detectSourceImageSize, renderFinalWallpaper } from "@/lib/imageProcessing";
+import { detectSourceImageSize, preserveGeneratedImage } from "@/lib/imageProcessing";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -527,8 +527,6 @@ async function saveRemoteFinalImage(
   orderId: string,
   assetType: string,
   url: string,
-  finalWidth: number,
-  finalHeight: number,
   modelSize: string,
 ) {
   const response = await fetch(url);
@@ -544,23 +542,20 @@ async function saveRemoteFinalImage(
     modelSizeToDimensions(modelSize),
     contentType,
   );
-  await saveFinalSourceImage(orderId, assetType, bytes, "image/png");
-  const rendered = await renderFinalWallpaper(bytes, {
-    width: finalWidth,
-    height: finalHeight,
-  });
+  const preserved = preserveGeneratedImage(bytes, contentType, sourceDimensions);
+  await saveFinalSourceImage(orderId, assetType, bytes, contentType);
   const saved = await saveFinalAssetImage(
     orderId,
     assetType,
-    rendered.bytes,
-    rendered.contentType,
+    preserved.bytes,
+    preserved.contentType,
   );
   return {
     savedFinal: saved,
     sourceDimensions,
     finalDimensions: {
-      width: rendered.width,
-      height: rendered.height,
+      width: preserved.width,
+      height: preserved.height,
     },
   };
 }
@@ -658,12 +653,8 @@ async function generateFinalAsset(input: {
     });
 
     await saveFinalSourceImage(orderId, item.assetType, bytes, "image/png");
-
-    const resizeStartedAt = Date.now();
-    const rendered = await renderFinalWallpaper(bytes, {
-      width: item.finalWidth,
-      height: item.finalHeight,
-    });
+    const preserveStartedAt = Date.now();
+    const rendered = preserveGeneratedImage(bytes, "image/png", sourceDimensions);
     finalDimensions = {
       width: rendered.width,
       height: rendered.height,
@@ -672,9 +663,9 @@ async function generateFinalAsset(input: {
       requestId,
       orderId,
       packageType,
-      step: "final_resize_complete",
+      step: "final_output_preserved",
       assetType: item.assetType,
-      durationMs: Date.now() - resizeStartedAt,
+      durationMs: Date.now() - preserveStartedAt,
       bytes: rendered.bytes.byteLength,
     });
 
@@ -700,8 +691,6 @@ async function generateFinalAsset(input: {
       orderId,
       item.assetType,
       image.url,
-      item.finalWidth,
-      item.finalHeight,
       item.modelSize,
     );
     savedFinal = remoteSaved?.savedFinal || null;
@@ -724,8 +713,8 @@ async function generateFinalAsset(input: {
 
   const d1StartedAt = Date.now();
   const resolvedDimensions = finalDimensions || {
-    width: item.finalWidth,
-    height: item.finalHeight,
+    width: sourceDimensions?.width || item.finalWidth,
+    height: sourceDimensions?.height || item.finalHeight,
   };
   await insertFinalAsset({
     orderId,

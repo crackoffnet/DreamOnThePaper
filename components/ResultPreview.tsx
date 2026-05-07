@@ -338,8 +338,8 @@ export function ResultPreview() {
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
-          <DetailRow label="Selected size" value={selectedSizeLabel} />
-          <DetailRow label="Final file" value={`PNG · ${actualDimensionsLabel}`} />
+          <DetailRow label="Selected format" value={selectedSizeLabel} />
+          <DetailRow label="Final file" value={`PNG - ${actualDimensionsLabel}`} />
           <DetailRow label="Style" value={labels.styles[meta.style]} />
           <DetailRow label="Theme" value={labels.themes[meta.theme]} />
           <DetailRow label="Format" value="PNG" />
@@ -359,7 +359,7 @@ export function ResultPreview() {
             </p>
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            Delivered in your selected device size.
+            {bestFitCopy(result.wallpaperType || meta.device)}
           </p>
           <Link
             href="/create"
@@ -432,7 +432,7 @@ function AssetPreviewCard({
         <p className="text-sm font-medium text-ink">{captionLabel}</p>
         <p className="text-xs text-taupe">{dimensionsLabel}</p>
         <p className="text-xs font-medium text-taupe">
-          Final PNG · High-resolution · No preview watermark
+          Final PNG - High-resolution - No preview watermark
         </p>
       </div>
     </div>
@@ -586,6 +586,13 @@ function assetDisplayLabel(assetType: string) {
   return "Wallpaper";
 }
 
+function bestFitCopy(wallpaperType: string) {
+  if (wallpaperType === "mobile") return "Best fit for mobile wallpaper use.";
+  if (wallpaperType === "tablet") return "Best fit for tablet wallpaper use.";
+  if (wallpaperType === "desktop") return "Best fit for desktop wallpaper use.";
+  return "Optimized for your selected custom format.";
+}
+
 function formatDimensions(width: number, height: number) {
-  return `${width} × ${height} px`;
+  return `${width} x ${height} px`;
 }

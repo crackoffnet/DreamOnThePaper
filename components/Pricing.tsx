@@ -257,8 +257,8 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         </div>
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
-          <p>Selected size: {state.meta.ratioLabel}</p>
-          <p>Final file: PNG · {state.meta.finalWidth} × {state.meta.finalHeight} px</p>
+          <p>Selected format: {state.meta.ratioLabel}</p>
+          <p>Paid file: Clean high-resolution PNG generated for this format</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>

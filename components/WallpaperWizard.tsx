@@ -49,7 +49,6 @@ import {
 } from "@/lib/wallpaper";
 import {
   getPreviewOptimizedLabel,
-  getTargetDimensionsLabel,
 } from "@/lib/wallpaperDimensions";
 import { createPreviewInputHash } from "@/lib/previewHash";
 
@@ -729,7 +728,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           <p className="font-semibold text-cocoa">Preview frame</p>
           <p>{labels.devices[form.device]}</p>
           <p>{getAspectRatioLabel(form)}</p>
-          <p>Final file: PNG · {getTargetDimensionsLabel(form)}</p>
+          <p>Preview generated for this format</p>
           <p className="text-gold">{getPreviewOptimizedLabel(form)}</p>
         </div>
       </aside>

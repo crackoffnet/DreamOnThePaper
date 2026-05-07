@@ -8,7 +8,6 @@ import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
 import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
 import { getOpenAIImageSize } from "@/lib/openaiImageSize";
-import { renderPreviewImage } from "@/lib/imageProcessing";
 import {
   attachPreviewImage,
   createOrder,
@@ -78,8 +77,6 @@ import {
   isValidRatioForDevice,
 } from "@/lib/wallpaper";
 import {
-  getPreviewRenderSize,
-  getWallpaperPresetForInput,
   validateCustomSize,
 } from "@/lib/wallpaperPresets";
 
@@ -767,12 +764,10 @@ async function resolveOrderIdFromToken(orderToken: string | null) {
 async function saveProcessedPreviewImage(
   orderId: string,
   bytes: Uint8Array,
-  input: WallpaperInput,
+  _input: WallpaperInput,
+  contentType = "image/png",
 ) {
-  const preset = getWallpaperPresetForInput(input);
-  const previewSize = getPreviewRenderSize(preset);
-  const processed = await renderPreviewImage(bytes, previewSize);
-  return savePreviewImage(orderId, processed.bytes, processed.contentType);
+  return savePreviewImage(orderId, bytes, contentType);
 }
 
 async function saveRemotePreviewImage(
@@ -787,7 +782,8 @@ async function saveRemotePreviewImage(
   }
 
   const bytes = new Uint8Array(await response.arrayBuffer());
-  return saveProcessedPreviewImage(orderId, bytes, input);
+  const contentType = response.headers.get("content-type") || "image/png";
+  return saveProcessedPreviewImage(orderId, bytes, input, contentType);
 }
 
 async function generatePreviewImage(input: {
