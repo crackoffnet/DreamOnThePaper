@@ -16,13 +16,11 @@ import {
   createNewWallpaperDraft,
   getCurrentDraft,
   getDraftPreviewSessionId,
-  getPreviewPolicy,
   markDraftFailed,
   markDraftGenerating,
   markDraftReady,
   saveCurrentDraft,
   updateDraftInput,
-  type PreviewPolicy,
   type WallpaperDraft,
 } from "@/lib/wallpaperDraft";
 import {
@@ -130,9 +128,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [draft, setDraft] = useState<WallpaperDraft | null>(null);
-  const [policy, setPolicy] = useState<PreviewPolicy>({
-    freePreviewUsed: false,
-    freePreviewDraftId: null,
+  const [previewAvailability, setPreviewAvailability] = useState({
+    hasPreviewAvailable: true,
+    nextPreviewAt: null as string | null,
+    activeOrderId: null as string | null,
   });
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
 
@@ -157,7 +156,6 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
       });
       setDraft(savedDraft);
       setForm(savedDraft.input);
-      setPolicy(getPreviewPolicy());
       setStep(0);
       return;
     }
@@ -165,11 +163,51 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     const currentDraft = getCurrentDraft();
     setDraft(currentDraft);
     setForm(currentDraft.input);
-    setPolicy(getPreviewPolicy());
     if (currentDraft.previewStatus !== "not_started") {
       setStep(stepTitles.length - 1);
     }
   }, [initialMood]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreviewAvailability() {
+      try {
+        const response = await fetch("/api/preview-entitlement", {
+          method: "GET",
+          credentials: "same-origin",
+        });
+        const data = (await response.json().catch(() => null)) as
+          | {
+              hasPreviewAvailable?: boolean;
+              nextPreviewAt?: string | null;
+              activeOrderId?: string | null;
+            }
+          | null;
+
+        if (!cancelled && data) {
+          setPreviewAvailability({
+            hasPreviewAvailable: data.hasPreviewAvailable !== false,
+            nextPreviewAt: data.nextPreviewAt || null,
+            activeOrderId: data.activeOrderId || null,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewAvailability({
+            hasPreviewAvailable: true,
+            nextPreviewAt: null,
+            activeOrderId: null,
+          });
+        }
+      }
+    }
+
+    void loadPreviewAvailability();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function update<K extends keyof WallpaperInput>(
     key: K,
@@ -221,7 +259,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     const nextDraft = createNewWallpaperDraft();
     setDraft(nextDraft);
     setForm(nextDraft.input);
-    setPolicy(getPreviewPolicy());
+    setPreviewAvailability((current) => ({
+      ...current,
+      activeOrderId: null,
+    }));
     setError("");
     setIsGenerating(false);
     setStep(0);
@@ -251,11 +292,16 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         return;
       }
 
-      if (policy.freePreviewUsed) {
-        router.push(
-          activeDraft.orderToken
-            ? checkoutHref(activeDraft)
-            : "/checkout",
+      if (!previewAvailability.hasPreviewAvailable) {
+        if (activeDraft.orderToken) {
+          router.push(checkoutHref(activeDraft));
+          return;
+        }
+
+        throw new Error(
+          `You’ve already used your free preview for this browser. Your next preview becomes available ${formatNextPreviewAt(
+            previewAvailability.nextPreviewAt,
+          )}.`,
         );
         return;
       }
@@ -296,6 +342,9 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
       });
       const data = (await response.json()) as GenerateResponse & {
         preview?: boolean;
+        hasPreviewAvailable?: boolean;
+        nextPreviewAt?: string | null;
+        activeOrderId?: string | null;
       };
       const imageUrl = await imageUrlFromPayload(data);
 
@@ -322,7 +371,11 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         orderSnapshotToken: data.orderSnapshotToken,
       });
       setDraft(readyDraft);
-      setPolicy(getPreviewPolicy());
+      setPreviewAvailability({
+        hasPreviewAvailable: data.hasPreviewAvailable === true,
+        nextPreviewAt: data.nextPreviewAt || null,
+        activeOrderId: data.activeOrderId || data.orderId || null,
+      });
       setEphemeralImage("previewImageUrl", imageUrl);
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
@@ -340,7 +393,15 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           ? markDraftFailed()
           : currentDraft,
       );
-      setPolicy(getPreviewPolicy());
+      if (
+        generationError instanceof Error &&
+        generationError.message.includes("free preview for this browser")
+      ) {
+        setPreviewAvailability((current) => ({
+          ...current,
+          hasPreviewAvailable: false,
+        }));
+      }
       setIsGenerating(false);
     }
   }
@@ -471,12 +532,23 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                   wallpaper download.
                 </p>
                 <div className="mt-3 overflow-hidden rounded-2xl border border-white/70 bg-linen">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={draft.previewImageUrl}
-                    alt="Generated wallpaper preview"
-                    className="max-h-72 w-full object-cover"
-                  />
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={draft.previewImageUrl}
+                      alt="Generated wallpaper preview"
+                      className="max-h-72 w-full scale-[1.02] object-cover blur-[1.4px] saturate-75"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/5 via-transparent to-ink/35" />
+                    <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/50 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold backdrop-blur">
+                      Low-resolution preview
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="-rotate-12 text-4xl font-serif italic tracking-[0.1em] text-white/28">
+                        Preview
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button
@@ -528,17 +600,19 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               </p>
             ) : null}
             {draft?.previewStatus === "not_started" &&
-            policy.freePreviewUsed &&
+            !previewAvailability.hasPreviewAvailable &&
             !isGenerating ? (
               <div className="rounded-2xl border border-gold/20 bg-[#f8f0df] p-4 text-sm text-cocoa">
                 <p className="font-semibold text-ink">
-                  You&apos;ve already used your free preview.
+                  You&apos;ve already used your free preview for this browser.
                 </p>
                 <p className="mt-1 leading-6">
-                  You can still create a new wallpaper and unlock the full
-                  version anytime.
+                  Your next free preview becomes available{" "}
+                  {formatNextPreviewAt(previewAvailability.nextPreviewAt)}. You can
+                  keep refining your answers now and generate a new preview when the
+                  window resets.
                 </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className={`mt-4 grid gap-2 ${draft?.orderToken ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                   <button
                     type="button"
                     onClick={editAnswers}
@@ -553,19 +627,15 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                   >
                     Start New Wallpaper
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        draft?.orderId
-                          ? checkoutHref(draft)
-                          : "/checkout",
-                      )
-                    }
-                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
-                  >
-                    Unlock Full Wallpaper
-                  </button>
+                  {draft?.orderToken ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push(checkoutHref(draft))}
+                      className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl"
+                    >
+                      Unlock Full Wallpaper
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -598,22 +668,27 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               <ArrowRight aria-hidden className="h-4 w-4" />
             </button>
           ) : (
-            <button
-              type="submit"
-              disabled={isGenerating}
-              className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isGenerating ? (
-                <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles aria-hidden className="h-4 w-4" />
-              )}
-              {draft?.previewStatus === "ready"
-                ? "View Preview"
-                : policy.freePreviewUsed
-                  ? "Unlock Full Wallpaper"
-                  : "Generate Free Preview"}
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <p className="max-w-xs text-right text-[11px] leading-5 text-taupe">
+                Free preview is low-resolution and watermarked. Your paid download is a clean high-resolution PNG.
+              </p>
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isGenerating ? (
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles aria-hidden className="h-4 w-4" />
+                )}
+                {draft?.previewStatus === "ready"
+                  ? "View Preview"
+                  : !previewAvailability.hasPreviewAvailable
+                    ? "Unlock Full Wallpaper"
+                    : "Generate Free Preview"}
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -720,8 +795,8 @@ function formatPreviewError(data: GenerateResponse) {
     return `Too many preview attempts. Please wait and try again.${retryText}`;
   }
 
-  if (data.code === "PREVIEW_DAILY_LIMIT") {
-    return "You've reached today's free preview limit. Please try again tomorrow.";
+  if (data.code === "PREVIEW_DAILY_LIMIT" || data.code === "PREVIEW_LIMIT_REACHED") {
+    return "You’ve already used your free preview for this browser.";
   }
 
   if (data.code === "PREVIEW_GENERATION_FAILED") {
@@ -749,6 +824,24 @@ function formatPreviewError(data: GenerateResponse) {
   }
 
   return data.message || data.error || "Unable to create your preview.";
+}
+
+function formatNextPreviewAt(value: string | null) {
+  if (!value) {
+    return "in about 24 hours";
+  }
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return "in about 24 hours";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(timestamp);
 }
 
 type CustomSizeFieldsProps = {

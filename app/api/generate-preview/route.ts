@@ -27,15 +27,24 @@ import {
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   checkPreviewAttemptLimit,
-  checkPreviewSessionSuccess,
-  checkPreviewSuccessLimit,
-  recordPreviewSuccess,
 } from "@/lib/rateLimit";
 import {
   assertSameOrigin,
   getClientIp,
   safeLog,
 } from "@/lib/security";
+import {
+  appendBrowserCookie,
+  hashUserAgent,
+  resolveBrowserIdentity,
+} from "@/lib/browserIdentity";
+import {
+  abandonExistingBrowserDraft,
+  consumePreviewEntitlement,
+  getPreviewAvailability,
+  recordPreviewAttempt,
+  setActiveBrowserOrder,
+} from "@/lib/previewEntitlements";
 import {
   savePreviewImageFromBase64,
 } from "@/lib/storage";
@@ -98,10 +107,11 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const requestMetadata = await getRequestMetadata(request);
   let orderId: string | undefined;
+  const browserIdentity = resolveBrowserIdentity(request);
 
   try {
     if (!assertSameOrigin(request)) {
-      return previewError("Request origin is not allowed.", 403);
+      return previewError("Request origin is not allowed.", 403, undefined, undefined, browserIdentity);
     }
 
     const env = getRuntimeEnv();
@@ -111,6 +121,8 @@ export async function POST(request: Request) {
       Boolean(env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN) &&
       bypassToken === env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN;
     const clientIp = getClientIp(request);
+    const browserId = browserIdentity.browserId;
+    const uaHash = await hashUserAgent(requestMetadata.userAgent);
 
     const rawBody = await request.json().catch(() => null);
     const normalizedBody = normalizePreviewRequestBody(rawBody);
@@ -120,6 +132,8 @@ export async function POST(request: Request) {
         "Please complete your wallpaper settings and try again.",
         400,
         "PREVIEW_INVALID_INPUT",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -131,6 +145,7 @@ export async function POST(request: Request) {
           failureReason: "Preview attempt limit exceeded",
           limitType: "attempt",
           retryAfterSeconds: attemptLimit.retryAfterSeconds,
+          ipHash: requestMetadata.ipHash,
         });
         void trackOrderEvent({
           eventType: "preview_failed",
@@ -146,6 +161,7 @@ export async function POST(request: Request) {
           429,
           "PREVIEW_ATTEMPT_LIMIT",
           attemptLimit.retryAfterSeconds,
+          browserIdentity,
         );
       }
     }
@@ -166,6 +182,8 @@ export async function POST(request: Request) {
         "Please complete your wallpaper settings and try again.",
         400,
         "PREVIEW_INVALID_INPUT",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -183,6 +201,8 @@ export async function POST(request: Request) {
         "Please keep the wallpaper request safe and respectful.",
         400,
         "PREVIEW_INVALID_INPUT",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -197,6 +217,8 @@ export async function POST(request: Request) {
         "Preview storage is temporarily unavailable. Please try again soon.",
         503,
         "PREVIEW_STORAGE_UNAVAILABLE",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -216,37 +238,45 @@ export async function POST(request: Request) {
         "Preview generation is temporarily unavailable. Please try again soon.",
         503,
         "PREVIEW_AI_UNAVAILABLE",
+        undefined,
+        browserIdentity,
       );
     }
 
-    if (!hasRateLimitBypass) {
-      const sessionSuccess = await checkPreviewSessionSuccess(
-        normalizedBody.previewSessionId,
-      );
-      if (!sessionSuccess.allowed) {
-        return previewError(
-          "You already created your free preview. Unlock the full wallpaper to continue.",
-          409,
-          "PREVIEW_SESSION_USED",
-          sessionSuccess.retryAfterSeconds,
-        );
-      }
-
-      const successLimit = await checkPreviewSuccessLimit(clientIp);
-      if (!successLimit.allowed) {
-        logPreviewRateLimit({
+    const previewAvailability = await getPreviewAvailability(browserId);
+    if (!hasRateLimitBypass && !previewAvailability.hasPreviewAvailable) {
+      void recordPreviewAttempt({
+        browserId,
+        ipHash: requestMetadata.ipHash,
+        uaHash,
+        allowed: false,
+        denialReason: "preview_limit_reached",
+      }).catch((error) => {
+        console.warn("[generate-preview]", {
           requestId,
-          failureReason: "Preview daily success limit exceeded",
-          limitType: "success",
-          retryAfterSeconds: successLimit.retryAfterSeconds,
+          failureReason: "Preview attempt tracking failed",
+          errorMessage: error instanceof Error ? error.message : "Unknown preview attempt error",
         });
-        return previewError(
-          "You've reached today's free preview limit. Please try again tomorrow.",
-          429,
-          "PREVIEW_DAILY_LIMIT",
-          successLimit.retryAfterSeconds,
-        );
-      }
+      });
+      console.warn("[generate-preview]", {
+        requestId,
+        browserIdPresent: !browserIdentity.created,
+        previewAllowed: false,
+        denialReason: "preview_limit_reached",
+        nextPreviewAt: previewAvailability.nextPreviewAt,
+      });
+      return previewError(
+        "You’ve already used your free preview for this browser.",
+        429,
+        "PREVIEW_LIMIT_REACHED",
+        retryAfterSecondsFromIso(previewAvailability.nextPreviewAt),
+        browserIdentity,
+        {
+          hasPreviewAvailable: false,
+          nextPreviewAt: previewAvailability.nextPreviewAt,
+          activeOrderId: previewAvailability.activeOrderId,
+        },
+      );
     }
 
     const input = parsed.data as WallpaperInput;
@@ -269,6 +299,16 @@ export async function POST(request: Request) {
       },
     });
 
+    if (previewAvailability.activeOrderId) {
+      void abandonExistingBrowserDraft(browserId).catch((error) => {
+        console.warn("[generate-preview]", {
+          requestId,
+          failureReason: "Old browser draft cleanup failed",
+          errorMessage: error instanceof Error ? error.message : "Unknown browser cleanup error",
+        });
+      });
+    }
+
     const dbOrder = await createOrder(input);
     orderId = dbOrder?.id;
 
@@ -277,6 +317,8 @@ export async function POST(request: Request) {
         "We couldn't create your preview right now. Please try again.",
         503,
         "PREVIEW_INTERNAL_ERROR",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -330,7 +372,13 @@ export async function POST(request: Request) {
           reason: aiResult.code,
         },
       });
-      return previewError(aiResult.message, aiResult.status, aiResult.code);
+      return previewError(
+        aiResult.message,
+        aiResult.status,
+        aiResult.code,
+        undefined,
+        browserIdentity,
+      );
     }
 
     const image = aiResult.result.data?.[0];
@@ -358,6 +406,8 @@ export async function POST(request: Request) {
         "Preview storage is temporarily unavailable. Please try again soon.",
         503,
         "PREVIEW_STORAGE_UNAVAILABLE",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -366,6 +416,8 @@ export async function POST(request: Request) {
         "Preview storage is temporarily unavailable. Please try again soon.",
         503,
         "PREVIEW_STORAGE_UNAVAILABLE",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -394,12 +446,48 @@ export async function POST(request: Request) {
     });
 
     if (!hasRateLimitBypass) {
-      await recordPreviewSuccess(clientIp, normalizedBody.previewSessionId);
+      const entitlementResult = await consumePreviewEntitlement({
+        browserId,
+        ipHash: requestMetadata.ipHash,
+        uaHash,
+      });
+      if (!entitlementResult.allowed) {
+        return previewError(
+          "You’ve already used your free preview for this browser.",
+          429,
+          "PREVIEW_LIMIT_REACHED",
+          retryAfterSecondsFromIso(entitlementResult.nextPreviewAt),
+          browserIdentity,
+          {
+            hasPreviewAvailable: false,
+            nextPreviewAt: entitlementResult.nextPreviewAt,
+            activeOrderId: previewAvailability.activeOrderId,
+          },
+        );
+      }
     }
+
+    await setActiveBrowserOrder(browserId, dbOrder.id);
+    void recordPreviewAttempt({
+      browserId,
+      orderId: dbOrder.id,
+      ipHash: requestMetadata.ipHash,
+      uaHash,
+      allowed: true,
+      denialReason: null,
+    }).catch((error) => {
+      console.warn("[generate-preview]", {
+        requestId,
+        failureReason: "Preview attempt tracking failed",
+        errorMessage: error instanceof Error ? error.message : "Unknown preview attempt error",
+      });
+    });
 
     console.info("[generate-preview]", {
       requestId,
       orderId: order.orderId,
+      browserIdPresent: !browserIdentity.created,
+      previewAllowed: true,
       wallpaperType: normalizedBody.wallpaperType,
       model: imageConfig.model,
       event: "preview_created",
@@ -417,9 +505,14 @@ export async function POST(request: Request) {
       meta,
       preview: true,
       mock: false,
+      hasPreviewAvailable: false,
+      nextPreviewAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      activeOrderId: dbOrder.id,
     };
 
-    return NextResponse.json(response);
+    const jsonResponse = NextResponse.json(response);
+    appendBrowserCookie(jsonResponse, browserIdentity.setCookie);
+    return jsonResponse;
   } catch (error) {
     console.error("[generate-preview]", {
       requestId,
@@ -443,6 +536,8 @@ export async function POST(request: Request) {
       "We couldn't create your preview right now. Please try again.",
       500,
       "PREVIEW_INTERNAL_ERROR",
+      undefined,
+      browserIdentity,
     );
   }
 }
@@ -787,19 +882,29 @@ function previewError(
     | "PREVIEW_ATTEMPT_LIMIT"
     | "PREVIEW_DAILY_LIMIT"
     | "PREVIEW_SESSION_USED"
+    | "PREVIEW_LIMIT_REACHED"
     | "PREVIEW_AI_UNAVAILABLE"
     | "PREVIEW_STORAGE_UNAVAILABLE"
     | "PREVIEW_GENERATION_FAILED"
     | "PREVIEW_INTERNAL_ERROR",
   retryAfterSeconds?: number,
+  browserIdentity?: { setCookie: string },
+  extras?: {
+    hasPreviewAvailable?: boolean;
+    nextPreviewAt?: string | null;
+    activeOrderId?: string | null;
+  },
 ) {
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       success: false,
       code,
       message,
       error: message,
       retryAfterSeconds,
+      hasPreviewAvailable: extras?.hasPreviewAvailable,
+      nextPreviewAt: extras?.nextPreviewAt,
+      activeOrderId: extras?.activeOrderId,
     },
     {
       status,
@@ -809,6 +914,10 @@ function previewError(
           : undefined,
     },
   );
+  if (browserIdentity?.setCookie) {
+    appendBrowserCookie(response, browserIdentity.setCookie);
+  }
+  return response;
 }
 
 function logPreviewRateLimit(details: {
@@ -816,6 +925,20 @@ function logPreviewRateLimit(details: {
   failureReason: string;
   limitType: "attempt" | "success";
   retryAfterSeconds: number;
+  ipHash?: string;
 }) {
   console.error("[preview-rate-limit]", details);
+}
+
+function retryAfterSecondsFromIso(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const ms = Date.parse(value) - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return undefined;
+  }
+
+  return Math.max(1, Math.ceil(ms / 1000));
 }

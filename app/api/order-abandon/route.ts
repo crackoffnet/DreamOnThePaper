@@ -9,6 +9,11 @@ import {
 } from "@/lib/orderEvents";
 import { assertSameOrigin } from "@/lib/security";
 import { getDb } from "@/lib/cloudflare";
+import {
+  appendBrowserCookie,
+  resolveBrowserIdentity,
+} from "@/lib/browserIdentity";
+import { clearActiveBrowserOrder } from "@/lib/previewEntitlements";
 
 const abandonSchema = z.object({
   orderId: z.string().min(8).max(120).optional(),
@@ -18,6 +23,7 @@ const abandonSchema = z.object({
 const abandonableStatuses = new Set(["preview_created", "pending_payment", "draft"]);
 
 export async function POST(request: Request) {
+  const browserIdentity = resolveBrowserIdentity(request);
   if (!assertSameOrigin(request)) {
     return NextResponse.json({ success: false }, { status: 403 });
   }
@@ -31,21 +37,28 @@ export async function POST(request: Request) {
   const requestedOrderId = parsed.success ? parsed.data.orderId : undefined;
 
   if (!token && !requestedOrderId) {
-    return NextResponse.json({ success: true, abandoned: false });
+    const response = NextResponse.json({ success: true, abandoned: false });
+    appendBrowserCookie(response, browserIdentity.setCookie);
+    return response;
   }
 
   const order = await getOrder(token?.orderId || requestedOrderId || "");
   if (!order || (token && order.prompt_hash !== token.promptHash)) {
-    return NextResponse.json({ success: true, abandoned: false });
+    const response = NextResponse.json({ success: true, abandoned: false });
+    appendBrowserCookie(response, browserIdentity.setCookie);
+    return response;
   }
 
   if (!abandonableStatuses.has(order.status)) {
-    return NextResponse.json({ success: true, abandoned: false });
+    const response = NextResponse.json({ success: true, abandoned: false });
+    appendBrowserCookie(response, browserIdentity.setCookie);
+    return response;
   }
 
   await updateTrackedOrderStatus(getDb(), order.id, "abandoned", {
     abandoned_at: new Date().toISOString(),
   });
+  await clearActiveBrowserOrder(browserIdentity.browserId, order.id);
   void trackOrderEvent({
     orderId: order.id,
     customerId: order.customer_id || null,
@@ -56,5 +69,7 @@ export async function POST(request: Request) {
     requestMetadata,
   });
 
-  return NextResponse.json({ success: true, abandoned: true });
+  const response = NextResponse.json({ success: true, abandoned: true });
+  appendBrowserCookie(response, browserIdentity.setCookie);
+  return response;
 }

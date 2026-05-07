@@ -70,6 +70,9 @@ export type GenerateResponse = {
   mock?: boolean;
   code?: string;
   retryAfterSeconds?: number;
+  hasPreviewAvailable?: boolean;
+  nextPreviewAt?: string | null;
+  activeOrderId?: string | null;
   message?: string;
   error?: string;
 };

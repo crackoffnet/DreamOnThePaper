@@ -395,7 +395,7 @@ export function ResultPreview() {
           />
         </div>
         <p className="mt-3 text-center text-xs font-medium text-taupe">
-          Final PNG · {asset.width} × {asset.height} px
+          Final PNG · High-resolution · No preview watermark
         </p>
       </div>
     </section>

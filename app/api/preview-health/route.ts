@@ -9,6 +9,11 @@ export async function GET() {
     bindings.DB,
     "wallpaper_type",
   );
+  const hasPreviewEntitlementsTable = await hasTable(
+    bindings.DB,
+    "preview_entitlements",
+  );
+  const hasBrowserSessionsTable = await hasTable(bindings.DB, "browser_sessions");
 
   return NextResponse.json(
     {
@@ -26,6 +31,8 @@ export async function GET() {
         env.OPENAI_PREVIEW_IMAGE_MODEL || "gpt-image-1-mini",
       ),
       supportsWallpaperTypeColumn,
+      hasPreviewEntitlementsTable,
+      hasBrowserSessionsTable,
       supportedImageSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"],
     },
     {
@@ -35,6 +42,30 @@ export async function GET() {
       },
     },
   );
+}
+
+async function hasTable(
+  db: D1Database | undefined,
+  tableName: string,
+) {
+  if (!db) {
+    return false;
+  }
+
+  try {
+    const statement = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .bind(tableName);
+    const result = await statement.first<{ name?: string }>();
+    return result?.name === tableName;
+  } catch (error) {
+    console.warn("[preview-health]", {
+      failureReason: "Unable to inspect table",
+      tableName,
+      errorMessage: error instanceof Error ? error.message : "Unknown schema error",
+    });
+    return false;
+  }
 }
 
 async function hasOrdersColumn(

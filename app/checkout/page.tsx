@@ -47,6 +47,9 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
           <p className="mt-3 text-sm leading-6 text-taupe sm:text-base">
             Pay once to generate and download your high-resolution final PNG wallpaper.
           </p>
+          <p className="mt-2 text-sm leading-6 text-cocoa">
+            Your preview shows the concept, mood, and layout. After payment, we generate a clean high-resolution PNG without the preview watermark.
+          </p>
         </div>
         <Pricing
           orderId={initialOrder?.orderId || orderId}
