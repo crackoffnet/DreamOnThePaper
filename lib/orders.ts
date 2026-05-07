@@ -28,7 +28,13 @@ export type FinalAsset = {
   height: number;
   r2_key: string;
   format: "png";
+  file_size_bytes?: number | null;
+  generation_status?: "generated" | "failed" | string | null;
+  generation_attempt?: number | null;
+  openai_image_id?: string | null;
+  prompt_hash?: string | null;
   created_at: number;
+  updated_at?: number | null;
 };
 
 export type DbOrder = {

@@ -2,6 +2,7 @@ import type { DbOrder, FinalAssetType } from "@/lib/orders";
 import type { PackageId } from "@/lib/packages";
 import type { WallpaperInput } from "@/lib/types";
 import { inputFromDbOrder } from "@/lib/orders";
+import { normalizeGenerationSize } from "@/lib/imageGenerationConfig";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
 
 export type FinalGenerationPlanItem = {
@@ -20,12 +21,15 @@ export function buildFinalGenerationPlan(
   const baseInput = inputFromDbOrder(order);
 
   if (packageType === "bundle") {
+    const mobileSize = normalizeGenerationSize(1290, 2796, "final");
+    const desktopSize = normalizeGenerationSize(2560, 1440, "final");
+
     return [
       {
         assetType: "mobile",
         label: "Mobile wallpaper",
-        width: 1290,
-        height: 2796,
+        width: mobileSize.width,
+        height: mobileSize.height,
         input: {
           ...baseInput,
           device: "mobile",
@@ -39,8 +43,8 @@ export function buildFinalGenerationPlan(
       {
         assetType: "desktop",
         label: "Desktop wallpaper",
-        width: 2560,
-        height: 1440,
+        width: desktopSize.width,
+        height: desktopSize.height,
         input: {
           ...baseInput,
           device: "desktop",
@@ -55,12 +59,14 @@ export function buildFinalGenerationPlan(
   }
 
   if (packageType === "premium") {
+    const selectedSize = normalizeGenerationSize(order.width, order.height, "final");
+
     return [
       {
         assetType: "version_1",
         label: "Version 1",
-        width: order.width,
-        height: order.height,
+        width: selectedSize.width,
+        height: selectedSize.height,
         input: baseInput,
         variationPrompt:
           "Version 1: closest to the selected style, balanced, polished, and faithful to the preview concept.",
@@ -68,8 +74,8 @@ export function buildFinalGenerationPlan(
       {
         assetType: "version_2",
         label: "Version 2",
-        width: order.width,
-        height: order.height,
+        width: selectedSize.width,
+        height: selectedSize.height,
         input: baseInput,
         variationPrompt:
           "Version 2: softer and more minimal interpretation with extra negative space, quieter palette, and refined restraint.",
@@ -77,8 +83,8 @@ export function buildFinalGenerationPlan(
       {
         assetType: "version_3",
         label: "Version 3",
-        width: order.width,
-        height: order.height,
+        width: selectedSize.width,
+        height: selectedSize.height,
         input: baseInput,
         variationPrompt:
           "Version 3: more cinematic and editorial interpretation with premium depth, richer light, and a distinct visual direction.",
@@ -86,12 +92,14 @@ export function buildFinalGenerationPlan(
     ];
   }
 
+  const selectedSize = normalizeGenerationSize(order.width, order.height, "final");
+
   return [
     {
       assetType: "single",
       label: "Wallpaper",
-      width: order.width,
-      height: order.height,
+      width: selectedSize.width,
+      height: selectedSize.height,
       input: baseInput,
       variationPrompt:
         "Single final wallpaper: polished, refined, and optimized for the selected device or custom size.",

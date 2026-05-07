@@ -4,6 +4,8 @@ import { getFinalAssets, getOrder, inputFromDbOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
+import { buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
+import { packages, type PackageId } from "@/lib/packages";
 
 const orderStatusSchema = z.object({
   finalGenerationToken: z.string().min(24).max(12000),
@@ -52,6 +54,16 @@ export async function POST(request: Request) {
     }
 
     const assets = await getFinalAssets(order.id);
+    const packageType = (order.package_type || token.packageId || "single") as PackageId;
+    const expectedAssets = packages[packageType]
+      ? buildFinalGenerationPlan(order, packageType).length
+      : 1;
+    const completedAssets = assets.filter(
+      (asset) => (asset.generation_status || "generated") === "generated",
+    ).length;
+    const failedAssets = assets.filter(
+      (asset) => asset.generation_status === "failed",
+    ).length;
     const finalAssets = assets.map((asset) => ({
       id: asset.id,
       assetType: asset.asset_type,
@@ -73,6 +85,10 @@ export async function POST(request: Request) {
       finalImageUrl,
       imageUrl: finalImageUrl,
       finalAssets,
+      packageType,
+      expectedAssets,
+      completedAssets,
+      failedAssets,
       finalWidth: finalAssets[0]?.width || (finalImageUrl ? order.width : undefined),
       finalHeight: finalAssets[0]?.height || (finalImageUrl ? order.height : undefined),
       meta: finalImageUrl ? getWallpaperMeta(inputFromDbOrder(order)) : undefined,

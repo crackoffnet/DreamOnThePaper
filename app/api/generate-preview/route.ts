@@ -34,6 +34,7 @@ import {
   savePreviewImageFromBase64,
   savePreviewImageFromDataUrl,
 } from "@/lib/storage";
+import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   hashOperationalValue,
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data as WallpaperInput;
+    const imageConfig = getImageGenerationConfig().preview;
     const meta = getWallpaperMeta(input);
     const prompt = buildPreviewWallpaperPrompt(input);
     void trackOrderEvent({
@@ -265,11 +267,12 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+        model: imageConfig.model,
         prompt,
         size: getPreviewImageSize(input),
-        quality: "low",
-        output_format: "png",
+        quality: imageConfig.quality,
+        output_format: imageConfig.outputFormat,
+        output_compression: imageConfig.compression,
         moderation: "auto",
         n: 1,
       }),
@@ -293,7 +296,11 @@ export async function POST(request: Request) {
     const result = (await response.json()) as OpenAIImageResponse;
     const image = result.data?.[0];
     const savedPreview = image?.b64_json
-      ? await savePreviewImageFromBase64(dbOrder.id, image.b64_json, "image/png")
+      ? await savePreviewImageFromBase64(
+          dbOrder.id,
+          image.b64_json,
+          "image/jpeg",
+        )
       : image?.url
         ? await saveRemotePreviewImage(dbOrder.id, image.url)
         : null;

@@ -4,6 +4,9 @@ export const DEFAULT_FROM_NAME = "Dream On The Paper";
 
 export type RuntimeEnv = {
   OPENAI_API_KEY?: string;
+  OPENAI_PREVIEW_IMAGE_MODEL?: string;
+  OPENAI_FINAL_IMAGE_MODEL?: string;
+  OPENAI_FINAL_IMAGE_QUALITY?: string;
   ORDER_TOKEN_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_SINGLE_PRICE_ID?: string;
@@ -22,6 +25,9 @@ export type RuntimeEnv = {
 
 const runtimeEnvNames = [
   "OPENAI_API_KEY",
+  "OPENAI_PREVIEW_IMAGE_MODEL",
+  "OPENAI_FINAL_IMAGE_MODEL",
+  "OPENAI_FINAL_IMAGE_QUALITY",
   "ORDER_TOKEN_SECRET",
   "STRIPE_SECRET_KEY",
   "STRIPE_SINGLE_PRICE_ID",

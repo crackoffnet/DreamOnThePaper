@@ -17,6 +17,10 @@ import type { GenerateResponse } from "@/lib/types";
 type Step = "verifying" | "generating" | "done" | "error";
 type FinalGenerationResponse = GenerateResponse & {
   status?: "ready" | "generating" | "failed" | string;
+  packageType?: string;
+  expectedAssets?: number;
+  completedAssets?: number;
+  failedAssets?: number;
 };
 
 export function SuccessExperience({ sessionId }: { sessionId: string }) {
@@ -62,9 +66,11 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const pollFinalStatus = useCallback(
     async (
       finalGenerationToken: string,
+      packageType: string,
       signal: AbortSignal,
     ): Promise<FinalGenerationResponse> => {
-      const deadline = Date.now() + 2 * 60 * 1000;
+      const startedAt = Date.now();
+      const deadline = startedAt + 8 * 60 * 1000;
 
       while (Date.now() < deadline) {
         await sleep(3000, signal);
@@ -76,6 +82,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           signal,
         });
         const status = (await response.json()) as FinalGenerationResponse;
+        const elapsed = Date.now() - startedAt;
+        const expectedAssets = status.expectedAssets || expectedAssetCount(packageType);
+        const completedAssets = status.completedAssets || status.finalAssets?.length || 0;
 
         if (status.status === "final_generated" || status.status === "ready") {
           const imageUrl = await imageUrlFromPayload(status);
@@ -85,7 +94,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         }
 
         if (status.status === "paid") {
-          return requestFinalGeneration(finalGenerationToken, signal);
+          if (elapsed > 10000) {
+            return requestFinalGeneration(finalGenerationToken, signal);
+          }
         }
 
         if (status.status === "failed") {
@@ -95,41 +106,45 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           );
         }
 
-        setMessage("Your wallpaper is being created...");
+        setMessage(progressMessage(packageType, completedAssets, expectedAssets, elapsed));
       }
 
       throw new Error(
-        "Your wallpaper is still being created. Please wait a moment and retry.",
+        "Generation is taking longer than expected. You can retry without another payment.",
       );
     },
     [requestFinalGeneration],
   );
 
-  const generateOrPollFinal = useCallback(
+  const startAndPollFinal = useCallback(
     async (
       finalGenerationToken: string,
+      packageType: string,
       signal: AbortSignal,
     ): Promise<FinalGenerationResponse> => {
-      const generated = await requestFinalGeneration(finalGenerationToken, signal);
+      const response = await fetch("/api/start-final-generation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ finalGenerationToken }),
+        signal,
+      });
+      const started = (await response.json()) as FinalGenerationResponse;
 
-      if (generated.status === "ready") {
-        return generated;
+      if (started.status === "ready") {
+        return pollFinalStatus(finalGenerationToken, packageType, signal);
       }
 
-      if (generated.status === "generating") {
-        return pollFinalStatus(finalGenerationToken, signal);
-      }
-
-      if (generated.status === "failed") {
+      if (!response.ok && started.status !== "generating") {
         throw new Error(
-          generated.message ||
+          started.message ||
             "Your payment is verified, but generation failed. Please retry.",
         );
       }
 
-      return generated;
+      setMessage(progressMessage(packageType, started.completedAssets || 0, started.expectedAssets || expectedAssetCount(packageType), 0));
+      return pollFinalStatus(finalGenerationToken, packageType, signal);
     },
-    [pollFinalStatus, requestFinalGeneration],
+    [pollFinalStatus],
   );
 
   const persistGeneratedWallpaper = useCallback(
@@ -236,10 +251,11 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         }
 
         setStep("generating");
-        setMessage("Creating your final wallpaper...");
+        setMessage(progressMessage(verified.packageId || "single", 0, expectedAssetCount(verified.packageId || "single"), 0));
         console.info("[success] generating final");
-        const generated = await generateOrPollFinal(
+        const generated = await startAndPollFinal(
           verified.finalGenerationToken,
+          verified.packageId || "single",
           signal,
         );
 
@@ -260,7 +276,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
     }
-  }, [generateOrPollFinal, persistGeneratedWallpaper, sessionId]);
+  }, [persistGeneratedWallpaper, sessionId, startAndPollFinal]);
 
   if (step === "done") {
     return <ResultPreview />;
@@ -303,6 +319,36 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       </div>
     </section>
   );
+}
+
+function expectedAssetCount(packageType: string) {
+  if (packageType === "bundle") return 2;
+  if (packageType === "premium") return 3;
+  return 1;
+}
+
+function progressMessage(
+  packageType: string,
+  completedAssets: number,
+  expectedAssets: number,
+  elapsedMs: number,
+) {
+  const base =
+    packageType === "bundle"
+      ? `Creating ${Math.min(completedAssets + 1, expectedAssets)} of ${expectedAssets} wallpapers...`
+      : packageType === "premium"
+        ? `Creating ${Math.min(completedAssets + 1, expectedAssets)} of ${expectedAssets} versions...`
+        : "Creating your wallpaper...";
+
+  if (elapsedMs > 8 * 60 * 1000) {
+    return "Generation is taking longer than expected. You can retry without another payment.";
+  }
+
+  if (elapsedMs > 3 * 60 * 1000) {
+    return "Still working. You can leave this page open, or come back using this checkout success page.";
+  }
+
+  return `${base} This can take 1-3 minutes.`;
 }
 
 function sleep(ms: number, signal: AbortSignal) {

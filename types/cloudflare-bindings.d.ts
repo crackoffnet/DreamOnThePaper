@@ -75,6 +75,9 @@ interface CloudflareEnv {
   DREAM_RATE_LIMITS?: KVNamespace;
   WALLPAPER_BUCKET?: R2Bucket;
   OPENAI_API_KEY?: string;
+  OPENAI_PREVIEW_IMAGE_MODEL?: string;
+  OPENAI_FINAL_IMAGE_MODEL?: string;
+  OPENAI_FINAL_IMAGE_QUALITY?: string;
   ORDER_TOKEN_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_SINGLE_PRICE_ID?: string;

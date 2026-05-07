@@ -27,6 +27,9 @@ Copy `.env.example` to `.env.local`.
 
 ```bash
 OPENAI_API_KEY=
+OPENAI_PREVIEW_IMAGE_MODEL=gpt-image-1-mini
+OPENAI_FINAL_IMAGE_MODEL=gpt-image-1
+OPENAI_FINAL_IMAGE_QUALITY=medium
 STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
 STRIPE_BUNDLE_PRICE_ID=
@@ -49,6 +52,18 @@ NODE_VERSION=22
 ```
 
 `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BREVO_API_KEY`, `ORDER_TOKEN_SECRET`, and `TURNSTILE_SECRET_KEY` must never be exposed to the frontend.
+
+Image generation speed is controlled by optional server-side variables:
+
+- `OPENAI_PREVIEW_IMAGE_MODEL` defaults to `gpt-image-1-mini`
+- `OPENAI_FINAL_IMAGE_MODEL` defaults to `gpt-image-1`
+- `OPENAI_FINAL_IMAGE_QUALITY` defaults to `medium`
+
+Final generation uses launch-friendly normalized sizes (`1024x1024`,
+`1024x1536`, or `1536x1024`) and stores those actual output dimensions with the
+generated assets. Bundle and premium assets are generated concurrently with a
+small concurrency cap, and the success page starts generation in the background
+then polls order status for progress.
 
 ## Preview-First Payment Flow
 
@@ -154,6 +169,9 @@ Set these in your Cloudflare Workers production build/deploy environment:
 ```bash
 NODE_VERSION=22
 OPENAI_API_KEY=
+OPENAI_PREVIEW_IMAGE_MODEL=gpt-image-1-mini
+OPENAI_FINAL_IMAGE_MODEL=gpt-image-1
+OPENAI_FINAL_IMAGE_QUALITY=medium
 STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
 STRIPE_BUNDLE_PRICE_ID=

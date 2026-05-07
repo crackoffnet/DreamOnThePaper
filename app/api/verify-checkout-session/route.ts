@@ -27,6 +27,7 @@ const verifyCheckoutSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
   const requestMetadata = await getRequestMetadata(request);
   let sessionIdPrefix = "";
   let orderId: string | undefined;
@@ -84,6 +85,13 @@ export async function POST(request: Request) {
     });
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     paymentStatus = session.payment_status || "unknown";
+    console.info("[final-generation-timing]", {
+      requestId,
+      sessionIdPrefix,
+      step: "payment_verification",
+      durationMs: Date.now() - startedAt,
+      paymentStatus,
+    });
 
     if (session.payment_status !== "paid") {
       logVerifyFailure({

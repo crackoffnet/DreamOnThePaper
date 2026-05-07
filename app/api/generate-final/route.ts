@@ -17,16 +17,27 @@ import {
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin, safeLog } from "@/lib/security";
-import { saveFinalAssetImage, saveFinalAssetImageFromBase64 } from "@/lib/storage";
-import { buildFinalAssetPrompt, buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
-import { getFinalImageSize, getWallpaperMeta } from "@/lib/wallpaper";
+import { saveFinalAssetImage } from "@/lib/storage";
+import {
+  buildFinalAssetPrompt,
+  buildFinalGenerationPlan,
+  type FinalGenerationPlanItem,
+} from "@/lib/finalGenerationPlan";
+import { getWallpaperMeta } from "@/lib/wallpaper";
 import { packages, type PackageId } from "@/lib/packages";
 import type { FinalAssetResult } from "@/lib/types";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import { patchOrderTracking, trackOrderEvent } from "@/lib/orderEvents";
+import { getImageGenerationConfig, type ImageQuality } from "@/lib/imageGenerationConfig";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
+};
+
+type FinalImageConfig = {
+  model: string;
+  quality: ImageQuality;
+  outputFormat: "png" | "jpeg" | "webp";
 };
 
 const generateFinalSchema = z
@@ -44,6 +55,7 @@ const generateFinalSchema = z
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const totalStartedAt = Date.now();
   const requestMetadata = await getRequestMetadata(request);
   let orderId: string | undefined;
   let orderStatus: string | undefined;
@@ -269,90 +281,45 @@ export async function POST(request: Request) {
     }
 
     const plan = buildFinalGenerationPlan(claimableOrder, claimablePackageType);
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType: claimablePackageType,
+      step: "prompt_plan_built",
+      durationMs: Date.now() - totalStartedAt,
+      expectedAssets: plan.length,
+    });
     const existingAssets = await getFinalAssets(orderId);
     const missingItems = plan.filter(
       (item) =>
-        !existingAssets.some((asset) => asset.asset_type === item.assetType),
+        !existingAssets.some(
+          (asset) =>
+            asset.asset_type === item.assetType &&
+            (asset.generation_status || "generated") === "generated",
+        ),
     );
 
-    for (const item of missingItems) {
-      const prompt = buildFinalAssetPrompt(item);
-      const response = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
-          prompt,
-          size: getOpenAiSizeForAsset(item.input),
-          quality: "high",
-          output_format: "png",
-          moderation: "auto",
-          n: 1,
-        }),
-      });
-
-      if (!response.ok) {
-        safeLog("OpenAI final generation failed", response.status);
-        await markFinalFailed(orderId, `OpenAI failed with status ${response.status}`);
-        void trackOrderEvent({
-          orderId,
-          customerId: claimableOrder.customer_id || null,
-          eventType: "final_generation_failed",
-          statusBefore: "final_generating",
-          statusAfter: "failed",
-          packageType: claimablePackageType,
-          requestMetadata,
-          metadata: { requestId, providerStatus: response.status },
-        });
-        return finalError(
-          "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
-          502,
-        );
-      }
-
-      const result = (await response.json()) as OpenAIImageResponse;
-      const image = result.data?.[0];
-      const savedFinal = image?.b64_json
-        ? await saveFinalAssetImageFromBase64(
-            orderId,
-            item.assetType,
-            image.b64_json,
-            "image/png",
-          )
-        : image?.url
-          ? await saveRemoteFinalImage(orderId, item.assetType, image.url)
-          : null;
-
-      if (!savedFinal) {
-        await markFinalFailed(orderId, "OpenAI returned no final image");
-        void trackOrderEvent({
-          orderId,
-          customerId: claimableOrder.customer_id || null,
-          eventType: "final_generation_failed",
-          statusBefore: "final_generating",
-          statusAfter: "failed",
-          packageType: claimablePackageType,
-          requestMetadata,
-          metadata: { requestId, reason: "no_final_image" },
-        });
-        return finalError(
-          "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
-          502,
-        );
-      }
-
-      await insertFinalAsset({
-        orderId,
-        assetType: item.assetType,
-        width: item.width,
-        height: item.height,
-        r2Key: savedFinal.key,
-        fileSizeBytes: savedFinal.size,
+    const imageConfig = getImageGenerationConfig().final;
+    const concurrency = claimablePackageType === "premium" ? 2 : missingItems.length || 1;
+    const assetResults = await runWithConcurrency(missingItems, concurrency, (item) =>
+      generateFinalAsset({
+        item,
+        env,
+        imageConfig,
+        orderId: claimableOrder.id,
+        requestId,
+        packageType: claimablePackageType,
         promptHash: claimableOrder.prompt_hash,
-      });
+      }),
+    );
+    const failedAssets = assetResults.filter((result) => result.status === "rejected");
+
+    for (const result of assetResults) {
+      if (result.status !== "fulfilled") {
+        continue;
+      }
+
+      const { item, savedFinal } = result.value;
       void trackOrderEvent({
         orderId,
         customerId: claimableOrder.customer_id || null,
@@ -368,6 +335,25 @@ export async function POST(request: Request) {
           fileSizeBytes: savedFinal.size,
         },
       });
+    }
+
+    if (failedAssets.length > 0) {
+      safeLog("OpenAI final generation failed", failedAssets.length);
+      await markFinalFailed(orderId, `${failedAssets.length} final asset(s) failed`);
+      void trackOrderEvent({
+        orderId,
+        customerId: claimableOrder.customer_id || null,
+        eventType: "final_generation_failed",
+        statusBefore: "final_generating",
+        statusAfter: "failed",
+        packageType: claimablePackageType,
+        requestMetadata,
+        metadata: { requestId, failedAssets: failedAssets.length },
+      });
+      return finalError(
+        "Your payment is verified, but we couldn't finish every wallpaper. You will not be charged again. Please retry missing assets.",
+        502,
+      );
     }
 
     const finalAssets = await getFinalAssets(orderId);
@@ -395,6 +381,16 @@ export async function POST(request: Request) {
       orderStatus: "final_generated",
       finalGenerationAttempts: (finalGenerationAttempts || 0) + 1,
       event: "final_ready",
+      totalDurationMs: Date.now() - totalStartedAt,
+    });
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType: claimablePackageType,
+      step: "total_job_complete",
+      durationMs: Date.now() - totalStartedAt,
+      expectedAssets: plan.length,
+      completedAssets: finalAssets.length,
     });
 
     return finalAssetsSuccess(
@@ -492,6 +488,183 @@ async function saveRemoteFinalImage(orderId: string, assetType: string, url: str
   return saveFinalAssetImage(orderId, assetType, bytes, contentType);
 }
 
+async function generateFinalAsset(input: {
+  item: FinalGenerationPlanItem;
+  env: ReturnType<typeof getRuntimeEnv>;
+  imageConfig: FinalImageConfig;
+  orderId: string;
+  requestId: string;
+  packageType: PackageId;
+  promptHash: string;
+}) {
+  const { item, env, imageConfig, orderId, requestId, packageType, promptHash } = input;
+  const promptStartedAt = Date.now();
+  const prompt = buildFinalAssetPrompt(item);
+  logFinalTiming({
+    requestId,
+    orderId,
+    packageType,
+    step: "prompt_built",
+    assetType: item.assetType,
+    width: item.width,
+    height: item.height,
+    durationMs: Date.now() - promptStartedAt,
+  });
+
+  const openAiStartedAt = Date.now();
+  logFinalTiming({
+    requestId,
+    orderId,
+    packageType,
+    step: "openai_start",
+    assetType: item.assetType,
+    width: item.width,
+    height: item.height,
+    quality: imageConfig.quality,
+    model: imageConfig.model,
+  });
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: imageConfig.model,
+      prompt,
+      size: `${item.width}x${item.height}`,
+      quality: imageConfig.quality,
+      output_format: imageConfig.outputFormat,
+      moderation: "auto",
+      n: 1,
+    }),
+  });
+  logFinalTiming({
+    requestId,
+    orderId,
+    packageType,
+    step: "openai_complete",
+    assetType: item.assetType,
+    width: item.width,
+    height: item.height,
+    quality: imageConfig.quality,
+    model: imageConfig.model,
+    durationMs: Date.now() - openAiStartedAt,
+    providerStatus: response.status,
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI failed with status ${response.status}`);
+  }
+
+  const result = (await response.json()) as OpenAIImageResponse;
+  const image = result.data?.[0];
+  let savedFinal: Awaited<ReturnType<typeof saveFinalAssetImage>> | null = null;
+
+  if (image?.b64_json) {
+    const decodeStartedAt = Date.now();
+    const bytes = base64ToBytes(image.b64_json);
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType,
+      step: "base64_decoded",
+      assetType: item.assetType,
+      durationMs: Date.now() - decodeStartedAt,
+      bytes: bytes.byteLength,
+    });
+
+    const uploadStartedAt = Date.now();
+    savedFinal = await saveFinalAssetImage(
+      orderId,
+      item.assetType,
+      bytes,
+      "image/png",
+    );
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType,
+      step: "r2_upload_complete",
+      assetType: item.assetType,
+      durationMs: Date.now() - uploadStartedAt,
+      bytes: savedFinal.size,
+    });
+  } else if (image?.url) {
+    const uploadStartedAt = Date.now();
+    savedFinal = await saveRemoteFinalImage(orderId, item.assetType, image.url);
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType,
+      step: "remote_fetch_r2_upload_complete",
+      assetType: item.assetType,
+      durationMs: Date.now() - uploadStartedAt,
+      bytes: savedFinal?.size,
+    });
+  }
+
+  if (!savedFinal) {
+    throw new Error("OpenAI returned no final image");
+  }
+
+  const d1StartedAt = Date.now();
+  await insertFinalAsset({
+    orderId,
+    assetType: item.assetType,
+    width: item.width,
+    height: item.height,
+    r2Key: savedFinal.key,
+    fileSizeBytes: savedFinal.size,
+    promptHash,
+  });
+  logFinalTiming({
+    requestId,
+    orderId,
+    packageType,
+    step: "d1_asset_insert_complete",
+    assetType: item.assetType,
+    durationMs: Date.now() - d1StartedAt,
+  });
+
+  return { item, savedFinal };
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+) {
+  const results: PromiseSettledResult<R>[] = [];
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length || 1));
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await worker(items[currentIndex])
+          .then((value) => ({ status: "fulfilled" as const, value }))
+          .catch((reason) => ({ status: "rejected" as const, reason }));
+      }
+    }),
+  );
+
+  return results;
+}
+
+function base64ToBytes(content: string) {
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
 function assetToResult(asset: FinalAsset): FinalAssetResult {
   return {
     id: asset.id,
@@ -510,10 +683,14 @@ async function getReadyAssets(order: DbOrder, packageType: PackageId) {
 
   if (
     plan.every((item) =>
-      assets.some((asset) => asset.asset_type === item.assetType),
+      assets.some(
+        (asset) =>
+          asset.asset_type === item.assetType &&
+          (asset.generation_status || "generated") === "generated",
+      ),
     )
   ) {
-    return assets;
+    return assets.filter((asset) => (asset.generation_status || "generated") === "generated");
   }
 
   if (
@@ -547,10 +724,6 @@ function labelForAsset(assetType: string) {
   return "Wallpaper";
 }
 
-function getOpenAiSizeForAsset(input: ReturnType<typeof inputFromDbOrder>) {
-  return getFinalImageSize(input);
-}
-
 function logFinalFailure(details: {
   requestId: string;
   orderId?: string;
@@ -561,6 +734,25 @@ function logFinalFailure(details: {
   envPresence?: ReturnType<typeof getRuntimeEnvPresence>;
 }) {
   console.error("[generate-final]", details);
+}
+
+function logFinalTiming(details: {
+  requestId: string;
+  orderId?: string;
+  packageType?: string;
+  step: string;
+  assetType?: string;
+  width?: number;
+  height?: number;
+  quality?: string;
+  model?: string;
+  durationMs?: number;
+  providerStatus?: number;
+  expectedAssets?: number;
+  completedAssets?: number;
+  bytes?: number;
+}) {
+  console.info("[final-generation-timing]", details);
 }
 
 function finalError(message: string, status = 400) {
