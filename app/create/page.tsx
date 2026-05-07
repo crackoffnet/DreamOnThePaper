@@ -3,7 +3,13 @@ import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { WallpaperWizard } from "@/components/WallpaperWizard";
 
-export default function CreatePage() {
+type CreatePageProps = {
+  searchParams: Promise<{ mood?: string }>;
+};
+
+export default async function CreatePage({ searchParams }: CreatePageProps) {
+  const params = await searchParams;
+
   return (
     <main className="min-h-screen px-4 py-4 sm:px-6">
       <div className="mx-auto mb-4 max-w-6xl">
@@ -15,7 +21,7 @@ export default function CreatePage() {
           Back
         </Link>
       </div>
-      <WallpaperWizard />
+      <WallpaperWizard initialMood={params.mood || ""} />
       <Footer />
     </main>
   );

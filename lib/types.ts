@@ -18,7 +18,8 @@ export type WallpaperStyle =
   | "feminine"
   | "wealth-business"
   | "family-home"
-  | "fitness-health";
+  | "fitness-health"
+  | "freedom-travel";
 export type QuoteTone = "soft-emotional" | "powerful-confident" | "spiritual-calm" | "none";
 
 export type WallpaperInput = {

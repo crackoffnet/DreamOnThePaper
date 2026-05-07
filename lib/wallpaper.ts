@@ -19,6 +19,7 @@ export const styles = [
   "wealth-business",
   "family-home",
   "fitness-health",
+  "freedom-travel",
 ] as const satisfies readonly WallpaperStyle[];
 export const quoteTones = [
   "soft-emotional",
@@ -65,6 +66,7 @@ export const labels = {
     "wealth-business": "Wealth / business",
     "family-home": "Family / home",
     "fitness-health": "Fitness / health",
+    "freedom-travel": "Freedom / travel",
   },
   quoteTones: {
     "soft-emotional": "Soft and emotional",

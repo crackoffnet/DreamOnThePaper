@@ -39,7 +39,8 @@ export type DbOrder = {
   expires_at: number | null;
 };
 
-const ORDER_TTL_SECONDS = 60 * 60 * 6;
+const ORDER_TTL_SECONDS = 60 * 60 * 24;
+export const STALE_FINAL_GENERATION_MS = 10 * 60 * 1000;
 
 export async function createOrder(input: WallpaperInput) {
   const db = getDb();
@@ -84,6 +85,14 @@ export async function getOrder(orderId: string) {
     .prepare("SELECT * FROM orders WHERE id = ?")
     .bind(orderId)
     .first<DbOrder>();
+}
+
+export function isUnpaidOrderExpired(order: DbOrder) {
+  return (
+    (order.status === "preview_created" || order.status === "pending_payment") &&
+    typeof order.expires_at === "number" &&
+    order.expires_at <= Date.now()
+  );
 }
 
 export async function getOrderByStripeSessionId(stripeSessionId: string) {
@@ -194,9 +203,48 @@ export async function startFinalGeneration(orderId: string) {
            updated_at = ?
        WHERE id = ?
          AND status = 'paid'
-         AND final_generation_attempts = 0`,
+         AND final_generation_attempts < 2`,
     )
     .bind(now, now, orderId)
+    .run();
+
+  return (result.meta.changes || 0) === 1;
+}
+
+export async function resetStaleFinalGeneration(orderId: string) {
+  const now = Date.now();
+  const staleBefore = now - STALE_FINAL_GENERATION_MS;
+  const result = await getDb()
+    .prepare(
+      `UPDATE orders
+       SET status = 'paid',
+           updated_at = ?
+       WHERE id = ?
+         AND status = 'final_generating'
+         AND final_r2_key IS NULL
+         AND (final_generation_started_at IS NULL OR final_generation_started_at < ?)
+         AND final_generation_attempts < 2`,
+    )
+    .bind(now, orderId, staleBefore)
+    .run();
+
+  return (result.meta.changes || 0) === 1;
+}
+
+export async function resetFailedFinalGeneration(orderId: string) {
+  const now = Date.now();
+  const result = await getDb()
+    .prepare(
+      `UPDATE orders
+       SET status = 'paid',
+           updated_at = ?
+       WHERE id = ?
+         AND status = 'failed'
+         AND final_r2_key IS NULL
+         AND stripe_payment_status = 'paid'
+         AND final_generation_attempts < 2`,
+    )
+    .bind(now, orderId)
     .run();
 
   return (result.meta.changes || 0) === 1;

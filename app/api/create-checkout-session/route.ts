@@ -4,7 +4,7 @@ import { checkoutSchema } from "@/lib/schemas";
 import { assertSameOrigin, getClientIp } from "@/lib/security";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { checkCheckoutRateLimitDetailed } from "@/lib/rateLimit";
-import { markOrderPendingPayment, getOrder } from "@/lib/orders";
+import { markOrderPendingPayment, getOrder, isUnpaidOrderExpired } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 import type { PackageId } from "@/lib/plans";
 
@@ -113,6 +113,16 @@ export async function POST(request: Request) {
         failureReason: "D1 order missing",
       });
       return checkoutError(safeCheckoutMessage, 503);
+    }
+
+    if (isUnpaidOrderExpired(order)) {
+      logCheckoutFailure({
+        requestId,
+        orderId,
+        packageType,
+        failureReason: "Unpaid order expired",
+      });
+      return checkoutError("Your preview expired. Please create a new preview.", 404);
     }
 
     if (order.prompt_hash !== checkoutToken.promptHash) {

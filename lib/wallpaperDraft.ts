@@ -1,6 +1,7 @@
 "use client";
 
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
+import { clearDreamState } from "@/lib/clientState";
 import { defaultWallpaperInput } from "@/lib/wallpaper";
 
 export type WallpaperDraft = {
@@ -244,60 +245,7 @@ export function clearBrokenCheckoutState() {
 }
 
 export function clearDreamWallpaperState() {
-  const explicitKeys = [
-    "dreamPreviewCreated",
-    "dreamOrderId",
-    "dreamOrderToken",
-    "dreamPreviewImageUrl",
-    "dreamPreviewImageId",
-    "dreamWallpaperAnswers",
-    "dreamWallpaperDraft",
-    "dreamCheckoutPackage",
-    "dreamFinalGenerationToken",
-    "dreamFinalImageUrl",
-    "dreamSelectedDevice",
-    "dreamSelectedRatio",
-    "dreamSelectedTheme",
-    "dreamSelectedStyle",
-    "dreamQuoteTone",
-    "dreamCurrentDraft",
-    "dreamCurrentDraftId",
-    "dreamPreviewPolicy",
-    "dreamPreviewGenerated",
-    "dreamPreviewGenerationId",
-    "dreamCheckoutOrderToken",
-    "dreamOrderSnapshotToken",
-    "dreamWallpaperInput",
-    "dreamPreviewMeta",
-    "dreamWallpaperMeta",
-    "dreamPackageId",
-    "dreamCustomerEmail",
-    "dreamFinalSessionId",
-    "previewImageUrl",
-    "finalImageUrl",
-  ];
-
-  clearStorageKeys(sessionStorage, explicitKeys);
-  clearStorageKeys(localStorage, explicitKeys);
-}
-
-function clearStorageKeys(storage: Storage, explicitKeys: string[]) {
-  const matchers = ["dream", "wallpaper", "preview", "order", "checkout"];
-  const keys = new Set(explicitKeys);
-
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (!key) {
-      continue;
-    }
-
-    const normalized = key.toLowerCase();
-    if (matchers.some((matcher) => normalized.includes(matcher))) {
-      keys.add(key);
-    }
-  }
-
-  keys.forEach((key) => storage.removeItem(key));
+  clearDreamState();
 }
 
 function readJson<T>(key: string) {

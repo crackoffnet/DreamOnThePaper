@@ -6,6 +6,7 @@ import { CheckoutCTA } from "@/components/CheckoutCTA";
 import { PricingCard } from "@/components/PricingCard";
 import { StartOverButton } from "@/components/StartOverButton";
 import { TrustBadges } from "@/components/TrustBadges";
+import { ensureAppStateVersion } from "@/lib/clientState";
 import type { CheckoutOrderToken } from "@/lib/order-state";
 import type { PackageId } from "@/lib/plans";
 import { packageIds } from "@/lib/plans";
@@ -43,86 +44,87 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
 
     async function loadPricingState() {
       try {
-      if (initialOrder?.previewImageUrl) {
-        const meta = metaFromCheckoutOrder(initialOrder);
-        sessionStorage.setItem("dreamOrderId", initialOrder.orderId);
-        sessionStorage.setItem("dreamCheckoutOrderToken", orderToken || "");
-        sessionStorage.setItem("previewImageUrl", initialOrder.previewImageUrl);
-        if (initialOrder.previewImageId) {
-          sessionStorage.setItem("dreamPreviewImageId", initialOrder.previewImageId);
-        }
-        console.info("Checkout preview restored", {
-          hasOrderToken: Boolean(orderToken),
-          orderId: initialOrder.orderId,
-        });
-        if (!cancelled) {
-          setState({
-          imageUrl: initialOrder.previewImageUrl,
-          meta,
-          orderId: initialOrder.orderId,
-          orderToken: orderToken || null,
-          orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
+        ensureAppStateVersion();
+        if (initialOrder?.previewImageUrl) {
+          const meta = metaFromCheckoutOrder(initialOrder);
+          sessionStorage.setItem("dreamOrderId", initialOrder.orderId);
+          sessionStorage.setItem("dreamCheckoutOrderToken", orderToken || "");
+          sessionStorage.setItem("previewImageUrl", initialOrder.previewImageUrl);
+          if (initialOrder.previewImageId) {
+            sessionStorage.setItem("dreamPreviewImageId", initialOrder.previewImageId);
+          }
+          console.info("Checkout preview restored", {
+            hasOrderToken: Boolean(orderToken),
+            orderId: initialOrder.orderId,
           });
-        }
-        return;
-      }
-
-      const draft = getCurrentDraft();
-      const activeOrderId = orderId || sessionStorage.getItem("dreamOrderId");
-      const activeOrderToken =
-        orderToken || draft.orderToken || sessionStorage.getItem("dreamCheckoutOrderToken");
-
-      if (activeOrderToken) {
-        const restored = await validateStoredOrderToken(activeOrderToken);
-        if (restored?.previewImageUrl) {
-          const meta = metaFromCheckoutOrder(restored);
           if (!cancelled) {
             setState({
-              imageUrl: restored.previewImageUrl,
+              imageUrl: initialOrder.previewImageUrl,
               meta,
-              orderId: restored.orderId,
-              orderToken: activeOrderToken,
+              orderId: initialOrder.orderId,
+              orderToken: orderToken || null,
               orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
             });
           }
           return;
         }
-      }
 
-      if (!activeOrderId || draft.orderId !== activeOrderId) {
-        console.info("Checkout preview missing", {
-          hasOrderToken: Boolean(activeOrderToken),
-          hasOrderId: Boolean(activeOrderId),
-        });
-        if (!cancelled) {
-          setState((current) => ({
-            ...current,
-            orderId: activeOrderId || null,
-            orderToken: activeOrderToken || null,
-          }));
+        const draft = getCurrentDraft();
+        const activeOrderId = orderId || sessionStorage.getItem("dreamOrderId");
+        const activeOrderToken =
+          orderToken || draft.orderToken || sessionStorage.getItem("dreamCheckoutOrderToken");
+
+        if (activeOrderToken) {
+          const restored = await validateStoredOrderToken(activeOrderToken);
+          if (restored?.previewImageUrl) {
+            const meta = metaFromCheckoutOrder(restored);
+            if (!cancelled) {
+              setState({
+                imageUrl: restored.previewImageUrl,
+                meta,
+                orderId: restored.orderId,
+                orderToken: activeOrderToken,
+                orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken"),
+              });
+            }
+            return;
+          }
         }
-        return;
-      }
 
-      if (!cancelled) {
-        setState({
-        imageUrl: draft.previewImageUrl || sessionStorage.getItem("previewImageUrl") || "",
-        meta: draft.previewMeta || null,
-        orderId: draft.orderId || activeOrderId,
-        orderToken: activeOrderToken || null,
-        orderSnapshotToken:
-          draft.orderSnapshotToken ||
-          sessionStorage.getItem("dreamOrderSnapshotToken"),
-        });
-      }
+        if (!activeOrderId || draft.orderId !== activeOrderId) {
+          console.info("Checkout preview missing", {
+            hasOrderToken: Boolean(activeOrderToken),
+            hasOrderId: Boolean(activeOrderId),
+          });
+          if (!cancelled) {
+            setState((current) => ({
+              ...current,
+              orderId: activeOrderId || null,
+              orderToken: activeOrderToken || null,
+            }));
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setState({
+            imageUrl: draft.previewImageUrl || sessionStorage.getItem("previewImageUrl") || "",
+            meta: draft.previewMeta || null,
+            orderId: draft.orderId || activeOrderId,
+            orderToken: activeOrderToken || null,
+            orderSnapshotToken:
+              draft.orderSnapshotToken ||
+              sessionStorage.getItem("dreamOrderSnapshotToken"),
+          });
+        }
       } catch {
         if (!cancelled) {
           setState({
-        imageUrl: "",
-        meta: null,
-        orderId: orderId || null,
-        orderToken: orderToken || null,
-        orderSnapshotToken: null,
+            imageUrl: "",
+            meta: null,
+            orderId: orderId || null,
+            orderToken: orderToken || null,
+            orderSnapshotToken: null,
           });
         }
       }

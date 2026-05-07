@@ -5,6 +5,8 @@ import {
   inputFromDbOrder,
   markFinalFailed,
   markFinalGenerated,
+  resetFailedFinalGeneration,
+  resetStaleFinalGeneration,
   startFinalGeneration,
 } from "@/lib/orders";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
@@ -115,31 +117,72 @@ export async function POST(request: Request) {
     }
 
     if (order.status === "final_generating") {
-      logFinalFailure({
-        requestId,
-        orderId,
-        orderStatus,
-        finalGenerationAttempts,
-        failureReason: "Final already generating",
-      });
-      return finalError("Your wallpaper is already being created.", 409);
+      const reset = await resetStaleFinalGeneration(orderId);
+      if (reset) {
+        console.info("[generate-final]", {
+          requestId,
+          orderId,
+          orderStatus,
+          finalGenerationAttempts,
+          event: "stale_generation_reset",
+        });
+      } else {
+        console.info("[generate-final]", {
+          requestId,
+          orderId,
+          orderStatus,
+          finalGenerationAttempts,
+          event: "generation_still_in_progress",
+        });
+        return finalInProgress();
+      }
     }
 
     if (order.status === "failed") {
-      logFinalFailure({
-        requestId,
-        orderId,
-        orderStatus,
-        finalGenerationAttempts,
-        failureReason: "Final generation previously failed",
-      });
+      const reset = await resetFailedFinalGeneration(orderId);
+      if (!reset) {
+        logFinalFailure({
+          requestId,
+          orderId,
+          orderStatus,
+          finalGenerationAttempts,
+          failureReason: "Final generation previously failed",
+        });
+        return finalStatusError(
+          "failed",
+          "Your payment is verified, but generation failed. Please retry.",
+          500,
+        );
+      }
+    }
+
+    const claimableOrder = await getOrder(orderId);
+    orderStatus = claimableOrder?.status;
+    finalGenerationAttempts = claimableOrder?.final_generation_attempts;
+
+    if (!claimableOrder) {
+      logFinalFailure({ requestId, orderId, failureReason: "Order missing after reset" });
       return finalError(
-        "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
-        500,
+        "We found your payment session, but could not restore your wallpaper order. Please contact support.",
+        404,
       );
     }
 
-    if (order.status !== "paid") {
+    if (claimableOrder.status === "final_generated" && claimableOrder.final_r2_key) {
+      return finalSuccess(
+        claimableOrder.final_r2_key,
+        inputFromDbOrder(claimableOrder),
+        claimableOrder.width,
+        claimableOrder.height,
+        true,
+      );
+    }
+
+    if (claimableOrder.status === "final_generating") {
+      return finalInProgress();
+    }
+
+    if (claimableOrder.status !== "paid") {
       logFinalFailure({
         requestId,
         orderId,
@@ -173,7 +216,7 @@ export async function POST(request: Request) {
         finalGenerationAttempts,
         failureReason: "Unable to claim final generation atomically",
       });
-      return finalError("Your wallpaper is already being created.", 409);
+      return finalInProgress();
     }
 
     const env = getRuntimeEnv();
@@ -193,7 +236,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const input = inputFromDbOrder(order);
+    const input = inputFromDbOrder(claimableOrder);
     const prompt = buildFinalWallpaperPrompt(input);
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -251,8 +294,9 @@ export async function POST(request: Request) {
       success: true,
       imageUrl: savedFinal.url,
       finalImageUrl: savedFinal.url,
-      finalWidth: order.width,
-      finalHeight: order.height,
+      status: "ready",
+      finalWidth: claimableOrder.width,
+      finalHeight: claimableOrder.height,
       meta: getWallpaperMeta(input),
       reused: false,
     });
@@ -287,6 +331,7 @@ async function finalSuccess(
 ) {
   return NextResponse.json({
     success: true,
+    status: "ready",
     imageUrl: `/api/wallpaper-image/${encodeURIComponent(r2Key)}`,
     finalImageUrl: `/api/wallpaper-image/${encodeURIComponent(r2Key)}`,
     finalWidth,
@@ -294,6 +339,30 @@ async function finalSuccess(
     meta: getWallpaperMeta(input),
     reused,
   });
+}
+
+function finalInProgress() {
+  return NextResponse.json(
+    {
+      success: false,
+      status: "generating",
+      message: "Your wallpaper is still being created.",
+      error: "Your wallpaper is still being created.",
+    },
+    { status: 202 },
+  );
+}
+
+function finalStatusError(statusValue: string, message: string, status = 400) {
+  return NextResponse.json(
+    {
+      success: false,
+      status: statusValue,
+      message,
+      error: message,
+    },
+    { status },
+  );
 }
 
 async function saveRemoteFinalImage(orderId: string, url: string) {

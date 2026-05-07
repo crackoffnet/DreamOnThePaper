@@ -70,6 +70,13 @@ Cloudflare Workers are stateless, so checkout restoration uses the signed
 order state lives in D1, rate limits live in KV, and generated images live in
 R2.
 
+Browser state is versioned with `APP_STATE_VERSION` in
+`lib/appStateVersion.ts`. After major state, storage, or schema changes, update
+that value so stale browser tokens and drafts are cleared on `/create`,
+`/checkout`, and `/success`. Deployments do not automatically clear browser
+storage or D1 rows, so the app intentionally handles stale client state, expired
+unpaid orders, and in-progress final generation recovery.
+
 ## Stripe Setup
 
 In Stripe Dashboard:
@@ -178,8 +185,11 @@ Production helper modules are available for Cloudflare bindings:
 - `lib/cloudflare.ts` reads OpenNext Cloudflare bindings: `DB`,
   `DREAM_RATE_LIMITS`, and `WALLPAPER_BUCKET`.
 - `lib/orders.ts` stores order state in D1 and uses an atomic
-  `paid -> final_generating` update so one paid order can start final
-  generation only once.
+  `paid -> final_generating` update so a paid order can safely start final
+  generation. If a generation is already in progress, `/api/generate-final`
+  returns `202` and `/success` polls `/api/order-status` instead of failing.
+  Stale `final_generating` orders older than 10 minutes can retry once without
+  another payment.
 - `lib/storage.ts` stores image bytes in R2. Preview keys use
   `previews/{orderId}.webp`; final keys use `finals/{orderId}.png`.
 - `lib/rateLimit.ts` stores rate-limit counters and generation locks in KV.

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, X } from "lucide-react";
-import { clearDreamWallpaperState } from "@/lib/wallpaperDraft";
+import { clearDreamState } from "@/lib/clientState";
 
 type StartOverButtonProps = {
   className?: string;
@@ -14,9 +14,9 @@ export function StartOverButton({ className = "" }: StartOverButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   function startOver() {
-    clearDreamWallpaperState();
+    clearDreamState();
     setIsOpen(false);
-    router.push("/create");
+    router.replace("/create");
   }
 
   return (

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, RotateCcw } from "lucide-react";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { ResultPreview } from "@/components/ResultPreview";
 import { StartOverButton } from "@/components/StartOverButton";
+import { ensureAppStateVersion } from "@/lib/clientState";
 import {
   getEphemeralImage,
   imageUrlFromPayload,
@@ -14,6 +15,9 @@ import {
 import type { GenerateResponse } from "@/lib/types";
 
 type Step = "verifying" | "generating" | "done" | "error";
+type FinalGenerationResponse = GenerateResponse & {
+  status?: "ready" | "generating" | "failed" | string;
+};
 
 export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [step, setStep] = useState<Step>("verifying");
@@ -21,7 +25,137 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState("");
   const hasStartedRef = useRef(false);
 
+  const requestFinalGeneration = useCallback(
+    async (
+      finalGenerationToken: string,
+      signal: AbortSignal,
+    ): Promise<FinalGenerationResponse> => {
+      const generationResponse = await fetch("/api/generate-final", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ finalGenerationToken }),
+        signal,
+      });
+      const generated = (await generationResponse.json()) as
+        | FinalGenerationResponse
+        | undefined;
+
+      if (generationResponse.status === 202 || generated?.status === "generating") {
+        setMessage("Your wallpaper is being created...");
+        return { ...(generated || {}), status: "generating" };
+      }
+
+      const imageUrl = generated ? await imageUrlFromPayload(generated) : "";
+      if (!generationResponse.ok || !generated || !imageUrl || !generated.meta) {
+        throw new Error(
+          generated?.message ||
+            generated?.error ||
+            "Your payment is verified, but we could not finish generation. Please retry.",
+        );
+      }
+
+      return { ...generated, status: "ready", imageUrl };
+    },
+    [],
+  );
+
+  const pollFinalStatus = useCallback(
+    async (
+      finalGenerationToken: string,
+      signal: AbortSignal,
+    ): Promise<FinalGenerationResponse> => {
+      const deadline = Date.now() + 2 * 60 * 1000;
+
+      while (Date.now() < deadline) {
+        await sleep(3000, signal);
+
+        const response = await fetch("/api/order-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ finalGenerationToken }),
+          signal,
+        });
+        const status = (await response.json()) as FinalGenerationResponse;
+
+        if (status.status === "final_generated" || status.status === "ready") {
+          const imageUrl = await imageUrlFromPayload(status);
+          if (response.ok && imageUrl && status.meta) {
+            return { ...status, status: "ready", imageUrl };
+          }
+        }
+
+        if (status.status === "paid") {
+          return requestFinalGeneration(finalGenerationToken, signal);
+        }
+
+        if (status.status === "failed") {
+          throw new Error(
+            status.message ||
+              "Your payment is verified, but generation failed. Please retry.",
+          );
+        }
+
+        setMessage("Your wallpaper is being created...");
+      }
+
+      throw new Error(
+        "Your wallpaper is still being created. Please wait a moment and retry.",
+      );
+    },
+    [requestFinalGeneration],
+  );
+
+  const generateOrPollFinal = useCallback(
+    async (
+      finalGenerationToken: string,
+      signal: AbortSignal,
+    ): Promise<FinalGenerationResponse> => {
+      const generated = await requestFinalGeneration(finalGenerationToken, signal);
+
+      if (generated.status === "ready") {
+        return generated;
+      }
+
+      if (generated.status === "generating") {
+        return pollFinalStatus(finalGenerationToken, signal);
+      }
+
+      if (generated.status === "failed") {
+        throw new Error(
+          generated.message ||
+            "Your payment is verified, but generation failed. Please retry.",
+        );
+      }
+
+      return generated;
+    },
+    [pollFinalStatus, requestFinalGeneration],
+  );
+
+  const persistGeneratedWallpaper = useCallback(
+    (generated: FinalGenerationResponse) => {
+      const imageUrl = generated.imageUrl || generated.finalImageUrl || "";
+
+      setEphemeralImage("finalImageUrl", imageUrl);
+      sessionStorage.setItem("dreamFinalSessionId", sessionId);
+      if (generated.meta) {
+        sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
+      }
+      if (generated.finalWidth && generated.finalHeight) {
+        sessionStorage.setItem(
+          "dreamWallpaperDimensions",
+          JSON.stringify({
+            width: generated.finalWidth,
+            height: generated.finalHeight,
+          }),
+        );
+      }
+    },
+    [sessionId],
+  );
+
   useEffect(() => {
+    ensureAppStateVersion();
     console.info("[success] sessionId present", Boolean(sessionId));
 
     if (hasStartedRef.current) {
@@ -45,9 +179,15 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       return;
     }
 
-    void verifyAndGenerate();
+    const controller = new AbortController();
 
-    async function verifyAndGenerate() {
+    void verifyAndGenerate(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+
+    async function verifyAndGenerate(signal: AbortSignal) {
       try {
         console.info("[success] verifying payment");
         setStep("verifying");
@@ -56,6 +196,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId }),
+          signal,
         });
         const verified = (await verifyResponse.json()) as {
           success?: boolean;
@@ -91,47 +232,20 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         setStep("generating");
         setMessage("Creating your final wallpaper...");
         console.info("[success] generating final");
-        const generationResponse = await fetch("/api/generate-final", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            finalGenerationToken: verified.finalGenerationToken,
-          }),
-        });
-        const generated = (await generationResponse.json()) as
-          | GenerateResponse
-          | undefined;
-        const imageUrl = generated ? await imageUrlFromPayload(generated) : "";
+        const generated = await generateOrPollFinal(
+          verified.finalGenerationToken,
+          signal,
+        );
 
-        if (
-          !generationResponse.ok ||
-          generated?.success === false ||
-          !imageUrl ||
-          !generated?.meta
-        ) {
-          throw new Error(
-            generated?.message ||
-              generated?.error ||
-              "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
-          );
-        }
-
-        setEphemeralImage("finalImageUrl", imageUrl);
-        sessionStorage.setItem("dreamFinalSessionId", sessionId);
-        sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
-        if (generated.finalWidth && generated.finalHeight) {
-          sessionStorage.setItem(
-            "dreamWallpaperDimensions",
-            JSON.stringify({
-              width: generated.finalWidth,
-              height: generated.finalHeight,
-            }),
-          );
-        }
+        persistGeneratedWallpaper(generated);
         setStep("done");
         setMessage("Your full-resolution wallpaper is ready.");
         console.info("[success] final ready");
       } catch (successError) {
+        if (signal.aborted) {
+          return;
+        }
+
         setStep("error");
         setError(
           successError instanceof Error
@@ -140,7 +254,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         );
       }
     }
-  }, [sessionId]);
+  }, [generateOrPollFinal, persistGeneratedWallpaper, sessionId]);
 
   if (step === "done") {
     return <ResultPreview />;
@@ -183,4 +297,19 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       </div>
     </section>
   );
+}
+
+function sleep(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(resolve, ms);
+
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timeout);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 }

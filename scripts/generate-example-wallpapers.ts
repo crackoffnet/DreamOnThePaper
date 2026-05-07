@@ -8,17 +8,17 @@ type OpenAIImageResponse = {
 
 const prompts = {
   "soft-luxury":
-    "Create a premium vertical phone wallpaper in soft cream, beige, and muted gold tones. Minimal elegant composition, quiet luxury mood, subtle abstract light shapes, negative space for app icons. No words, no letters, no logo, no text.",
+    "Create a premium vertical phone wallpaper in soft cream, beige, and muted gold tones. Minimal elegant composition, quiet luxury mood, subtle abstract light shapes, negative space for app icons and website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
   "wealth-business":
-    "Create a premium vertical wallpaper with warm neutral tones, subtle desk/workspace abstraction, calm wealth energy, soft shadows, minimal gold details, lots of negative space. No words, no letters, no logo, no text.",
+    "Create a premium vertical wallpaper with warm neutral tones, subtle desk/workspace abstraction, calm wealth energy, soft shadows, minimal gold details, lots of negative space for website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
   "nature-reset":
-    "Create a premium vertical wallpaper with sage green, cream, and soft natural textures, gentle botanical abstract shapes, calm growth feeling, lots of negative space. No words, no letters, no logo, no text.",
+    "Create a premium vertical wallpaper with sage green, cream, and soft natural textures, gentle botanical abstract shapes, calm growth feeling, lots of negative space for website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
   "fitness-health":
-    "Create a premium vertical wallpaper with warm beige, stone, and soft charcoal accents, clean strength mood, subtle movement shapes, calm energy, not sporty or loud. No words, no letters, no logo, no text.",
+    "Create a premium vertical wallpaper with warm beige, stone, and soft charcoal accents, clean strength mood, subtle movement shapes, calm energy, not sporty or loud, with negative space for website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
   "family-home":
-    "Create a premium vertical wallpaper with warm home tones, soft sunlight, gentle abstract house and family symbols, cozy but elegant, not childish, negative space. No words, no letters, no logo, no text.",
+    "Create a premium vertical wallpaper with warm home tones, soft sunlight, gentle abstract house and family symbols, cozy but elegant, not childish, negative space for website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
   "freedom-travel":
-    "Create a premium vertical wallpaper with soft sky blue, cream, warm sand tones, abstract travel path and horizon feeling, airy composition, elegant minimal style. No words, no letters, no logo, no text.",
+    "Create a premium vertical wallpaper with soft sky blue, cream, warm sand tones, abstract travel path and horizon feeling, airy composition, elegant minimal style, negative space for website overlay text. No typography inside the image, no words, no letters, no logo, no text.",
 } satisfies Record<(typeof exampleWallpapers)[number]["id"], string>;
 
 async function main() {

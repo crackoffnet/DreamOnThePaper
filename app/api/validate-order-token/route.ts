@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder } from "@/lib/orders";
+import { getOrder, isUnpaidOrderExpired } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
 
 const validateOrderTokenSchema = z.object({
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const order = await getOrder(token.orderId);
-  if (!order || order.prompt_hash !== token.promptHash) {
+  if (!order || order.prompt_hash !== token.promptHash || isUnpaidOrderExpired(order)) {
     return NextResponse.json({ valid: false }, { status: 404 });
   }
 

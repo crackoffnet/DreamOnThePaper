@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HelpCircle, Loader2, Sparkles } from "lucide-react";
 import { DeviceSelector } from "@/components/DeviceSelector";
@@ -25,11 +25,15 @@ import {
   type PreviewPolicy,
   type WallpaperDraft,
 } from "@/lib/wallpaperDraft";
+import { ensureAppStateVersion } from "@/lib/clientState";
 import type {
   DeviceType,
+  QuoteTone,
   GenerateResponse,
+  ThemeType,
   WallpaperInput,
   WallpaperMeta,
+  WallpaperStyle,
 } from "@/lib/types";
 import {
   defaultWallpaperInput,
@@ -110,8 +114,9 @@ const stepTitles = [
   "Generate",
 ];
 
-export function WallpaperWizard() {
+export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) {
   const router = useRouter();
+  const appliedMoodRef = useRef(false);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WallpaperInput>(defaultWallpaperInput);
   const [website, setWebsite] = useState("");
@@ -125,6 +130,27 @@ export function WallpaperWizard() {
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
 
   useEffect(() => {
+    ensureAppStateVersion();
+    const moodPreset = getMoodPreset(initialMood);
+
+    if (moodPreset && !appliedMoodRef.current) {
+      appliedMoodRef.current = true;
+      const nextDraft = createNewWallpaperDraft();
+      const nextInput = {
+        ...nextDraft.input,
+        ...moodPreset,
+      };
+      const savedDraft = saveCurrentDraft({
+        ...nextDraft,
+        input: nextInput,
+      });
+      setDraft(savedDraft);
+      setForm(savedDraft.input);
+      setPolicy(getPreviewPolicy());
+      setStep(0);
+      return;
+    }
+
     const currentDraft = getCurrentDraft();
     setDraft(currentDraft);
     setForm(currentDraft.input);
@@ -132,7 +158,7 @@ export function WallpaperWizard() {
     if (currentDraft.previewStatus !== "not_started") {
       setStep(stepTitles.length - 1);
     }
-  }, []);
+  }, [initialMood]);
 
   function update<K extends keyof WallpaperInput>(
     key: K,
@@ -594,6 +620,59 @@ function checkoutHref(draft: WallpaperDraft) {
   }
 
   return `/checkout?orderId=${encodeURIComponent(draft.orderId || "")}`;
+}
+
+function getMoodPreset(value: string | null):
+  | Pick<WallpaperInput, "style" | "theme" | "quoteTone" | "feelingWords">
+  | null {
+  const presets: Record<
+    string,
+    {
+      style: WallpaperStyle;
+      theme: ThemeType;
+      quoteTone: QuoteTone;
+      feelingWords: string;
+    }
+  > = {
+    "soft-luxury": {
+      style: "soft-luxury",
+      theme: "light",
+      quoteTone: "soft-emotional",
+      feelingWords: "gentle, elegant, calm, expensive",
+    },
+    "wealth-business": {
+      style: "wealth-business",
+      theme: "dark",
+      quoteTone: "powerful-confident",
+      feelingWords: "confident, focused, calm, abundant",
+    },
+    "nature-reset": {
+      style: "nature",
+      theme: "light",
+      quoteTone: "spiritual-calm",
+      feelingWords: "calm, grounded, fresh, growing",
+    },
+    "fitness-health": {
+      style: "fitness-health",
+      theme: "light",
+      quoteTone: "powerful-confident",
+      feelingWords: "strong, steady, clear, energized",
+    },
+    "family-home": {
+      style: "family-home",
+      theme: "light",
+      quoteTone: "soft-emotional",
+      feelingWords: "warm, grateful, rooted, lasting",
+    },
+    "freedom-travel": {
+      style: "freedom-travel",
+      theme: "light",
+      quoteTone: "soft-emotional",
+      feelingWords: "expansive, free, light, open",
+    },
+  };
+
+  return value && value in presets ? presets[value] : null;
 }
 
 type CustomSizeFieldsProps = {

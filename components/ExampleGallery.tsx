@@ -32,27 +32,33 @@ export function ExampleGallery() {
               key={example.id}
               className="group min-w-[76vw] snap-center sm:min-w-0"
             >
-              <div className="relative aspect-[4/5] overflow-hidden rounded-[1.3rem] bg-linen shadow-[0_18px_50px_rgba(59,49,38,0.10)] transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_26px_70px_rgba(59,49,38,0.14)] sm:aspect-[6/5]">
-                <Image
-                  src={example.image}
-                  alt={`${example.title} wallpaper example`}
-                  fill
-                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 76vw"
-                  className="object-cover object-center transition duration-700 group-hover:scale-[1.035]"
-                />
-                <div className="absolute inset-0 bg-gradient-to-b from-ink/8 via-transparent to-ink/76 transition duration-300 group-hover:to-ink/66" />
-                <div className="absolute left-3 top-3 rounded-full border border-white/35 bg-pearl/70 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-cocoa backdrop-blur-md">
-                  {example.title}
+              <Link
+                href={`/create?mood=${encodeURIComponent(example.id)}`}
+                className="focus-ring block rounded-[1.3rem]"
+                aria-label={`Start creating with the ${example.title} mood`}
+              >
+                <div className="relative aspect-[4/5] overflow-hidden rounded-[1.3rem] bg-linen shadow-[0_18px_50px_rgba(59,49,38,0.10)] transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_26px_70px_rgba(59,49,38,0.14)] sm:aspect-[6/5]">
+                  <Image
+                    src={example.image}
+                    alt={`${example.title} wallpaper example`}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 76vw"
+                    className="object-cover object-center transition duration-700 group-hover:scale-[1.035]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-ink/8 via-transparent to-ink/76 transition duration-300 group-hover:to-ink/66" />
+                  <div className="absolute left-3 top-3 rounded-full border border-white/35 bg-pearl/70 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-cocoa backdrop-blur-md">
+                    {example.title}
+                  </div>
+                  <p className="absolute inset-x-4 bottom-4 max-w-[16rem] font-serif text-[1.25rem] leading-[1.08] text-white drop-shadow-md sm:text-[1.35rem]">
+                    {example.quote}
+                  </p>
+                  <div className="absolute right-3 top-3 opacity-0 transition duration-300 group-hover:opacity-100">
+                    <span className="rounded-full border border-white/35 bg-ink/35 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur-md">
+                      Start with this mood
+                    </span>
+                  </div>
                 </div>
-                <p className="absolute inset-x-4 bottom-4 max-w-[16rem] font-serif text-[1.25rem] leading-[1.08] text-white drop-shadow-md sm:text-[1.35rem]">
-                  {example.quote}
-                </p>
-                <div className="absolute right-3 top-3 opacity-0 transition duration-300 group-hover:opacity-100">
-                  <span className="rounded-full border border-white/35 bg-ink/35 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur-md">
-                    Start with this mood
-                  </span>
-                </div>
-              </div>
+              </Link>
             </article>
           ))}
         </div>
