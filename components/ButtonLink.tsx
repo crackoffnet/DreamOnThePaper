@@ -17,8 +17,8 @@ export function ButtonLink({
       href={href}
       className={
         variant === "primary"
-          ? "focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-6 text-sm font-medium text-pearl shadow-soft transition hover:-translate-y-0.5 hover:bg-cocoa"
-          : "focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-cocoa/10 bg-white/60 px-6 text-sm font-medium text-ink transition hover:-translate-y-0.5 hover:bg-white"
+          ? "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-[12.5px] font-medium text-pearl transition hover:-translate-y-px hover:bg-cocoa"
+          : "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-cocoa/10 bg-white/70 px-5 text-[12.5px] font-medium text-ink transition hover:-translate-y-px hover:bg-white"
       }
     >
       {children}
