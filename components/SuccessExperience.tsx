@@ -22,6 +22,7 @@ import type { GenerateResponse } from "@/lib/types";
 type Step = "verifying" | "generating" | "done" | "error";
 type FinalGenerationResponse = GenerateResponse & {
   status?: "ready" | "generating" | "failed" | string;
+  state?: string;
   packageType?: string;
   wallpaperType?: string;
   expectedAssets?: number;
@@ -29,10 +30,13 @@ type FinalGenerationResponse = GenerateResponse & {
   failedAssets?: number;
 };
 
+type ErrorKind = "retryable_generation" | "invalid_session" | "payment_pending";
+
 export function SuccessExperience({ sessionId }: { sessionId: string }) {
   const [step, setStep] = useState<Step>("verifying");
   const [message, setMessage] = useState("Verifying payment...");
   const [error, setError] = useState("");
+  const [errorKind, setErrorKind] = useState<ErrorKind>("retryable_generation");
   const hasStartedRef = useRef(false);
 
   const requestFinalGeneration = useCallback(
@@ -51,7 +55,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         | undefined;
 
       if (generationResponse.status === 202 || generated?.status === "generating") {
-        setMessage("Your wallpaper is being created...");
+        setMessage("We’re rendering the image, saving the final file, and preparing your download.");
         return { ...(generated || {}), status: "generating" };
       }
 
@@ -112,11 +116,16 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           );
         }
 
+        if (status.state === "payment_verified") {
+          setMessage("We’re preparing your final generation job. Please keep this tab open.");
+          continue;
+        }
+
         setMessage(progressMessage(packageType, completedAssets, expectedAssets, elapsed));
       }
 
       throw new Error(
-        "Generation is taking longer than expected. You can retry without another payment.",
+        "Your payment was received, but the final image could not be completed successfully. You can retry below without paying again.",
       );
     },
     [requestFinalGeneration],
@@ -245,11 +254,13 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           packageId?: string;
           wallpaperType?: string;
           customerEmail?: string | null;
+          state?: string;
           message?: string;
           error?: string;
         };
 
         if (!verifyResponse.ok || !verified.finalGenerationToken) {
+          setErrorKind(classifyVerifyError(verifyResponse.status, verified.state));
           throw new Error(
             verified.message ||
               verified.error ||
@@ -300,6 +311,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         }
 
         setStep("error");
+        setErrorKind(classifyRuntimeError(successError instanceof Error ? successError.message : ""));
         setError(
           successError instanceof Error
             ? successError.message
@@ -320,15 +332,17 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           <>
             <RotateCcw aria-hidden className="h-8 w-8 text-gold" />
             <h1 className="mt-4 text-3xl font-semibold text-ink">
-              We could not finish generation.
+              {errorHeading(errorKind)}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-taupe">{error}</p>
-            {sessionId ? (
+            <p className="mt-2 text-sm leading-6 text-taupe">
+              {errorBody(errorKind, error)}
+            </p>
+            {errorKind !== "invalid_session" && sessionId ? (
               <Link
                 href={`/success?session_id=${encodeURIComponent(sessionId)}`}
                 className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-6 text-sm font-semibold text-pearl"
               >
-                Retry
+                {errorKind === "payment_pending" ? "Retry" : "Retry Generation"}
               </Link>
             ) : null}
             <div className="mt-3">
@@ -341,9 +355,20 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
               <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
               {step === "verifying" ? "Verifying payment" : "Payment confirmed"}
             </div>
-            <h1 className="text-3xl font-semibold text-ink">{message}</h1>
+            <h1 className="text-3xl font-semibold text-ink">
+              {step === "verifying" ? "Verifying your payment." : "Creating your final wallpaper."}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-taupe">
+              {step === "verifying"
+                ? "We’re confirming your checkout session before we start the final image."
+                : "This usually takes 1–3 minutes. Please keep this tab open while we prepare your download."}
+            </p>
             <div className="mt-5">
-              <LoadingGeneration label={message} />
+              <LoadingGeneration
+                title="Your wallpaper is being generated"
+                description={message || "We’re rendering the image, saving the final file, and preparing your download."}
+                steps={["Rendering image", "Saving final file", "Preparing download"]}
+              />
             </div>
           </>
         )}
@@ -362,17 +387,58 @@ function progressMessage(
   expectedAssets: number,
   elapsedMs: number,
 ) {
-  const base = "Creating your wallpaper...";
-
-  if (elapsedMs > 8 * 60 * 1000) {
-    return "Generation is taking longer than expected. You can retry without another payment.";
+  if (elapsedMs > 5 * 60 * 1000) {
+    return "Generation is taking longer than expected. You can retry below without paying again.";
   }
 
   if (elapsedMs > 3 * 60 * 1000) {
-    return "Still working. You can leave this page open, or come back using this checkout success page.";
+    return "Still working. You can leave this page open while we finish preparing your download.";
   }
 
-  return `${base} This can take 1-3 minutes.`;
+  return "We’re rendering the image, saving the final file, and preparing your download.";
+}
+
+function classifyVerifyError(status: number, state?: string): ErrorKind {
+  if (state === "payment_pending" || status === 402) {
+    return "payment_pending";
+  }
+
+  if (state === "session_invalid" || status === 400 || status === 403 || status === 404 || status === 409) {
+    return "invalid_session";
+  }
+
+  return "retryable_generation";
+}
+
+function classifyRuntimeError(message: string): ErrorKind {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("session") || normalized.includes("no longer valid") || normalized.includes("could not find your checkout session")) {
+    return "invalid_session";
+  }
+  if (normalized.includes("payment is not verified")) {
+    return "payment_pending";
+  }
+  return "retryable_generation";
+}
+
+function errorHeading(kind: ErrorKind) {
+  if (kind === "invalid_session") {
+    return "We couldn’t open this wallpaper session.";
+  }
+  if (kind === "payment_pending") {
+    return "Payment verification is still in progress.";
+  }
+  return "We couldn’t finish your wallpaper yet.";
+}
+
+function errorBody(kind: ErrorKind, fallback: string) {
+  if (kind === "invalid_session") {
+    return "This link is no longer valid or the session has expired. Please start again to create a new wallpaper.";
+  }
+  if (kind === "payment_pending") {
+    return "Please wait a moment and try again. If this continues, return to checkout or contact support.";
+  }
+  return fallback || "Your payment was received, but the final image could not be completed successfully. You can retry below without paying again.";
 }
 
 function sleep(ms: number, signal: AbortSignal) {

@@ -366,6 +366,7 @@ export async function POST(request: Request) {
       return finalError(
         "Your payment is verified, but we couldn't finish every wallpaper. You will not be charged again. Please retry missing assets.",
         502,
+        "final_failed_retryable",
       );
     }
 
@@ -383,8 +384,9 @@ export async function POST(request: Request) {
       });
       return finalStatusError(
         "failed",
-        "Your payment is verified, but the final file is missing. Please retry generation.",
+        "Your payment was received, but the final image could not be completed successfully. Please retry without paying again.",
         500,
+        "final_failed_retryable",
       );
     }
     await markFinalGenerated(orderId, firstAsset?.r2_key || "");
@@ -453,6 +455,7 @@ export async function POST(request: Request) {
     return finalError(
       "Your payment is verified, but we couldn't finish the wallpaper generation. You will not be charged again. Please retry or contact support.",
       500,
+      "final_failed_retryable",
     );
   }
 }
@@ -487,6 +490,7 @@ function finalInProgress() {
     {
       success: false,
       status: "generating",
+      state: "final_generating",
       message: "Your wallpaper is still being created.",
       error: "Your wallpaper is still being created.",
     },
@@ -494,11 +498,17 @@ function finalInProgress() {
   );
 }
 
-function finalStatusError(statusValue: string, message: string, status = 400) {
+function finalStatusError(
+  statusValue: string,
+  message: string,
+  status = 400,
+  state = "final_failed_retryable",
+) {
   return NextResponse.json(
     {
       success: false,
       status: statusValue,
+      state,
       message,
       error: message,
     },
@@ -723,7 +733,7 @@ function logFinalFailure(details: {
   errorMessage?: string;
   envPresence?: ReturnType<typeof getRuntimeEnvPresence>;
 }) {
-  console.error("[generate-final]", details);
+  console.error("[final-generation-error]", details);
 }
 
 function logFinalTiming(details: {
@@ -746,10 +756,11 @@ function logFinalTiming(details: {
   console.info("[final-generation-timing]", details);
 }
 
-function finalError(message: string, status = 400) {
+function finalError(message: string, status = 400, state = "final_failed_retryable") {
   return NextResponse.json(
     {
       success: false,
+      state,
       message,
       error: message,
     },

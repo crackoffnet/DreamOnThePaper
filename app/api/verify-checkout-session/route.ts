@@ -113,6 +113,7 @@ export async function POST(request: Request) {
       return verifyError(
         "Payment is not verified yet. Please wait a moment and retry.",
         402,
+        "payment_pending",
       );
     }
 
@@ -127,6 +128,7 @@ export async function POST(request: Request) {
       return verifyError(
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         404,
+        "session_invalid",
       );
     }
 
@@ -144,6 +146,7 @@ export async function POST(request: Request) {
       return verifyError(
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         404,
+        "session_invalid",
       );
     }
 
@@ -161,6 +164,7 @@ export async function POST(request: Request) {
       return verifyError(
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         409,
+        "session_invalid",
       );
     }
 
@@ -180,6 +184,7 @@ export async function POST(request: Request) {
       return verifyError(
         "Payment is verified, but your order could not be updated. Please retry.",
         503,
+        "payment_verified",
       );
     }
     const customerEmail = session.customer_details?.email || undefined;
@@ -269,7 +274,7 @@ export async function POST(request: Request) {
       stripeMessage: error instanceof Error ? error.message : "Unknown verification error",
       envPresence: getRuntimeEnvPresence(),
     });
-    return verifyError("Unable to verify payment. Please contact support.", 500);
+    return verifyError("Unable to verify payment. Please contact support.", 500, "session_invalid");
   }
 }
 
@@ -314,10 +319,11 @@ function stripeErrorValue(error: unknown, key: "code" | "type") {
   return typeof value === "string" ? value : undefined;
 }
 
-function verifyError(message: string, status = 400) {
+function verifyError(message: string, status = 400, state = "session_invalid") {
   return NextResponse.json(
     {
       success: false,
+      state,
       message,
       error: message,
     },

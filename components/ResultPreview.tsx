@@ -33,6 +33,7 @@ type WallpaperDimensions = {
 
 type FinalAssetHealth = {
   success?: boolean;
+  state?: string;
   orderStatus?: string;
   hasFinalAssetRow?: boolean;
   finalAssetCount?: number;
@@ -111,6 +112,13 @@ export function ResultPreview() {
         }
 
         setAssetHealth(payload);
+        console.info("[result-page]", {
+          orderId: sessionStorage.getItem("dreamOrderId"),
+          paymentVerified: payload.orderStatus === "paid" || payload.orderStatus === "final_generated",
+          hasFinalAssetRow: payload.hasFinalAssetRow,
+          hasR2Object: payload.hasR2Object,
+          finalStatus: payload.state || payload.orderStatus,
+        });
 
         if (payload.hasR2Object && payload.assetId && result.meta) {
           const width = payload.width || result.dimensions?.width || dimensionsFromMeta(result.meta).width;
@@ -212,6 +220,7 @@ export function ResultPreview() {
     assetHealth?.orderStatus === "failed" ||
     !asset;
   const retryHref = sessionId ? `/success?session_id=${encodeURIComponent(sessionId)}` : "/create";
+  const failureState = assetHealth?.state || "final_failed_retryable";
 
   if (missingFinalAsset) {
     return (
@@ -219,19 +228,31 @@ export function ResultPreview() {
         <div className="rounded-[1.75rem] border border-white/70 bg-white/60 p-6 shadow-soft">
           <Sparkles aria-hidden className="mb-4 h-6 w-6 text-gold" />
           <h1 className="text-3xl font-semibold text-ink">
-            We could not find your generated wallpaper.
+            {failureState === "session_invalid"
+              ? "We couldn’t open this wallpaper session."
+              : failureState === "payment_pending" || failureState === "payment_verified"
+                ? "Payment verification is still in progress."
+                : "We couldn’t finish your wallpaper yet."}
           </h1>
           <p className="mt-3 text-sm leading-6 text-taupe">
-            {assetHealth?.message ||
-              "Your payment is verified, but the final file is missing. Please retry generation."}
+            {failureState === "session_invalid"
+              ? "This session is no longer available. Please start again to create a new wallpaper."
+              : failureState === "payment_pending" || failureState === "payment_verified"
+                ? "Please wait a moment and try again. If this continues, return to checkout or contact support."
+                : assetHealth?.message ||
+                  "Your payment was received, but the final image could not be completed successfully. You can retry below without paying again."}
           </p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href={retryHref}
-              className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-medium text-pearl"
-            >
-              Retry Generation
-            </Link>
+            {failureState !== "session_invalid" ? (
+              <Link
+                href={retryHref}
+                className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-medium text-pearl"
+              >
+                {failureState === "payment_pending" || failureState === "payment_verified"
+                  ? "Retry"
+                  : "Retry Generation"}
+              </Link>
+            ) : null}
             <StartOverButton className="min-h-11 px-5 text-sm font-medium" />
           </div>
         </div>

@@ -61,10 +61,21 @@ export async function POST(request: Request) {
       order.status === "final_generated" && !resolved.hasR2Object
         ? "failed"
         : order.status;
+    const state =
+      effectiveStatus === "failed"
+        ? "final_failed_retryable"
+        : effectiveStatus === "final_generating"
+          ? "final_generating"
+          : effectiveStatus === "paid"
+            ? "payment_verified"
+            : resolved.hasR2Object
+              ? "final_generated"
+              : "session_invalid";
 
     return NextResponse.json({
       success: true,
       status: effectiveStatus,
+      state,
       hasFinalImage: resolved.hasR2Object,
       finalImageUrl,
       imageUrl: finalImageUrl,
