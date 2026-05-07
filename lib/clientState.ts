@@ -25,6 +25,7 @@ const explicitStateKeys = [
   "dreamWallpaperDraft",
   "dreamCheckoutPackage",
   "dreamFinalGenerationToken",
+  "dreamResultAccessToken",
   "dreamFinalImageUrl",
   "dreamSelectedDevice",
   "dreamSelectedRatio",
@@ -66,6 +67,7 @@ export type DreamState = {
   previewImageUrl?: string | null;
   previewImageId?: string | null;
   finalGenerationToken?: string | null;
+  resultAccessToken?: string | null;
   finalImageUrl?: string | null;
   finalSessionId?: string | null;
   customerEmail?: string | null;
@@ -83,6 +85,7 @@ export type CurrentOrderState = {
   previewImageUrl?: string | null;
   previewImageId?: string | null;
   finalGenerationToken?: string | null;
+  resultAccessToken?: string | null;
   finalImageUrl?: string | null;
 };
 
@@ -236,13 +239,14 @@ export function saveCurrentOrderState(state: CurrentOrderState) {
     previewImageUrl: state.previewImageUrl ?? null,
     previewImageId: state.previewImageId ?? null,
     finalGenerationToken: state.finalGenerationToken ?? null,
+    resultAccessToken: state.resultAccessToken ?? null,
     finalImageUrl: state.finalImageUrl ?? null,
     previewCreatedAt:
       state.previewImageUrl ? now : getDreamState()?.previewCreatedAt || null,
     checkoutStartedAt:
       state.orderToken ? now : getDreamState()?.checkoutStartedAt || null,
     status:
-      state.finalGenerationToken || state.finalImageUrl
+      state.finalGenerationToken || state.resultAccessToken || state.finalImageUrl
         ? "paid"
         : state.orderToken
           ? "preview_created"
@@ -258,6 +262,7 @@ export function getCurrentOrderState(): CurrentOrderState {
     previewImageUrl: state?.previewImageUrl || null,
     previewImageId: state?.previewImageId || null,
     finalGenerationToken: state?.finalGenerationToken || null,
+    resultAccessToken: state?.resultAccessToken || null,
     finalImageUrl: state?.finalImageUrl || null,
   };
 }
@@ -299,6 +304,7 @@ function mirrorDreamStateKeys(state: DreamState) {
   setOrRemove("dreamPreviewImageUrl", state.previewImageUrl);
   setOrRemove("dreamPreviewImageId", state.previewImageId);
   setOrRemove("dreamFinalGenerationToken", state.finalGenerationToken);
+  setOrRemove("dreamResultAccessToken", state.resultAccessToken);
   setOrRemove("finalImageUrl", state.finalImageUrl);
   setOrRemove("dreamFinalImageUrl", state.finalImageUrl);
   setOrRemove("dreamWallpaperType", state.wallpaperType);
@@ -387,6 +393,7 @@ function hydrateLegacyDreamState(): DreamState {
   const previewGenerated = sessionStorage.getItem("dreamPreviewGenerated") === "true";
   const finalImageUrl = sessionStorage.getItem("finalImageUrl");
   const finalGenerationToken = sessionStorage.getItem("dreamFinalGenerationToken");
+  const resultAccessToken = sessionStorage.getItem("dreamResultAccessToken");
 
   return {
     draftId:
@@ -414,12 +421,13 @@ function hydrateLegacyDreamState(): DreamState {
     previewImageUrl: sessionStorage.getItem("previewImageUrl"),
     previewImageId: sessionStorage.getItem("dreamPreviewImageId"),
     finalGenerationToken,
+    resultAccessToken,
     finalImageUrl,
     finalSessionId: sessionStorage.getItem("dreamFinalSessionId"),
     customerEmail: sessionStorage.getItem("dreamCustomerEmail"),
     status: finalImageUrl
       ? "final_generated"
-      : finalGenerationToken
+      : finalGenerationToken || resultAccessToken
         ? "paid"
         : previewGenerated
           ? "preview_created"
@@ -437,6 +445,7 @@ function hasMeaningfulDreamState(state: DreamState) {
       state.orderToken ||
       state.previewImageUrl ||
       state.finalGenerationToken ||
+      state.resultAccessToken ||
       state.finalImageUrl,
   );
 }

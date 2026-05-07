@@ -14,13 +14,16 @@ import {
   startFinalGeneration,
 } from "@/lib/orders";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
-import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin, safeLog } from "@/lib/security";
 import { saveFinalAssetImage } from "@/lib/storage";
 import {
   assetToResult,
   resolveServableFinalAssets,
 } from "@/lib/finalAssetState";
+import {
+  getBearerToken,
+  verifyResultOrFinalAccessToken,
+} from "@/lib/resultAccessToken";
 import {
   buildFinalAssetPrompt,
   buildFinalGenerationPlan,
@@ -49,15 +52,17 @@ type FinalImageConfig = {
 
 const generateFinalSchema = z
   .object({
+    resultAccessToken: z.string().min(24).max(12000).optional(),
     finalGenerationToken: z.string().min(24).max(12000).optional(),
     orderToken: z.string().min(24).max(12000).optional(),
   })
   .transform((input) => ({
-    finalGenerationToken: input.finalGenerationToken || input.orderToken || "",
+    accessToken:
+      input.resultAccessToken || input.finalGenerationToken || input.orderToken || "",
   }))
-  .refine((input) => input.finalGenerationToken.length >= 24, {
+  .refine((input) => input.accessToken.length >= 24, {
     message: "Please confirm payment before generating.",
-    path: ["finalGenerationToken"],
+    path: ["resultAccessToken"],
   });
 
 export async function POST(request: Request) {
@@ -78,17 +83,19 @@ export async function POST(request: Request) {
     const parsed = generateFinalSchema.safeParse(body);
 
     if (!parsed.success) {
-      logFinalFailure({ requestId, failureReason: "Missing finalGenerationToken" });
+      logFinalFailure({ requestId, failureReason: "Missing result access token" });
       return finalError("Please confirm payment before generating.", 402);
     }
 
-    const token = await verifyFinalGenerationToken(parsed.data.finalGenerationToken);
+    const token = await verifyResultOrFinalAccessToken(
+      parsed.data.accessToken || getBearerToken(request),
+    );
     if (!token) {
       logFinalFailure({
         requestId,
-        failureReason: "Invalid or expired finalGenerationToken",
+        failureReason: "Invalid or expired result access token",
       });
-      return finalError("Please confirm payment before generating.", 402);
+      return finalError("This result link is no longer valid.", 403, "session_invalid");
     }
 
     orderId = token.orderId;
@@ -112,7 +119,6 @@ export async function POST(request: Request) {
     }
 
     if (
-      order.prompt_hash !== token.promptHash ||
       order.stripe_session_id !== token.sessionId
     ) {
       logFinalFailure({
@@ -122,7 +128,7 @@ export async function POST(request: Request) {
         finalGenerationAttempts,
         failureReason: "Final token does not match D1 order",
       });
-      return finalError("Unable to verify this paid order.", 400);
+      return finalError("This result link is no longer valid.", 403, "session_invalid");
     }
 
     const packageType: PackageId = "single";

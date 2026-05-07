@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrder, inputFromDbOrder } from "@/lib/orders";
-import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 import { resolveServableFinalAssets } from "@/lib/finalAssetState";
 import type { PackageId } from "@/lib/packages";
+import {
+  getBearerToken,
+  verifyResultOrFinalAccessToken,
+} from "@/lib/resultAccessToken";
 
 const orderStatusSchema = z.object({
-  finalGenerationToken: z.string().min(24).max(12000),
+  resultAccessToken: z.string().min(24).max(12000).optional(),
+  finalGenerationToken: z.string().min(24).max(12000).optional(),
 });
 
 export async function POST(request: Request) {
@@ -22,13 +26,17 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null);
     const parsed = orderStatusSchema.safeParse(body);
 
-    if (!parsed.success) {
+    if (!parsed.success || (!parsed.data.resultAccessToken && !parsed.data.finalGenerationToken && !request.headers.get("authorization"))) {
       return statusError("Please confirm payment before checking status.", 402);
     }
 
-    const token = await verifyFinalGenerationToken(parsed.data.finalGenerationToken);
+    const token = await verifyResultOrFinalAccessToken(
+      parsed.data.resultAccessToken ||
+        parsed.data.finalGenerationToken ||
+        getBearerToken(request),
+    );
     if (!token) {
-      return statusError("Please confirm payment before checking status.", 402);
+      return statusError("This result link is no longer valid.", 403, "RESULT_ACCESS_DENIED");
     }
 
     const order = await getOrder(token.orderId);
@@ -42,7 +50,6 @@ export async function POST(request: Request) {
     }
 
     if (
-      order.prompt_hash !== token.promptHash ||
       order.stripe_session_id !== token.sessionId
     ) {
       console.error("[order-status]", {
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
         orderId: token.orderId,
         failureReason: "Token does not match D1 order",
       });
-      return statusError("Unable to verify this paid order.", 400);
+      return statusError("This result link is no longer valid.", 403, "RESULT_ACCESS_DENIED");
     }
 
     const packageType: PackageId = "single";
@@ -103,10 +110,11 @@ export async function POST(request: Request) {
   }
 }
 
-function statusError(message: string, status = 400) {
+function statusError(message: string, status = 400, code?: string) {
   return NextResponse.json(
     {
       success: false,
+      code,
       message,
       error: message,
     },

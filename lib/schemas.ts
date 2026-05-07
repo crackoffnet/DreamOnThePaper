@@ -139,8 +139,12 @@ export const verifyPaymentSchema = z
 
 export const emailWallpaperSchema = z.object({
   email: z.string().email().max(254),
-  finalGenerationToken: z.string().min(24).max(12000),
+  finalGenerationToken: z.string().min(24).max(12000).optional(),
+  resultAccessToken: z.string().min(24).max(12000).optional(),
   website: z.string().max(0).optional().or(z.literal("")),
+}).refine((input) => Boolean(input.finalGenerationToken || input.resultAccessToken), {
+  message: "Missing paid result access token.",
+  path: ["resultAccessToken"],
 });
 
 export function hasMeaningfulInput(input: z.infer<typeof wallpaperInputSchema>) {

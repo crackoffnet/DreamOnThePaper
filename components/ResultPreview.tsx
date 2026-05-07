@@ -56,7 +56,7 @@ export function ResultPreview() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingAsset, setIsCheckingAsset] = useState(true);
-  const [orderToken, setOrderToken] = useState("");
+  const [resultAccessToken, setResultAccessToken] = useState("");
   const [orderId, setOrderId] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [assetHealth, setAssetHealth] = useState<FinalAssetHealth | null>(null);
@@ -80,7 +80,11 @@ export function ResultPreview() {
     );
 
     setResult({ imageUrl, input, meta, dimensions, finalAssets, wallpaperType });
-    setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
+    setResultAccessToken(
+      sessionStorage.getItem("dreamResultAccessToken") ||
+        sessionStorage.getItem("dreamOrderToken") ||
+        "",
+    );
     setOrderId(sessionStorage.getItem("dreamOrderId") || "");
     setSessionId(sessionStorage.getItem("dreamFinalSessionId") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 250);
@@ -92,27 +96,87 @@ export function ResultPreview() {
       return;
     }
 
-    if (!orderToken) {
-      setIsCheckingAsset(false);
-      return;
-    }
-
     let cancelled = false;
 
     async function verifyAsset() {
       try {
-        const response = await fetch("/api/final-asset-health", {
+        let activeToken = resultAccessToken;
+        if (!activeToken && sessionId) {
+          const refresh = await fetch("/api/verify-checkout-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+          const refreshed = (await refresh.json().catch(() => null)) as
+            | { resultAccessToken?: string; finalGenerationToken?: string; orderId?: string }
+            | null;
+          if (refresh.ok && refreshed?.resultAccessToken) {
+            sessionStorage.setItem("dreamResultAccessToken", refreshed.resultAccessToken);
+            sessionStorage.setItem(
+              "dreamFinalGenerationToken",
+              refreshed.finalGenerationToken || refreshed.resultAccessToken,
+            );
+            if (refreshed.orderId) {
+              sessionStorage.setItem("dreamOrderId", refreshed.orderId);
+              setOrderId(refreshed.orderId);
+            }
+            setResultAccessToken(refreshed.resultAccessToken);
+            activeToken = refreshed.resultAccessToken;
+          }
+        }
+
+        if (!activeToken) {
+          if (!cancelled) {
+            setAssetHealth({
+              success: false,
+              state: "session_invalid",
+              orderStatus: "failed",
+              hasR2Object: false,
+              message: "This session is no longer available. Please start again to create a new wallpaper.",
+            });
+          }
+          return;
+        }
+
+        let response = await fetch("/api/final-asset-health", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ finalGenerationToken: orderToken }),
+          body: JSON.stringify({ resultAccessToken: activeToken, orderId: orderId || undefined }),
         });
+        if (response.status === 403 && sessionId) {
+          const refresh = await fetch("/api/verify-checkout-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+          const refreshed = (await refresh.json().catch(() => null)) as
+            | { resultAccessToken?: string; finalGenerationToken?: string }
+            | null;
+          if (refresh.ok && refreshed?.resultAccessToken) {
+            sessionStorage.setItem("dreamResultAccessToken", refreshed.resultAccessToken);
+            sessionStorage.setItem(
+              "dreamFinalGenerationToken",
+              refreshed.finalGenerationToken || refreshed.resultAccessToken,
+            );
+            setResultAccessToken(refreshed.resultAccessToken);
+            activeToken = refreshed.resultAccessToken;
+            response = await fetch("/api/final-asset-health", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                resultAccessToken: activeToken,
+                orderId: orderId || undefined,
+              }),
+            });
+          }
+        }
         const payload = (await response.json()) as FinalAssetHealth;
         if (cancelled) {
           return;
         }
 
         setAssetHealth(payload);
-        console.info("[result-page]", {
+        console.info("[success-page]", {
           orderId: sessionStorage.getItem("dreamOrderId"),
           paymentVerified: payload.orderStatus === "paid" || payload.orderStatus === "final_generated",
           hasFinalAssetRow: payload.hasFinalAssetRow,
@@ -125,7 +189,7 @@ export function ResultPreview() {
           const height =
             payload.height || result.dimensions?.height || dimensionsFromMeta(result.meta).height;
           const assetType = payload.assetType || result.wallpaperType;
-          const imageUrl = `/api/final-asset?assetId=${encodeURIComponent(payload.assetId)}`;
+          const imageUrl = `/api/final-asset?orderId=${encodeURIComponent(orderId || sessionStorage.getItem("dreamOrderId") || "")}&assetId=${encodeURIComponent(payload.assetId)}`;
           setResult((current) => ({
             ...current,
             imageUrl,
@@ -167,11 +231,13 @@ export function ResultPreview() {
     };
   }, [
     isLoading,
-    orderToken,
+    resultAccessToken,
     result.meta,
     result.wallpaperType,
     result.dimensions?.width,
     result.dimensions?.height,
+    orderId,
+    sessionId,
   ]);
 
   if (isLoading || isCheckingAsset) {
@@ -214,7 +280,7 @@ export function ResultPreview() {
   const asset = result.finalAssets[0];
   const wallpaperTypeLabel = labelForWallpaperType(result.wallpaperType || meta.device);
   const missingFinalAsset =
-    !orderToken ||
+    !resultAccessToken ||
     imageLoadFailed ||
     assetHealth?.hasR2Object === false ||
     assetHealth?.orderStatus === "failed" ||
@@ -288,7 +354,7 @@ export function ResultPreview() {
         <div className="mt-6 grid gap-3">
           <DownloadButton
             asset={asset}
-            orderToken={orderToken}
+            resultAccessToken={resultAccessToken}
             filename={filenameForAsset(asset, orderIdShort)}
             label="Download Wallpaper"
             onError={setDownloadError}
@@ -314,7 +380,7 @@ export function ResultPreview() {
         </p>
         <div className="mt-4 grid gap-3">
           <SharePanel />
-          <EmailDeliveryForm finalGenerationToken={orderToken} />
+          <EmailDeliveryForm resultAccessToken={resultAccessToken} />
         </div>
       </div>
 
@@ -322,7 +388,7 @@ export function ResultPreview() {
         <div className="flex justify-center">
           <AssetPreviewCard
             asset={asset}
-            orderToken={orderToken}
+            resultAccessToken={resultAccessToken}
             single
             aspectRatio={meta.aspectRatio}
             onImageError={() => setImageLoadFailed(true)}
@@ -338,18 +404,18 @@ export function ResultPreview() {
 
 function AssetPreviewCard({
   asset,
-  orderToken,
+  resultAccessToken,
   single,
   aspectRatio,
   onImageError,
 }: {
   asset: FinalAssetResult;
-  orderToken: string;
+  resultAccessToken: string;
   single: boolean;
   aspectRatio?: string;
   onImageError: () => void;
 }) {
-  const protectedImageUrl = withDownloadToken(asset.imageUrl, orderToken);
+  const protectedImageUrl = withDownloadToken(asset.imageUrl, resultAccessToken);
   const dimensionsLabel = `${asset.width} × ${asset.height} px`;
 
   return (
@@ -380,13 +446,13 @@ function AssetPreviewCard({
 
 function DownloadButton({
   asset,
-  orderToken,
+  resultAccessToken,
   filename,
   label,
   onError,
 }: {
   asset: FinalAssetResult;
-  orderToken: string;
+  resultAccessToken: string;
   filename: string;
   label: string;
   onError: (message: string) => void;
@@ -399,7 +465,7 @@ function DownloadButton({
 
     try {
       const response = await fetch(
-        withDownloadMode(withDownloadToken(asset.imageUrl, orderToken)),
+        withDownloadMode(withDownloadToken(asset.imageUrl, resultAccessToken)),
       );
       const payload = (await response
         .clone()

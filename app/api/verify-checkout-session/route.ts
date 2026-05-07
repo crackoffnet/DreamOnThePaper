@@ -5,9 +5,14 @@ import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import {
   attachStripeSessionIfMissing,
   getOrder,
+  getOrderByStripeSessionId,
   markOrderPaid,
 } from "@/lib/orders";
 import { signFinalGenerationToken } from "@/lib/payment";
+import {
+  getResultAccessTokenTtlSeconds,
+  signResultAccessToken,
+} from "@/lib/resultAccessToken";
 import type { PackageId } from "@/lib/plans";
 import { normalizePackageId } from "@/lib/packages";
 import { wallpaperProductFromDevice } from "@/lib/wallpaperProducts";
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
 
     const sessionId = parsed.data.sessionId;
     sessionIdPrefix = sessionId.slice(0, 8);
-    console.info("[verify-checkout]", {
+    console.info("[verify-checkout-session]", {
       requestId,
       hasSessionId: true,
       sessionIdPrefix,
@@ -114,10 +119,14 @@ export async function POST(request: Request) {
         "Payment is not verified yet. Please wait a moment and retry.",
         402,
         "payment_pending",
+        "PAYMENT_NOT_VERIFIED",
       );
     }
 
-    orderId = session.metadata?.orderId || undefined;
+    orderId =
+      session.metadata?.orderId ||
+      (await getOrderByStripeSessionId(session.id))?.id ||
+      undefined;
     if (!orderId) {
       logVerifyFailure({
         requestId,
@@ -129,6 +138,7 @@ export async function POST(request: Request) {
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         404,
         "session_invalid",
+        "ORDER_NOT_FOUND",
       );
     }
 
@@ -147,6 +157,7 @@ export async function POST(request: Request) {
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         404,
         "session_invalid",
+        "ORDER_NOT_FOUND",
       );
     }
 
@@ -165,6 +176,7 @@ export async function POST(request: Request) {
         "We found your payment session, but could not restore your wallpaper order. Please contact support.",
         409,
         "session_invalid",
+        "ORDER_NOT_FOUND",
       );
     }
 
@@ -185,6 +197,7 @@ export async function POST(request: Request) {
         "Payment is verified, but your order could not be updated. Please retry.",
         503,
         "payment_verified",
+        "ORDER_UPDATE_FAILED",
       );
     }
     const customerEmail = session.customer_details?.email || undefined;
@@ -241,14 +254,19 @@ export async function POST(request: Request) {
       packageId: packageId || paidOrder.package_type || "single",
       promptHash: paidOrder.prompt_hash,
     });
+    const resultAccessToken = await signResultAccessToken({
+      orderId,
+      stripeCheckoutSessionId: session.id,
+    });
 
-    console.info("[verify-checkout]", {
+    console.info("[verify-checkout-session]", {
       requestId,
       hasSessionId: true,
       sessionIdPrefix,
       orderId,
       paymentStatus,
       event: "payment_verified",
+      issuedResultAccessToken: true,
     });
 
     return NextResponse.json({
@@ -260,6 +278,9 @@ export async function POST(request: Request) {
         session.metadata?.wallpaperType || paidOrder.wallpaper_type || paidOrder.device,
       ),
       customerEmail: customerEmail || null,
+      status: paidOrder.status,
+      resultAccessToken,
+      expiresInSeconds: getResultAccessTokenTtlSeconds(),
       finalGenerationToken,
     });
   } catch (error) {
@@ -274,7 +295,7 @@ export async function POST(request: Request) {
       stripeMessage: error instanceof Error ? error.message : "Unknown verification error",
       envPresence: getRuntimeEnvPresence(),
     });
-    return verifyError("Unable to verify payment. Please contact support.", 500, "session_invalid");
+    return verifyError("Unable to verify payment. Please contact support.", 500, "session_invalid", "SESSION_VERIFY_FAILED");
   }
 }
 
@@ -307,7 +328,7 @@ function logVerifyFailure(details: {
   stripeMessage?: string;
   envPresence?: ReturnType<typeof getRuntimeEnvPresence>;
 }) {
-  console.error("[verify-checkout]", details);
+  console.error("[verify-checkout-session]", details);
 }
 
 function stripeErrorValue(error: unknown, key: "code" | "type") {
@@ -319,11 +340,17 @@ function stripeErrorValue(error: unknown, key: "code" | "type") {
   return typeof value === "string" ? value : undefined;
 }
 
-function verifyError(message: string, status = 400, state = "session_invalid") {
+function verifyError(
+  message: string,
+  status = 400,
+  state = "session_invalid",
+  code = "SESSION_VERIFY_FAILED",
+) {
   return NextResponse.json(
     {
       success: false,
       state,
+      code,
       message,
       error: message,
     },

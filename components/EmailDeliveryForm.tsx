@@ -4,10 +4,10 @@ import { FormEvent, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
 
 type EmailDeliveryFormProps = {
-  finalGenerationToken: string;
+  resultAccessToken: string;
 };
 
-export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormProps) {
+export function EmailDeliveryForm({ resultAccessToken }: EmailDeliveryFormProps) {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState("");
@@ -22,7 +22,7 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
       const response = await fetch("/api/send-wallpaper-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, finalGenerationToken, website }),
+        body: JSON.stringify({ email, resultAccessToken, website }),
       });
       const data = (await response.json()) as {
         error?: string;
@@ -70,7 +70,7 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
       />
       <button
         type="submit"
-        disabled={isSending || !finalGenerationToken}
+        disabled={isSending || !resultAccessToken}
         className="focus-ring mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-ink transition hover:bg-pearl disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSending ? (

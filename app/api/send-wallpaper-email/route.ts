@@ -4,7 +4,6 @@ import {
   checkEmailIpRateLimit,
   checkEmailOrderRateLimit,
 } from "@/lib/rateLimit";
-import { verifyFinalGenerationToken } from "@/lib/payment";
 import { getFinalAssets, getOrder } from "@/lib/orders";
 import { getRuntimeEnv, isFromNameUsingFallback } from "@/lib/env";
 import { getImage } from "@/lib/storage";
@@ -15,6 +14,7 @@ import {
   patchOrderTracking,
   trackOrderEvent,
 } from "@/lib/orderEvents";
+import { verifyResultOrFinalAccessToken } from "@/lib/resultAccessToken";
 
 const unavailableMessage =
   "Email delivery is temporarily unavailable. Please use Download Wallpaper.";
@@ -50,7 +50,8 @@ export async function POST(request: Request) {
       return emailError("Please enter a valid email address.");
     }
 
-    const token = await verifyFinalGenerationToken(parsed.data.finalGenerationToken);
+    const tokenValue = parsed.data.resultAccessToken || parsed.data.finalGenerationToken || "";
+    const token = tokenValue ? await verifyResultOrFinalAccessToken(tokenValue) : null;
     const order = token ? await getOrder(token.orderId) : null;
     orderId = token?.orderId;
 
@@ -58,7 +59,6 @@ export async function POST(request: Request) {
       !token ||
       !order ||
       order.status !== "final_generated" ||
-      order.prompt_hash !== token.promptHash ||
       order.stripe_session_id !== token.sessionId
     ) {
       logEmailFailure({

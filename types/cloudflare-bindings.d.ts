@@ -79,6 +79,7 @@ interface CloudflareEnv {
   OPENAI_FINAL_IMAGE_MODEL?: string;
   OPENAI_FINAL_IMAGE_QUALITY?: string;
   ORDER_TOKEN_SECRET?: string;
+  RESULT_TOKEN_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_SINGLE_PRICE_ID?: string;
   NEXT_PUBLIC_SITE_URL?: string;

@@ -106,7 +106,7 @@ export function assetToResult(asset: FinalAsset): FinalAssetResult {
     id: asset.id,
     assetType: asset.asset_type,
     label: labelForAsset(asset.asset_type),
-    imageUrl: `/api/final-asset?assetId=${encodeURIComponent(asset.id)}`,
+    imageUrl: `/api/final-asset?orderId=${encodeURIComponent(asset.order_id)}&assetId=${encodeURIComponent(asset.id)}`,
     width: asset.width,
     height: asset.height,
     format: "PNG",

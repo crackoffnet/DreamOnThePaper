@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getFinalAssetById, getOrder } from "@/lib/orders";
-import { verifyFinalGenerationToken } from "@/lib/payment";
 import { getImageResponse } from "@/lib/storage";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
@@ -8,32 +7,47 @@ import {
   patchOrderTracking,
   trackOrderEvent,
 } from "@/lib/orderEvents";
+import {
+  getBearerToken,
+  verifyResultOrFinalAccessToken,
+} from "@/lib/resultAccessToken";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const requestId = crypto.randomUUID();
   const requestMetadata = await getRequestMetadata(request);
   const assetId = url.searchParams.get("assetId") || "";
+  const orderId = url.searchParams.get("orderId") || "";
   const tokenValue = url.searchParams.get("token") || "";
 
-  if (!assetId || !tokenValue) {
+  if (!assetId || !orderId || (!tokenValue && !request.headers.get("authorization"))) {
     return assetError("Missing wallpaper access details.", 400, "FINAL_ASSET_BAD_REQUEST");
   }
 
-  const token = await verifyFinalGenerationToken(tokenValue);
-  if (!token) {
+  const verifiedToken = await verifyResultOrFinalAccessToken(
+    tokenValue || getBearerToken(request),
+  );
+  console.info("[final-asset-auth]", {
+    requestId,
+    orderId,
+    assetId,
+    hasToken: Boolean(tokenValue || request.headers.get("authorization")),
+    tokenValid: Boolean(verifiedToken),
+    failureReason: verifiedToken ? undefined : "missing_or_invalid_token",
+  });
+  if (!verifiedToken) {
     return assetError(
-      "This wallpaper link is expired or invalid.",
+      "This result link is no longer valid.",
       403,
-      "FINAL_ASSET_UNAUTHORIZED",
+      "RESULT_ACCESS_DENIED",
     );
   }
 
-  const order = await getOrder(token.orderId);
+  const order = await getOrder(verifiedToken.orderId);
   if (!order) {
     console.warn("[final-asset]", {
       requestId,
-      orderId: token.orderId,
+      orderId: verifiedToken.orderId,
       assetId,
       failureReason: "Order not found",
     });
@@ -41,9 +55,9 @@ export async function GET(request: Request) {
   }
 
   if (
-    order.prompt_hash !== token.promptHash ||
-    order.stripe_session_id !== token.sessionId ||
-    order.status !== "final_generated"
+    order.id !== orderId ||
+    order.stripe_session_id !== verifiedToken.sessionId ||
+    !["paid", "final_generating", "final_generated", "failed"].includes(order.status)
   ) {
     console.warn("[final-asset]", {
       requestId,
@@ -51,7 +65,7 @@ export async function GET(request: Request) {
       assetId,
       failureReason: "Token verification failed for order",
     });
-    return assetError("Unable to verify this wallpaper.", 403, "FINAL_ASSET_UNAUTHORIZED");
+    return assetError("This result link is no longer valid.", 403, "RESULT_ACCESS_DENIED");
   }
 
   const asset = await getFinalAssetById(order.id, assetId);
@@ -85,6 +99,8 @@ export async function GET(request: Request) {
       "Content-Disposition",
       `attachment; filename="${filenameForAsset(asset.asset_type, order.id)}"`,
     );
+  } else {
+    response.headers.set("Content-Disposition", "inline");
   }
   response.headers.set("Cache-Control", "private, no-store");
   void createDownloadEvent({

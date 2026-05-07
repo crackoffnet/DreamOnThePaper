@@ -41,13 +41,13 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
 
   const requestFinalGeneration = useCallback(
     async (
-      finalGenerationToken: string,
+      resultAccessToken: string,
       signal: AbortSignal,
     ): Promise<FinalGenerationResponse> => {
       const generationResponse = await fetch("/api/generate-final", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ finalGenerationToken }),
+        body: JSON.stringify({ resultAccessToken }),
         signal,
       });
       const generated = (await generationResponse.json()) as
@@ -88,7 +88,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         const response = await fetch("/api/order-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ finalGenerationToken }),
+          body: JSON.stringify({ resultAccessToken: finalGenerationToken }),
           signal,
         });
         const status = (await response.json()) as FinalGenerationResponse;
@@ -140,7 +140,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       const response = await fetch("/api/start-final-generation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ finalGenerationToken }),
+        body: JSON.stringify({ resultAccessToken: finalGenerationToken }),
         signal,
       });
       const started = (await response.json()) as FinalGenerationResponse;
@@ -193,6 +193,8 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         finalImageUrl: imageUrl,
         finalGenerationToken:
           sessionStorage.getItem("dreamFinalGenerationToken") || null,
+        resultAccessToken:
+          sessionStorage.getItem("dreamResultAccessToken") || null,
         finalSessionId: sessionId,
         wallpaperType: generated.wallpaperType || null,
         status: "final_generated",
@@ -250,6 +252,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         const verified = (await verifyResponse.json()) as {
           success?: boolean;
           finalGenerationToken?: string;
+          resultAccessToken?: string;
           orderId?: string;
           packageId?: string;
           wallpaperType?: string;
@@ -259,7 +262,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           error?: string;
         };
 
-        if (!verifyResponse.ok || !verified.finalGenerationToken) {
+        if (!verifyResponse.ok || !verified.resultAccessToken) {
           setErrorKind(classifyVerifyError(verifyResponse.status, verified.state));
           throw new Error(
             verified.message ||
@@ -270,9 +273,10 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
 
         sessionStorage.setItem(
           "dreamFinalGenerationToken",
-          verified.finalGenerationToken,
+          verified.finalGenerationToken || verified.resultAccessToken,
         );
-        sessionStorage.setItem("dreamOrderToken", verified.finalGenerationToken);
+        sessionStorage.setItem("dreamResultAccessToken", verified.resultAccessToken);
+        sessionStorage.setItem("dreamOrderToken", verified.resultAccessToken);
         if (verified.orderId) {
           sessionStorage.setItem("dreamOrderId", verified.orderId);
         }
@@ -285,7 +289,9 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         }
         saveDreamState({
           orderId: verified.orderId || null,
-          finalGenerationToken: verified.finalGenerationToken,
+          finalGenerationToken:
+            verified.finalGenerationToken || verified.resultAccessToken,
+          resultAccessToken: verified.resultAccessToken,
           finalSessionId: sessionId,
           customerEmail: verified.customerEmail || null,
           wallpaperType: verified.wallpaperType || null,
@@ -296,7 +302,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         setMessage(progressMessage(verified.packageId || "single", 0, expectedAssetCount(), 0));
         console.info("[success] generating final");
         const generated = await startAndPollFinal(
-          verified.finalGenerationToken,
+          verified.resultAccessToken,
           verified.packageId || "single",
           signal,
         );

@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrder } from "@/lib/orders";
-import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { resolveServableFinalAssets } from "@/lib/finalAssetState";
 import type { PackageId } from "@/lib/packages";
+import {
+  getBearerToken,
+  verifyResultOrFinalAccessToken,
+} from "@/lib/resultAccessToken";
 
 const schema = z.object({
-  finalGenerationToken: z.string().min(24).max(12000),
+  resultAccessToken: z.string().min(24).max(12000).optional(),
+  finalGenerationToken: z.string().min(24).max(12000).optional(),
+  orderId: z.string().min(8).max(120).optional(),
 });
 
 export async function POST(request: Request) {
@@ -30,10 +35,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = await verifyFinalGenerationToken(parsed.data.finalGenerationToken);
+    const tokenValue =
+      parsed.data.resultAccessToken ||
+      parsed.data.finalGenerationToken ||
+      getBearerToken(request);
+    const token = tokenValue
+      ? await verifyResultOrFinalAccessToken(tokenValue)
+      : null;
+    console.info("[final-asset-health]", {
+      requestId,
+      orderId: parsed.data.orderId,
+      hasAuthHeader: Boolean(request.headers.get("authorization")),
+      tokenValid: Boolean(token),
+      failureReason: token ? undefined : "missing_or_invalid_token",
+    });
     if (!token) {
       return NextResponse.json(
-        { success: false, state: "session_invalid", message: "This wallpaper access token is invalid." },
+        {
+          success: false,
+          code: "RESULT_ACCESS_DENIED",
+          state: "session_invalid",
+          message: "This result link is no longer valid.",
+        },
         { status: 403 },
       );
     }
@@ -47,11 +70,16 @@ export async function POST(request: Request) {
     }
 
     if (
-      order.prompt_hash !== token.promptHash ||
+      order.id !== (parsed.data.orderId || order.id) ||
       order.stripe_session_id !== token.sessionId
     ) {
       return NextResponse.json(
-        { success: false, state: "session_invalid", message: "Unable to verify this wallpaper order." },
+        {
+          success: false,
+          code: "RESULT_ACCESS_DENIED",
+          state: "session_invalid",
+          message: "This result link is no longer valid.",
+        },
         { status: 403 },
       );
     }
