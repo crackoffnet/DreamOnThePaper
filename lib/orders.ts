@@ -12,10 +12,32 @@ import type {
 import { getDb } from "@/lib/cloudflare";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
+export type FinalAssetType =
+  | "single"
+  | "mobile"
+  | "desktop"
+  | "version_1"
+  | "version_2"
+  | "version_3";
+
+export type FinalAsset = {
+  id: string;
+  order_id: string;
+  asset_type: FinalAssetType;
+  width: number;
+  height: number;
+  r2_key: string;
+  format: "png";
+  created_at: number;
+};
+
 export type DbOrder = {
   id: string;
   status: OrderStatus;
   package_type: PackageId | null;
+  package_name?: string | null;
+  amount_cents?: number | null;
+  currency?: string | null;
   device: string;
   ratio: string;
   width: number;
@@ -28,7 +50,18 @@ export type DbOrder = {
   preview_r2_key: string | null;
   final_r2_key: string | null;
   stripe_session_id: string | null;
+  stripe_checkout_session_id?: string | null;
+  stripe_payment_intent_id?: string | null;
+  stripe_customer_id?: string | null;
   stripe_payment_status: string | null;
+  stripe_mode?: "test" | "live" | "unknown" | null;
+  customer_id?: string | null;
+  customer_email?: string | null;
+  customer_email_normalized?: string | null;
+  client_ip_hash?: string | null;
+  country?: string | null;
+  email_send_count?: number | null;
+  download_count?: number | null;
   preview_generated_at: number | null;
   paid_at: number | null;
   final_generation_started_at: number | null;
@@ -61,7 +94,7 @@ export async function createOrder(input: WallpaperInput) {
     .bind(
       id,
       "preview_created",
-      null,
+      "single",
       input.device,
       input.ratio,
       width,
@@ -102,6 +135,86 @@ export async function getOrderByStripeSessionId(stripeSessionId: string) {
     .first<DbOrder>();
 }
 
+export async function getFinalAssets(orderId: string): Promise<FinalAsset[]> {
+  const statement = getDb()
+    .prepare(
+      `SELECT * FROM final_assets
+       WHERE order_id = ?
+       ORDER BY
+         CASE asset_type
+           WHEN 'single' THEN 1
+           WHEN 'mobile' THEN 2
+           WHEN 'desktop' THEN 3
+           WHEN 'version_1' THEN 4
+           WHEN 'version_2' THEN 5
+           WHEN 'version_3' THEN 6
+           ELSE 99
+         END`,
+    )
+    .bind(orderId);
+  const results = await (
+    statement as unknown as {
+      all<T>(): Promise<{ results?: T[] }>;
+    }
+  ).all<FinalAsset>();
+
+  return results.results || [];
+}
+
+export async function getFinalAsset(orderId: string, r2Key: string) {
+  return getDb()
+    .prepare("SELECT * FROM final_assets WHERE order_id = ? AND r2_key = ?")
+    .bind(orderId, r2Key)
+    .first<FinalAsset>();
+}
+
+export async function getFinalAssetById(orderId: string, assetId: string) {
+  return getDb()
+    .prepare("SELECT * FROM final_assets WHERE order_id = ? AND id = ?")
+    .bind(orderId, assetId)
+    .first<FinalAsset>();
+}
+
+export async function insertFinalAsset(input: {
+  orderId: string;
+  assetType: FinalAssetType;
+  width: number;
+  height: number;
+  r2Key: string;
+  fileSizeBytes?: number;
+  promptHash?: string;
+}) {
+  const now = Date.now();
+  const id = crypto.randomUUID();
+
+  await getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO final_assets (
+        id, order_id, asset_type, width, height, r2_key, format,
+        file_size_bytes, generation_status, generation_attempt, prompt_hash,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      input.orderId,
+      input.assetType,
+      input.width,
+      input.height,
+      input.r2Key,
+      "png",
+      input.fileSizeBytes ?? null,
+      "generated",
+      1,
+      input.promptHash || null,
+      now,
+      now,
+    )
+    .run();
+
+  return getFinalAssets(input.orderId);
+}
+
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const now = Date.now();
   await getDb()
@@ -135,10 +248,11 @@ export async function attachStripeSession(
   await getDb()
     .prepare(
       `UPDATE orders
-       SET stripe_session_id = ?, package_type = ?, status = ?, updated_at = ?
+       SET stripe_session_id = ?, stripe_checkout_session_id = ?, package_type = ?,
+           status = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .bind(stripeSessionId, packageType, "pending_payment", now, orderId)
+    .bind(stripeSessionId, stripeSessionId, packageType, "pending_payment", now, orderId)
     .run();
 
   return getOrder(orderId);
@@ -150,6 +264,7 @@ export async function markOrderPaid(orderId: string, stripeSessionId: string) {
     .prepare(
       `UPDATE orders
        SET stripe_session_id = ?, stripe_payment_status = ?,
+           stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, ?),
            status = CASE
              WHEN status IN ('final_generating', 'final_generated', 'failed')
              THEN status
@@ -158,7 +273,7 @@ export async function markOrderPaid(orderId: string, stripeSessionId: string) {
            paid_at = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .bind(stripeSessionId, "paid", "paid", now, now, orderId)
+    .bind(stripeSessionId, "paid", stripeSessionId, "paid", now, now, orderId)
     .run();
 
   return getOrder(orderId);
@@ -174,11 +289,12 @@ export async function attachStripeSessionIfMissing(
     .prepare(
       `UPDATE orders
        SET stripe_session_id = COALESCE(stripe_session_id, ?),
+           stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, ?),
            package_type = COALESCE(package_type, ?),
            updated_at = ?
        WHERE id = ?`,
     )
-    .bind(stripeSessionId, packageType, now, orderId)
+    .bind(stripeSessionId, stripeSessionId, packageType, now, orderId)
     .run();
 
   return getOrder(orderId);
@@ -271,8 +387,13 @@ export async function markFinalFailed(orderId: string, message: string) {
 
   await db.batch([
     db
-      .prepare("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?")
-      .bind("failed", now, orderId),
+      .prepare(
+        `UPDATE orders
+         SET status = ?, final_failed_at = ?, final_failure_reason = ?,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind("failed", new Date(now).toISOString(), message.slice(0, 500), now, orderId),
     db
       .prepare(
         `INSERT INTO generation_events (id, order_id, type, status, message, created_at)

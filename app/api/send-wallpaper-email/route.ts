@@ -5,16 +5,23 @@ import {
   checkEmailOrderRateLimit,
 } from "@/lib/rateLimit";
 import { verifyFinalGenerationToken } from "@/lib/payment";
-import { getOrder } from "@/lib/orders";
+import { getFinalAssets, getOrder } from "@/lib/orders";
 import { getRuntimeEnv, isFromNameUsingFallback } from "@/lib/env";
 import { getImage } from "@/lib/storage";
+import { getRequestMetadata } from "@/lib/requestMetadata";
+import {
+  createEmailEvent,
+  patchOrderTracking,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
 
 const unavailableMessage =
   "Email delivery is not available yet. Please download your wallpaper.";
-const maxAttachmentBytes = 4 * 1024 * 1024;
+const maxTotalAttachmentBytes = 8 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const requestMetadata = await getRequestMetadata(request);
   let orderId: string | undefined;
 
   try {
@@ -26,6 +33,11 @@ export async function POST(request: Request) {
     const ipLimit = await checkEmailIpRateLimit(getClientIp(request));
     if (!ipLimit.allowed) {
       logEmailFailure({ requestId, failureReason: "Email IP rate limit exceeded" });
+      void trackOrderEvent({
+        eventType: "email_rate_limited",
+        requestMetadata,
+        metadata: { requestId, reason: "ip_limit" },
+      });
       return emailError("Too many email attempts. Please wait and try again.", 429);
     }
 
@@ -45,7 +57,6 @@ export async function POST(request: Request) {
       !token ||
       !order ||
       order.status !== "final_generated" ||
-      !order.final_r2_key ||
       order.prompt_hash !== token.promptHash ||
       order.stripe_session_id !== token.sessionId
     ) {
@@ -56,6 +67,15 @@ export async function POST(request: Request) {
       });
       return emailError("Please confirm payment before emailing.", 402);
     }
+    void trackOrderEvent({
+      orderId: order.id,
+      customerId: order.customer_id || null,
+      eventType: "email_requested",
+      statusAfter: order.status,
+      packageType: order.package_type || undefined,
+      requestMetadata,
+      metadata: { requestId },
+    });
 
     const env = getRuntimeEnv();
     const brevoApiKey = env.BREVO_API_KEY;
@@ -87,24 +107,107 @@ export async function POST(request: Request) {
     const orderLimit = await checkEmailOrderRateLimit(order.id);
     if (!orderLimit.allowed) {
       logEmailFailure({ requestId, orderId, failureReason: "Email order rate limit exceeded" });
+      void createEmailEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        recipientEmail: parsed.data.email,
+        status: "rate_limited",
+        failureReason: "order_limit",
+      });
+      void trackOrderEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        eventType: "email_rate_limited",
+        packageType: order.package_type || undefined,
+        requestMetadata,
+        metadata: { requestId, reason: "order_limit" },
+      });
       return emailError("Too many email attempts. Please wait and try again.", 429);
     }
 
-    const stored = await getImage(order.final_r2_key);
-    if (!stored || stored.size > maxAttachmentBytes) {
+    const assets = await getFinalAssets(order.id);
+    const assetInputs = assets.length
+      ? assets.map((asset) => ({
+          assetType: asset.asset_type,
+          r2Key: asset.r2_key,
+          filename: filenameForAsset(asset.asset_type, order.id.slice(0, 8)),
+        }))
+      : order.final_r2_key
+        ? [
+            {
+              assetType: "single",
+              r2Key: order.final_r2_key,
+              filename: `dream-on-the-paper-wallpaper-${order.id.slice(0, 8)}.png`,
+            },
+          ]
+        : [];
+
+    if (assetInputs.length === 0) {
       logEmailFailure({
         requestId,
         orderId,
-        failureReason: stored ? "Final image too large for email" : "Final R2 image missing",
-        imageSize: stored?.size,
+        failureReason: "Final assets missing",
+      });
+      return emailError("Email delivery failed. Please use Download Wallpaper.", 404);
+    }
+
+    const storedAssets = await Promise.all(
+      assetInputs.map(async (asset) => ({
+        ...asset,
+        object: await getImage(asset.r2Key),
+      })),
+    );
+    const missingAsset = storedAssets.find((asset) => !asset.object);
+    const totalSize = storedAssets.reduce(
+      (sum, asset) => sum + (asset.object?.size || 0),
+      0,
+    );
+
+    if (missingAsset) {
+      logEmailFailure({
+        requestId,
+        orderId,
+        failureReason: "Final R2 image missing",
+      });
+      return emailError("Email delivery failed. Please use Download Wallpaper.", 404);
+    }
+
+    if (totalSize > maxTotalAttachmentBytes) {
+      logEmailFailure({
+        requestId,
+        orderId,
+        failureReason: "Final images too large for email",
+        imageSize: totalSize,
+      });
+      void createEmailEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        recipientEmail: parsed.data.email,
+        status: "skipped_too_large",
+        failureReason: "attachments_too_large",
+        attachmentCount: assetInputs.length,
+        totalAttachmentBytes: totalSize,
+      });
+      void trackOrderEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        eventType: "email_skipped_too_large",
+        packageType: order.package_type || undefined,
+        requestMetadata,
+        metadata: { requestId, totalSize, attachmentCount: assetInputs.length },
       });
       return emailError(
-        "This wallpaper is too large to email. Please use the download button.",
+        "These files are too large to email. Please use the download buttons.",
         413,
       );
     }
 
-    const bytes = new Uint8Array(await stored.arrayBuffer());
+    const attachments = await Promise.all(
+      storedAssets.map(async (asset) => ({
+        name: asset.filename,
+        content: bytesToBase64(new Uint8Array(await asset.object!.arrayBuffer())),
+      })),
+    );
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
@@ -120,15 +223,10 @@ export async function POST(request: Request) {
         to: [{ email: parsed.data.email }],
         subject: "Your Dream On The Paper wallpaper is ready",
         htmlContent:
-          "<p>Your personalized wallpaper is ready.</p><p>Your final wallpaper is attached to this email.</p><p>If the attachment is blocked by your email provider, return to your checkout success page and use the Download Wallpaper button.</p>",
+          "<p>Your personalized wallpaper file(s) are attached.</p><p>If your email provider blocks the attachment, return to your checkout success page and use the Download button.</p>",
         textContent:
-          "Your personalized wallpaper is ready.\nYour final wallpaper is attached to this email.\nIf the attachment is blocked, return to your checkout success page and use Download Wallpaper.",
-        attachment: [
-          {
-            name: `dream-on-the-paper-wallpaper-${order.id.slice(0, 8)}.png`,
-            content: bytesToBase64(bytes),
-          },
-        ],
+          "Your personalized wallpaper file(s) are attached.\nIf your email provider blocks the attachment, return to your checkout success page and use the Download button.",
+        attachment: attachments,
       }),
     });
 
@@ -141,14 +239,59 @@ export async function POST(request: Request) {
         statusText: response.statusText,
         brevoError: brevoError.slice(0, 500),
       });
+      void createEmailEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        recipientEmail: parsed.data.email,
+        status: "failed",
+        failureReason: `Brevo ${response.status}`,
+        attachmentCount: attachments.length,
+        totalAttachmentBytes: totalSize,
+      });
+      void trackOrderEvent({
+        orderId: order.id,
+        customerId: order.customer_id || null,
+        eventType: "email_failed",
+        packageType: order.package_type || undefined,
+        requestMetadata,
+        metadata: { requestId, providerStatus: response.status },
+      });
       return emailError("Email delivery failed. Please use Download Wallpaper.", 502);
     }
+    const brevoPayload = (await response.json().catch(() => null)) as
+      | { messageId?: string }
+      | null;
 
     console.info("[brevo-email]", {
       requestId,
       orderId,
       status: response.status,
       event: "email_sent",
+    });
+    void createEmailEvent({
+      orderId: order.id,
+      customerId: order.customer_id || null,
+      recipientEmail: parsed.data.email,
+      providerMessageId: brevoPayload?.messageId || null,
+      status: "sent",
+      attachmentCount: attachments.length,
+      totalAttachmentBytes: totalSize,
+    });
+    void patchOrderTracking(order.id, {
+      email_send_count: (order.email_send_count || 0) + 1,
+      last_email_sent_at: new Date().toISOString(),
+    });
+    void trackOrderEvent({
+      orderId: order.id,
+      customerId: order.customer_id || null,
+      eventType: "email_sent",
+      packageType: order.package_type || undefined,
+      requestMetadata,
+      metadata: {
+        requestId,
+        attachmentCount: attachments.length,
+        totalAttachmentBytes: totalSize,
+      },
     });
     return Response.json({ success: true, sent: true });
   } catch (error) {
@@ -162,6 +305,25 @@ export async function POST(request: Request) {
     safeLog("Wallpaper email failed", message);
     return emailError("Unable to send the email right now.", 500);
   }
+}
+
+function filenameForAsset(assetType: string, orderIdShort: string) {
+  if (assetType === "mobile") {
+    return `dream-on-the-paper-mobile-${orderIdShort}.png`;
+  }
+  if (assetType === "desktop") {
+    return `dream-on-the-paper-desktop-${orderIdShort}.png`;
+  }
+  if (assetType === "version_1") {
+    return `dream-on-the-paper-version-1-${orderIdShort}.png`;
+  }
+  if (assetType === "version_2") {
+    return `dream-on-the-paper-version-2-${orderIdShort}.png`;
+  }
+  if (assetType === "version_3") {
+    return `dream-on-the-paper-version-3-${orderIdShort}.png`;
+  }
+  return `dream-on-the-paper-wallpaper-${orderIdShort}.png`;
 }
 
 function getMissingEmailEnv(env: ReturnType<typeof getRuntimeEnv>) {

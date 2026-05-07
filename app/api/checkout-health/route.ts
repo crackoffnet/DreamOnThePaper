@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
+import { packages } from "@/lib/packages";
 
 export function GET() {
   const env = getRuntimeEnv();
   const bindings = getOptionalCloudflareBindings();
+  const stripeMode = env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+    ? "live"
+    : env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
+      ? "test"
+      : "unknown";
+  const singlePriceId = env[packages.single.stripePriceEnv];
+  const bundlePriceId = env[packages.bundle.stripePriceEnv];
+  const premiumPriceId = env[packages.premium.stripePriceEnv];
   const response = {
     ok: Boolean(
       env.STRIPE_SECRET_KEY &&
         env.NEXT_PUBLIC_SITE_URL &&
-        env.STRIPE_SINGLE_PRICE_ID &&
-        env.STRIPE_BUNDLE_PRICE_ID &&
-        env.STRIPE_PREMIUM_PRICE_ID &&
+        singlePriceId &&
+        bundlePriceId &&
+        premiumPriceId &&
         env.ORDER_TOKEN_SECRET &&
         bindings.DB &&
         bindings.DREAM_RATE_LIMITS &&
@@ -20,10 +29,11 @@ export function GET() {
     env: {
       hasStripeSecretKey: Boolean(env.STRIPE_SECRET_KEY),
       hasSiteUrl: Boolean(env.NEXT_PUBLIC_SITE_URL),
-      hasSinglePriceId: Boolean(env.STRIPE_SINGLE_PRICE_ID),
-      hasBundlePriceId: Boolean(env.STRIPE_BUNDLE_PRICE_ID),
-      hasPremiumPriceId: Boolean(env.STRIPE_PREMIUM_PRICE_ID),
+      hasSinglePriceId: Boolean(singlePriceId),
+      hasBundlePriceId: Boolean(bundlePriceId),
+      hasPremiumPriceId: Boolean(premiumPriceId),
       hasOrderTokenSecret: Boolean(env.ORDER_TOKEN_SECRET),
+      stripeMode,
     },
     bindings: {
       hasDb: Boolean(bindings.DB),
@@ -31,9 +41,9 @@ export function GET() {
       hasWallpaperBucket: Boolean(bindings.WALLPAPER_BUCKET),
     },
     priceIdFormat: {
-      singleStartsWithPrice: env.STRIPE_SINGLE_PRICE_ID?.startsWith("price_") || false,
-      bundleStartsWithPrice: env.STRIPE_BUNDLE_PRICE_ID?.startsWith("price_") || false,
-      premiumStartsWithPrice: env.STRIPE_PREMIUM_PRICE_ID?.startsWith("price_") || false,
+      singleStartsWithPrice: singlePriceId?.startsWith("price_") || false,
+      bundleStartsWithPrice: bundlePriceId?.startsWith("price_") || false,
+      premiumStartsWithPrice: premiumPriceId?.startsWith("price_") || false,
     },
   };
 

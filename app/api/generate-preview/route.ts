@@ -34,6 +34,12 @@ import {
   savePreviewImageFromBase64,
   savePreviewImageFromDataUrl,
 } from "@/lib/storage";
+import { getRequestMetadata } from "@/lib/requestMetadata";
+import {
+  hashOperationalValue,
+  patchOrderTracking,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -41,6 +47,8 @@ type OpenAIImageResponse = {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const requestMetadata = await getRequestMetadata(request);
+  let orderId: string | undefined;
 
   try {
     if (!assertSameOrigin(request)) {
@@ -63,6 +71,11 @@ export async function POST(request: Request) {
           limitType: "attempt",
           retryAfterSeconds: attemptLimit.retryAfterSeconds,
         });
+        void trackOrderEvent({
+          eventType: "preview_failed",
+          requestMetadata,
+          metadata: { requestId, reason: "attempt_limit", code: "PREVIEW_ATTEMPT_LIMIT" },
+        });
         return previewError(
           "Too many preview attempts. Please wait and try again.",
           429,
@@ -80,6 +93,11 @@ export async function POST(request: Request) {
     const parsed = previewGenerationSchema.safeParse(body);
 
     if (!parsed.success || parsed.data.website) {
+      void trackOrderEvent({
+        eventType: "preview_failed",
+        requestMetadata,
+        metadata: { requestId, reason: "invalid_input" },
+      });
       return previewError("Please check your wallpaper answers and try again.");
     }
 
@@ -125,15 +143,62 @@ export async function POST(request: Request) {
     const input = parsed.data as WallpaperInput;
     const meta = getWallpaperMeta(input);
     const prompt = buildPreviewWallpaperPrompt(input);
+    void trackOrderEvent({
+      eventType: "preview_requested",
+      requestMetadata,
+      packageType: "single",
+      metadata: {
+        requestId,
+        device: input.device,
+        ratio: input.ratio,
+        theme: input.theme,
+        style: input.style,
+      },
+    });
     const dbOrder = await createOrder(input);
+    orderId = dbOrder?.id;
 
     if (!dbOrder) {
+      void trackOrderEvent({
+        eventType: "preview_failed",
+        requestMetadata,
+        metadata: { requestId, reason: "order_create_failed" },
+      });
       return previewError(
         "We couldn't create your preview right now. Please try again.",
         503,
         "PREVIEW_GENERATION_FAILED",
       );
     }
+
+    void patchOrderTracking(dbOrder.id, {
+      client_ip: requestMetadata.ip,
+      client_ip_hash: requestMetadata.ipHash,
+      country: requestMetadata.country,
+      user_agent: requestMetadata.userAgent,
+      referer: requestMetadata.referer,
+      utm_source: requestMetadata.utmSource,
+      utm_medium: requestMetadata.utmMedium,
+      utm_campaign: requestMetadata.utmCampaign,
+      landing_path: requestMetadata.landingPath,
+      package_type: "single",
+      package_name: "Single wallpaper",
+      currency: "usd",
+      custom_width: input.customWidth || null,
+      custom_height: input.customHeight || null,
+      answers_hash: await hashOperationalValue(
+        [
+          input.goals,
+          input.lifestyle,
+          input.career,
+          input.personalLife,
+          input.health,
+          input.place,
+          input.feelingWords,
+          input.reminder,
+        ].join("|"),
+      ),
+    });
 
     if (!env.OPENAI_API_KEY) {
       if (process.env.NODE_ENV === "production") {
@@ -161,6 +226,19 @@ export async function POST(request: Request) {
       storeOrder(order);
       const orderToken = await signCheckoutOrderToken(order);
       const orderSnapshotToken = await signOrderSnapshot(order);
+      void patchOrderTracking(dbOrder.id, {
+        preview_r2_key: savedPreview.key,
+        preview_created_at: new Date().toISOString(),
+        order_token_hash: await hashOperationalValue(orderToken),
+      });
+      void trackOrderEvent({
+        orderId: dbOrder.id,
+        eventType: "preview_generated",
+        statusAfter: "preview_created",
+        packageType: "single",
+        requestMetadata,
+        metadata: { requestId, previewStored: true },
+      });
       if (!hasRateLimitBypass) {
         await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
       }
@@ -199,6 +277,12 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       safeLog("OpenAI preview generation failed", response.status);
+      void trackOrderEvent({
+        orderId,
+        eventType: "preview_failed",
+        requestMetadata,
+        metadata: { requestId, providerStatus: response.status },
+      });
       return previewError(
         "We couldn't create your preview right now. Please try again.",
         502,
@@ -215,6 +299,12 @@ export async function POST(request: Request) {
         : null;
 
     if (!savedPreview) {
+      void trackOrderEvent({
+        orderId,
+        eventType: "preview_failed",
+        requestMetadata,
+        metadata: { requestId, reason: "preview_r2_save_failed" },
+      });
       return previewError(
         "We couldn't create your preview right now. Please try again.",
         502,
@@ -226,6 +316,19 @@ export async function POST(request: Request) {
     storeOrder(order);
     const orderToken = await signCheckoutOrderToken(order);
     const orderSnapshotToken = await signOrderSnapshot(order);
+    void patchOrderTracking(dbOrder.id, {
+      preview_r2_key: savedPreview.key,
+      preview_created_at: new Date().toISOString(),
+      order_token_hash: await hashOperationalValue(orderToken),
+    });
+    void trackOrderEvent({
+      orderId: dbOrder.id,
+      eventType: "preview_generated",
+      statusAfter: "preview_created",
+      packageType: "single",
+      requestMetadata,
+      metadata: { requestId, previewStored: true },
+    });
     if (!hasRateLimitBypass) {
       await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
     }
@@ -245,6 +348,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     safeLog("Preview generation error", error);
+    void trackOrderEvent({
+      orderId,
+      eventType: "preview_failed",
+      requestMetadata,
+      metadata: { requestId, reason: "unhandled_preview_error" },
+    });
     return previewError(
       "We couldn't create your preview right now. Please try again.",
       500,

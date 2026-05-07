@@ -1,6 +1,12 @@
-import { getOrder } from "@/lib/orders";
+import { getFinalAsset, getOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { getImageResponse } from "@/lib/storage";
+import { getRequestMetadata } from "@/lib/requestMetadata";
+import {
+  createDownloadEvent,
+  patchOrderTracking,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
 
 type WallpaperImageRouteProps = {
   params: Promise<{ id: string }>;
@@ -9,6 +15,7 @@ type WallpaperImageRouteProps = {
 export async function GET(request: Request, { params }: WallpaperImageRouteProps) {
   const { id } = await params;
   const r2Key = decodeURIComponent(id);
+  const requestMetadata = await getRequestMetadata(request);
 
   if (!r2Key.startsWith("finals/")) {
     return getImageResponse(r2Key);
@@ -31,11 +38,12 @@ export async function GET(request: Request, { params }: WallpaperImageRouteProps
   }
 
   const order = await getOrder(token.orderId);
+  const finalAsset = order ? await getFinalAsset(order.id, r2Key) : null;
   if (
     !order ||
     order.status !== "final_generated" ||
-    order.final_r2_key !== r2Key ||
-    order.prompt_hash !== token.promptHash
+    order.prompt_hash !== token.promptHash ||
+    (!finalAsset && order.final_r2_key !== r2Key)
   ) {
     return new Response("Wallpaper not found.", {
       status: 404,
@@ -43,5 +51,29 @@ export async function GET(request: Request, { params }: WallpaperImageRouteProps
     });
   }
 
-  return getImageResponse(r2Key);
+  const response = await getImageResponse(r2Key);
+  void createDownloadEvent({
+    orderId: order.id,
+    customerId: order.customer_id || null,
+    assetId: finalAsset?.id || null,
+    assetType: finalAsset?.asset_type || "single",
+    requestMetadata,
+  });
+  void patchOrderTracking(order.id, {
+    download_count: (order.download_count || 0) + 1,
+    first_downloaded_at: order.download_count ? undefined : new Date().toISOString(),
+    last_downloaded_at: new Date().toISOString(),
+  });
+  void trackOrderEvent({
+    orderId: order.id,
+    customerId: order.customer_id || null,
+    eventType: "download_started",
+    packageType: order.package_type || undefined,
+    requestMetadata,
+    metadata: {
+      legacyRoute: true,
+      assetType: finalAsset?.asset_type || "single",
+    },
+  });
+  return response;
 }

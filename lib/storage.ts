@@ -43,6 +43,24 @@ export async function saveFinalImage(
   return saveImageAtKey(`finals/${orderId}.png`, bytes, contentType);
 }
 
+export async function saveFinalAssetImage(
+  orderId: string,
+  assetType: string,
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  return saveImageAtKey(`finals/${orderId}/${assetType}.png`, bytes, contentType);
+}
+
+export async function saveFinalAssetImageFromBase64(
+  orderId: string,
+  assetType: string,
+  content: string,
+  contentType = "image/png",
+) {
+  return saveFinalAssetImage(orderId, assetType, base64ToBytes(content), contentType);
+}
+
 export async function saveFinalImageFromBase64(
   orderId: string,
   content: string,
@@ -200,6 +218,7 @@ async function saveImageAtKey(
   return {
     key,
     url: `/api/wallpaper-image/${encodeURIComponent(key)}`,
+    size: bytes.byteLength,
   };
 }
 

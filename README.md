@@ -33,9 +33,13 @@ STRIPE_BUNDLE_PRICE_ID=
 STRIPE_PREMIUM_PRICE_ID=
 CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
 PREVIEW_RATE_LIMIT_BYPASS_TOKEN=
+IP_HASH_SECRET=
+ADMIN_DASHBOARD_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
+IP_HASH_SECRET=
+ADMIN_DASHBOARD_TOKEN=
 BREVO_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
 FROM_NAME=Dream On The Paper
@@ -189,7 +193,35 @@ for your current IP bucket. `PREVIEW_RATE_LIMIT_BYPASS_TOKEN` is optional for
 manual curl/Postman testing only and must not be sent from customer-facing
 browser code.
 
-The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
+The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one paid fulfillment job.
+
+## Customer and Order Tracking
+
+Cloudflare D1 stores privacy-conscious order tracking for fulfillment, refunds,
+fraud prevention, payment operations, and support. Tracking captures safe order
+metadata such as package, amount, Stripe Checkout Session ID, payment status,
+customer email, selected device/size/style/theme, generated final asset rows,
+email delivery attempts, and download events.
+
+Do not store or expose API keys, raw order tokens, final generation tokens,
+card data, generated image base64, full Stripe objects, full prompts, or private
+answers in events or health/admin responses. IP addresses are stored only for
+operations review and are also hashed with `IP_HASH_SECRET` when configured,
+falling back to `ORDER_TOKEN_SECRET`.
+
+Admin order summaries are available at `/api/admin/orders` only with:
+
+```bash
+Authorization: Bearer $ADMIN_DASHBOARD_TOKEN
+```
+
+The admin endpoint returns safe summaries only: short order ID, status,
+package, amount, customer email, country, IP hash, payment status, final asset
+count, email count, and download count. It does not return raw IP by default,
+R2 keys, prompts, answers, Stripe objects, or tokens.
+
+Tracking health is available at `/api/tracking-health` and returns booleans for
+the expected D1 tables only.
 
 ## Cloudflare Storage Helpers
 
@@ -267,15 +299,12 @@ The script writes:
 - `public/examples/family-home.jpg`
 - `public/examples/freedom-travel.jpg`
 
-## Future R2 Storage Step
+## Storage Model
 
-Current delivery uses temporary Worker memory for generated image bytes and browser session storage only for small IDs/URLs/tokens. For durable production delivery, add Cloudflare R2 plus D1/KV:
-
-- Binding name: `WALLPAPER_BUCKET`
-- Store generated PNGs without personal prompt answers.
-- Email signed expiring download URLs.
-- Add a Worker route that validates short-lived download tokens.
-- Store order state in D1 and distributed rate limits in KV.
+Production delivery uses Cloudflare D1 for order state, KV for rate limits, and
+R2 for preview/final image files. Browser storage is limited to short IDs,
+state flags, and signed restore/download tokens; image base64 and private
+answers are not stored in browser storage.
 
 ## Routes
 
@@ -291,6 +320,12 @@ Current delivery uses temporary Worker memory for generated image bytes and brow
 - `/api/generate-preview`
 - `/api/generate-final`
 - `/api/generate-wallpaper`
+- `/api/final-asset`
+- `/api/order-status`
+- `/api/order-health`
+- `/api/order-abandon`
+- `/api/tracking-health`
+- `/api/admin/orders`
 - `/api/send-wallpaper-email`
 - `/api/stripe-webhook`
 

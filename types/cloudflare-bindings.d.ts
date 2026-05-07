@@ -83,6 +83,9 @@ interface CloudflareEnv {
   NEXT_PUBLIC_SITE_URL?: string;
   CHECKOUT_RATE_LIMIT_BYPASS_TOKEN?: string;
   PREVIEW_RATE_LIMIT_BYPASS_TOKEN?: string;
+  IP_HASH_SECRET?: string;
+  ADMIN_DASHBOARD_TOKEN?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
   BREVO_API_KEY?: string;
   FROM_EMAIL?: string;
   FROM_NAME?: string;

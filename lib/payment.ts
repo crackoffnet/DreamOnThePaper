@@ -1,6 +1,6 @@
 import Stripe from "stripe";
-import type { PackageId } from "@/lib/plans";
-import { packages } from "@/lib/plans";
+import type { PackageId } from "@/lib/packages";
+import { packages } from "@/lib/packages";
 import { getRuntimeEnv } from "@/lib/env";
 import {
   fromBase64Url,
@@ -49,10 +49,10 @@ export function getStripe() {
 }
 
 export function isPaymentConfigured() {
-  return getMissingCheckoutEnv("single").length === 0;
+  return getMissingCheckoutEnv().length === 0;
 }
 
-export function getMissingCheckoutEnv(_packageId?: PackageId) {
+export function getMissingCheckoutEnv(packageId?: PackageId) {
   const missing: string[] = [];
   const env = getRuntimeEnv();
 
@@ -62,6 +62,14 @@ export function getMissingCheckoutEnv(_packageId?: PackageId) {
 
   if (!env.NEXT_PUBLIC_SITE_URL) {
     missing.push("NEXT_PUBLIC_SITE_URL");
+  }
+
+  const packageIds = packageId ? [packageId] : (Object.keys(packages) as PackageId[]);
+  for (const id of packageIds) {
+    const envName = packages[id].stripePriceEnv;
+    if (!env[envName]) {
+      missing.push(envName);
+    }
   }
 
   return missing;
@@ -81,9 +89,11 @@ export async function createCheckoutSession(
 ) {
   const stripe = getStripe();
   const plan = packages[packageId];
+  const env = getRuntimeEnv();
+  const priceId = env[plan.stripePriceEnv];
   const siteUrl = getSiteUrl();
 
-  if (!stripe || !getSiteUrlFromEnv()) {
+  if (!stripe || !getSiteUrlFromEnv() || !priceId) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("Stripe is not configured.");
     }
@@ -95,36 +105,28 @@ export async function createCheckoutSession(
     };
   }
 
-  const sessionParams: Stripe.Checkout.SessionCreateParams & {
-    automatic_payment_methods?: { enabled: true };
-  } = {
-      mode: "payment",
-      automatic_payment_methods: { enabled: true },
-      automatic_tax: { enabled: true },
-      success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/checkout?orderId=${metadata.orderId}`,
-      metadata: {
-        ...metadata,
-        packageType: metadata.packageType || packageId,
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    mode: "payment",
+    payment_method_types: ["card"],
+    automatic_tax: { enabled: true },
+    success_url: `${siteUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${siteUrl}/checkout?orderId=${metadata.orderId}`,
+    metadata: {
+      ...metadata,
+      packageType: metadata.packageType || packageId,
+    },
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
       },
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Dream On The Paper - ${plan.name}`,
-            },
-            unit_amount: plan.amount,
-          },
-          quantity: 1,
-        },
-      ],
-    };
+    ],
+  };
 
   const session = await stripe.checkout.sessions.create(
     sessionParams,
     {
-      idempotencyKey: `checkout:${metadata.orderId}`,
+      idempotencyKey: `checkout:${metadata.orderId}:${packageId}`,
     },
   );
 

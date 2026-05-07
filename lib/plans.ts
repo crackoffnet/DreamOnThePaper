@@ -1,39 +1,7 @@
-export const packageIds = ["single", "bundle", "premium"] as const;
-export type PackageId = (typeof packageIds)[number];
-
-export const packages: Record<
-  PackageId,
-  {
-    name: string;
-    price: string;
-    amount: number;
-    description: string;
-    features: string[];
-    versions: number;
-  }
-> = {
-  single: {
-    name: "Single wallpaper",
-    price: "$4.99",
-    amount: 499,
-    description: "One polished wallpaper for your selected device.",
-    features: ["One AI wallpaper", "Phone, desktop, or tablet", "Download ready"],
-    versions: 1,
-  },
-  bundle: {
-    name: "Mobile + desktop bundle",
-    price: "$6.99",
-    amount: 699,
-    description: "One final wallpaper now, with extra format fulfillment coming soon.",
-    features: ["One final image today", "Original selected size", "More formats soon"],
-    versions: 1,
-  },
-  premium: {
-    name: "Premium 3-version pack",
-    price: "$11.99",
-    amount: 1199,
-    description: "One final wallpaper now, with multi-version fulfillment coming soon.",
-    features: ["One final image today", "Original selected style", "More versions soon"],
-    versions: 1,
-  },
-};
+export {
+  isPackageId,
+  packageIds,
+  wallpaperPackages as packages,
+  type PackageConfig,
+  type PackageId,
+} from "@/lib/packages";

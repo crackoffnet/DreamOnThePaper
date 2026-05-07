@@ -6,20 +6,38 @@ import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { checkCheckoutRateLimitDetailed } from "@/lib/rateLimit";
 import { markOrderPendingPayment, getOrder, isUnpaidOrderExpired } from "@/lib/orders";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
-import type { PackageId } from "@/lib/plans";
+import {
+  isPackageId,
+  packages,
+  type PackageId,
+  type RuntimeStripePriceEnv,
+} from "@/lib/packages";
+import { getRequestMetadata } from "@/lib/requestMetadata";
+import {
+  patchOrderTracking,
+  stripeModeFromSecret,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
 
 const safeCheckoutMessage = "Checkout is temporarily unavailable. Please try again soon.";
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const requestMetadata = await getRequestMetadata(request);
   let orderId: string | undefined;
   let packageType: PackageId | undefined;
+  let selectedPriceEnvName: RuntimeStripePriceEnv | undefined;
 
   try {
     if (!assertSameOrigin(request)) {
       logCheckoutFailure({
         requestId,
         failureReason: "Origin not allowed",
+      });
+      void trackOrderEvent({
+        eventType: "checkout_failed",
+        requestMetadata,
+        metadata: { requestId, reason: "origin_not_allowed" },
       });
       return checkoutError("Request origin is not allowed.", 403);
     }
@@ -60,12 +78,26 @@ export async function POST(request: Request) {
     }
 
     packageType = parsed.data.packageType;
+    if (!isPackageId(packageType)) {
+      logCheckoutFailure({
+        requestId,
+        packageType,
+        failureReason: "Invalid packageType",
+      });
+      return checkoutError("Selected package is not available.", 400);
+    }
 
     if (!parsed.data.orderToken) {
       logCheckoutFailure({
         requestId,
         packageType,
         failureReason: "Missing orderToken",
+      });
+      void trackOrderEvent({
+        eventType: "checkout_failed",
+        packageType,
+        requestMetadata,
+        metadata: { requestId, reason: "missing_order_token" },
       });
       return checkoutError("Create your preview first.", 400);
     }
@@ -81,12 +113,14 @@ export async function POST(request: Request) {
       return checkoutError(safeCheckoutMessage, 503);
     }
 
-    const priceId = getPriceIdForPackage(packageType, env);
+    selectedPriceEnvName = packages[packageType].stripePriceEnv;
+    const priceId = env[selectedPriceEnvName];
     const invalidPriceReason = validatePriceId(priceId);
     if (invalidPriceReason) {
       logCheckoutFailure({
         requestId,
         packageType,
+        selectedPriceEnvName,
         failureReason: invalidPriceReason,
         envPresence: getRuntimeEnvPresence(),
       });
@@ -104,6 +138,13 @@ export async function POST(request: Request) {
     }
 
     orderId = checkoutToken.orderId;
+    void trackOrderEvent({
+      orderId,
+      eventType: "checkout_started",
+      packageType,
+      requestMetadata,
+      metadata: { requestId },
+    });
     const order = await getOrder(orderId);
     if (!order) {
       logCheckoutFailure({
@@ -184,6 +225,37 @@ export async function POST(request: Request) {
     }
 
     await markOrderPendingPayment(orderId, session.id, packageType);
+    void patchOrderTracking(orderId, {
+      package_type: packageType,
+      package_name: packages[packageType].name,
+      amount_cents: packages[packageType].amount,
+      currency: "usd",
+      stripe_checkout_session_id: session.id,
+      stripe_payment_status: session.payment_status || "unpaid",
+      stripe_mode: stripeModeFromSecret(),
+      client_ip: requestMetadata.ip,
+      client_ip_hash: requestMetadata.ipHash,
+      country: requestMetadata.country,
+      user_agent: requestMetadata.userAgent,
+      referer: requestMetadata.referer,
+      utm_source: requestMetadata.utmSource,
+      utm_medium: requestMetadata.utmMedium,
+      utm_campaign: requestMetadata.utmCampaign,
+      landing_path: requestMetadata.landingPath,
+    });
+    void trackOrderEvent({
+      orderId,
+      eventType: "checkout_session_created",
+      statusBefore: order.status,
+      statusAfter: "pending_payment",
+      packageType,
+      requestMetadata,
+      metadata: {
+        requestId,
+        selectedPriceEnvName,
+        stripeMode: stripeModeFromSecret(),
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -194,11 +266,24 @@ export async function POST(request: Request) {
       requestId,
       orderId,
       packageType,
+      selectedPriceEnvName,
       failureReason: "Stripe session create failed",
       stripeCode: stripeErrorValue(error, "code"),
       stripeType: stripeErrorValue(error, "type"),
       stripeMessage: error instanceof Error ? error.message : "Unknown checkout error",
       envPresence: getRuntimeEnvPresence(),
+    });
+    void trackOrderEvent({
+      orderId,
+      eventType: "checkout_failed",
+      packageType,
+      requestMetadata,
+      metadata: {
+        requestId,
+        reason: "stripe_session_create_failed",
+        stripeCode: stripeErrorValue(error, "code"),
+        stripeType: stripeErrorValue(error, "type"),
+      },
     });
     return checkoutError(safeCheckoutMessage, 503);
   }
@@ -215,21 +300,6 @@ function getMissingCheckoutEnv(env: ReturnType<typeof getRuntimeEnv>) {
   ]
     .filter(([, value]) => !value)
     .map(([name]) => name);
-}
-
-function getPriceIdForPackage(
-  packageType: PackageId,
-  env: ReturnType<typeof getRuntimeEnv>,
-) {
-  if (packageType === "bundle") {
-    return env.STRIPE_BUNDLE_PRICE_ID;
-  }
-
-  if (packageType === "premium") {
-    return env.STRIPE_PREMIUM_PRICE_ID;
-  }
-
-  return env.STRIPE_SINGLE_PRICE_ID;
 }
 
 function validatePriceId(priceId: string | undefined) {
@@ -252,6 +322,7 @@ function logCheckoutFailure(details: {
   requestId: string;
   orderId?: string;
   packageType?: string;
+  selectedPriceEnvName?: string;
   failureReason: string;
   stripeCode?: string;
   stripeType?: string;

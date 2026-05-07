@@ -108,7 +108,7 @@ function emailErrorMessage(
   }
 
   if (status === 413) {
-    return "This wallpaper is too large to email. Please use the download button.";
+    return "These files are too large to email. Please use the download buttons.";
   }
 
   return data.message || data.error || "Email delivery failed. Please use Download Wallpaper.";

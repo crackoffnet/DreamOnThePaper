@@ -150,6 +150,12 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
           }),
         );
       }
+      if (generated.finalAssets?.length) {
+        sessionStorage.setItem(
+          "dreamFinalAssets",
+          JSON.stringify(generated.finalAssets),
+        );
+      }
     },
     [sessionId],
   );

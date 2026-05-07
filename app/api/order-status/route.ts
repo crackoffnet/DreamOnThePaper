@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder, inputFromDbOrder } from "@/lib/orders";
+import { getFinalAssets, getOrder, inputFromDbOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
@@ -51,18 +51,30 @@ export async function POST(request: Request) {
       return statusError("Unable to verify this paid order.", 400);
     }
 
+    const assets = await getFinalAssets(order.id);
+    const finalAssets = assets.map((asset) => ({
+      id: asset.id,
+      assetType: asset.asset_type,
+      label: labelForAsset(asset.asset_type),
+      imageUrl: `/api/final-asset?assetId=${encodeURIComponent(asset.id)}`,
+      width: asset.width,
+      height: asset.height,
+      format: "PNG" as const,
+    }));
     const finalImageUrl =
       order.status === "final_generated" && order.final_r2_key
         ? `/api/wallpaper-image/${encodeURIComponent(order.final_r2_key)}`
-        : undefined;
+        : finalAssets[0]?.imageUrl;
 
     return NextResponse.json({
       success: true,
       status: order.status,
-      hasFinalImage: Boolean(finalImageUrl),
+      hasFinalImage: Boolean(finalImageUrl || finalAssets.length),
       finalImageUrl,
-      finalWidth: finalImageUrl ? order.width : undefined,
-      finalHeight: finalImageUrl ? order.height : undefined,
+      imageUrl: finalImageUrl,
+      finalAssets,
+      finalWidth: finalAssets[0]?.width || (finalImageUrl ? order.width : undefined),
+      finalHeight: finalAssets[0]?.height || (finalImageUrl ? order.height : undefined),
       meta: finalImageUrl ? getWallpaperMeta(inputFromDbOrder(order)) : undefined,
     });
   } catch (error) {
@@ -73,6 +85,15 @@ export async function POST(request: Request) {
     });
     return statusError("Unable to check wallpaper status.", 500);
   }
+}
+
+function labelForAsset(assetType: string) {
+  if (assetType === "mobile") return "Mobile wallpaper";
+  if (assetType === "desktop") return "Desktop wallpaper";
+  if (assetType === "version_1") return "Version 1";
+  if (assetType === "version_2") return "Version 2";
+  if (assetType === "version_3") return "Version 3";
+  return "Wallpaper";
 }
 
 function statusError(message: string, status = 400) {

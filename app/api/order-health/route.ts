@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder } from "@/lib/orders";
+import { getFinalAssets, getOrder } from "@/lib/orders";
 
 const orderHealthSchema = z.object({
   orderId: z.string().min(8).max(120),
@@ -30,12 +30,15 @@ export async function GET(request: Request) {
     );
   }
 
+  const finalAssets = await getFinalAssets(order.id);
+
   return NextResponse.json(
     {
       exists: true,
       status: order.status,
       hasPreviewImage: Boolean(order.preview_r2_key),
-      hasFinalImage: Boolean(order.final_r2_key),
+      hasFinalImage: Boolean(order.final_r2_key || finalAssets.length),
+      finalAssetCount: finalAssets.length,
       finalGenerationAttempts: order.final_generation_attempts,
     },
     {

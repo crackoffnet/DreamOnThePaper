@@ -202,6 +202,14 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
       </section>
 
       <aside className="space-y-3">
+        <div className="rounded-[1.5rem] border border-white/70 bg-white/50 p-4">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em] text-ink">
+            Choose your package.
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-taupe">
+            Select how many final wallpapers you want after your free preview.
+          </p>
+        </div>
         <div className="grid gap-3">
           {packageIds.map((packageId) => (
             <PricingCard

@@ -11,6 +11,15 @@ import { signFinalGenerationToken } from "@/lib/payment";
 import type { PackageId } from "@/lib/plans";
 import { packageIds } from "@/lib/plans";
 import { assertSameOrigin } from "@/lib/security";
+import { getDb } from "@/lib/cloudflare";
+import {
+  getOrCreateCustomerByEmail,
+  normalizeEmail,
+  patchOrderTracking,
+  stripeModeFromSecret,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
+import { getRequestMetadata } from "@/lib/requestMetadata";
 
 const verifyCheckoutSchema = z.object({
   sessionId: z.string().min(8).max(300),
@@ -18,6 +27,7 @@ const verifyCheckoutSchema = z.object({
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const requestMetadata = await getRequestMetadata(request);
   let sessionIdPrefix = "";
   let orderId: string | undefined;
   let paymentStatus: string | undefined;
@@ -81,6 +91,15 @@ export async function POST(request: Request) {
         sessionIdPrefix,
         paymentStatus,
         failureReason: "Payment not paid",
+      });
+      void trackOrderEvent({
+        eventType: "payment_failed",
+        requestMetadata,
+        metadata: {
+          requestId,
+          sessionIdPrefix,
+          paymentStatus,
+        },
       });
       return verifyError(
         "Payment is not verified yet. Please wait a moment and retry.",
@@ -154,6 +173,52 @@ export async function POST(request: Request) {
         503,
       );
     }
+    const customerEmail = session.customer_details?.email || undefined;
+    const stripeCustomerId = stripeId(session.customer);
+    const stripePaymentIntentId = stripeId(session.payment_intent);
+    const amountCents = session.amount_total || paidOrder.amount_cents || 0;
+    const customer = customerEmail
+      ? await getOrCreateCustomerByEmail(
+          getDb(),
+          customerEmail,
+          stripeCustomerId,
+          orderId,
+          amountCents,
+          !existingOrder.paid_at,
+        )
+      : null;
+
+    void patchOrderTracking(orderId, {
+      customer_id: customer?.id || paidOrder.customer_id || null,
+      customer_email: customerEmail || null,
+      customer_email_normalized: customerEmail ? normalizeEmail(customerEmail) : null,
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id: stripePaymentIntentId || null,
+      stripe_customer_id: stripeCustomerId || null,
+      stripe_payment_status: session.payment_status,
+      stripe_mode: stripeModeFromSecret(),
+      package_type: packageId || paidOrder.package_type || "single",
+      amount_cents: amountCents,
+      currency: session.currency || "usd",
+      paid_at: Date.now(),
+    });
+    void trackOrderEvent({
+      orderId,
+      customerId: customer?.id || null,
+      eventType: "payment_verified",
+      statusBefore: existingOrder.status,
+      statusAfter: paidOrder.status,
+      packageType: packageId || paidOrder.package_type || "single",
+      requestMetadata,
+      metadata: {
+        requestId,
+        sessionIdPrefix,
+        paymentStatus,
+        stripeMode: stripeModeFromSecret(),
+        amountCents,
+        currency: session.currency || "usd",
+      },
+    });
 
     const finalGenerationToken = await signFinalGenerationToken({
       sessionId: session.id,
@@ -176,7 +241,7 @@ export async function POST(request: Request) {
       paid: true,
       orderId,
       packageId: packageId || paidOrder.package_type || "single",
-      customerEmail: session.customer_details?.email || null,
+      customerEmail: customerEmail || null,
       finalGenerationToken,
     });
   } catch (error) {
@@ -193,6 +258,23 @@ export async function POST(request: Request) {
     });
     return verifyError("Unable to verify payment. Please contact support.", 500);
   }
+}
+
+function stripeId(value: unknown) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id;
+    return typeof id === "string" ? id : "";
+  }
+
+  return "";
 }
 
 function normalizePackageId(value: string | null | undefined): PackageId | null {

@@ -28,10 +28,12 @@ export function PricingCard({ packageId, selected, onSelect }: PricingCardProps)
           <h2 className="text-lg font-semibold text-ink">{plan.name}</h2>
           <p className="mt-1 text-sm leading-5 text-taupe">{plan.description}</p>
         </div>
-        <p className="shrink-0 text-xl font-semibold text-ink">{plan.price}</p>
+        <p className="shrink-0 text-xl font-semibold text-ink">
+          {plan.priceLabel}
+        </p>
       </div>
       <div className="mt-4 grid gap-2">
-        {plan.features.map((feature) => (
+        {plan.checkoutBullets.map((feature) => (
           <div key={feature} className="flex items-center gap-2 text-sm text-cocoa">
             <Check aria-hidden className="h-4 w-4 text-gold" />
             {feature}

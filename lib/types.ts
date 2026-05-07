@@ -61,6 +61,7 @@ export type GenerateResponse = {
   finalImageUrl?: string;
   finalWidth?: number;
   finalHeight?: number;
+  finalAssets?: FinalAssetResult[];
   imageBase64?: string;
   mimeType?: string;
   meta?: WallpaperMeta;
@@ -69,4 +70,15 @@ export type GenerateResponse = {
   retryAfterSeconds?: number;
   message?: string;
   error?: string;
+};
+
+export type FinalAssetResult = {
+  id: string;
+  assetType: string;
+  label: string;
+  imageUrl: string;
+  downloadUrl?: string;
+  width: number;
+  height: number;
+  format: "PNG";
 };

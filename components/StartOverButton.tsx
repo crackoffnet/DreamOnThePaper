@@ -13,7 +13,23 @@ export function StartOverButton({ className = "" }: StartOverButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
-  function startOver() {
+  async function startOver() {
+    const orderToken =
+      sessionStorage.getItem("dreamCheckoutOrderToken") ||
+      sessionStorage.getItem("dreamOrderToken") ||
+      localStorage.getItem("dreamCheckoutOrderToken") ||
+      localStorage.getItem("dreamOrderToken") ||
+      "";
+
+    if (orderToken) {
+      await fetch("/api/order-abandon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderToken }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+
     clearDreamState();
     setIsOpen(false);
     router.replace("/create");

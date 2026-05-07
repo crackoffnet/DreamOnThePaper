@@ -23,13 +23,6 @@ type PreviewState = {
   orderSnapshotToken: string | null;
 };
 
-const unlockFeatures = [
-  "High resolution",
-  "No watermark",
-  "Download + Email",
-  "Original selected size",
-];
-
 export function PreviewUnlock() {
   const router = useRouter();
   const [preview, setPreview] = useState<PreviewState>({
@@ -97,6 +90,8 @@ export function PreviewUnlock() {
       </section>
     );
   }
+
+  const packageConfig = packages[selectedPackage];
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[0.48fr_0.52fr]">
@@ -176,10 +171,10 @@ export function PreviewUnlock() {
             </h2>
           </div>
           <p className="text-sm leading-6 text-taupe">
-            {packages[selectedPackage].price} unlocks the high-quality final image.
+            {packageConfig.priceLabel} unlocks {packageConfig.name.toLowerCase()}.
           </p>
           <div className="mt-4 grid gap-2">
-            {unlockFeatures.map((feature) => (
+            {packageConfig.checkoutBullets.map((feature) => (
               <div key={feature} className="flex items-center gap-2 text-sm text-cocoa">
                 <Check aria-hidden className="h-4 w-4 text-gold" />
                 {feature}
