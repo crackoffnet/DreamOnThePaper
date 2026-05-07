@@ -24,13 +24,13 @@ export function HomepageStateReset() {
   }
 
   return (
-    <div className="px-4 pt-3 sm:px-6">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 rounded-2xl border border-gold/15 bg-white/55 px-3 py-2 text-xs text-cocoa shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <p>You have a wallpaper in progress.</p>
+    <div className="px-4 pt-2 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-1.5 rounded-full border border-gold/15 bg-white/55 px-3 py-1.5 text-[11.5px] font-light text-cocoa sm:flex-row sm:items-center sm:justify-between">
+        <p className="truncate">You have a wallpaper in progress.</p>
         <div className="flex items-center gap-2">
           <Link
             href="/create"
-            className="focus-ring rounded-full px-3 py-2 font-semibold text-ink transition hover:bg-white"
+            className="focus-ring rounded-full px-3 py-1.5 font-medium text-ink transition hover:bg-white"
           >
             Continue
           </Link>

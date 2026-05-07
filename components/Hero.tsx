@@ -26,27 +26,95 @@ const cardTextures = [
   "radial-gradient(circle at 20% 22%, rgba(255,255,255,0.28), transparent 7rem), linear-gradient(155deg, transparent 0 50%, rgba(255,255,255,0.14) 50% 53%, transparent 53%)",
 ];
 
+function CardScene({ id }: { id: string }) {
+  if (id === "soft-luxury") {
+    return (
+      <>
+        <div className="absolute -left-8 top-0 h-full w-24 rotate-6 rounded-full bg-white/18 blur-sm" />
+        <div className="absolute right-5 top-12 h-32 w-10 rotate-12 rounded-full border border-white/20 bg-white/12" />
+        <div className="absolute right-8 bottom-14 h-14 w-10 rounded-b-full rounded-t-[999px] border border-white/25 bg-pearl/18" />
+        <div className="absolute right-6 bottom-11 h-3 w-16 rounded-full bg-white/20" />
+      </>
+    );
+  }
+
+  if (id === "wealth-business") {
+    return (
+      <>
+        <div className="absolute left-6 top-16 h-16 w-24 rounded-lg border border-white/22 bg-white/12" />
+        <div className="absolute left-8 top-[5.1rem] h-px w-20 bg-white/25" />
+        <div className="absolute right-6 top-8 h-16 w-16 rounded-full bg-gold/12" />
+        <div className="absolute bottom-14 right-5 h-10 w-20 rounded-xl border border-white/20 bg-ink/8" />
+        <div className="absolute bottom-11 left-4 h-px w-[78%] bg-white/24" />
+      </>
+    );
+  }
+
+  if (id === "nature-reset") {
+    return (
+      <>
+        <div className="absolute bottom-16 left-0 h-24 w-[55%] rounded-tr-[90px] bg-white/13" />
+        <div className="absolute bottom-12 right-0 h-28 w-[62%] rounded-tl-[110px] bg-ink/8" />
+        <div className="absolute left-8 top-12 h-20 w-20 rounded-full border border-white/20 bg-white/10" />
+        <div className="absolute left-5 top-6 h-20 w-px rotate-[-24deg] bg-white/25" />
+        <div className="absolute left-8 top-10 h-8 w-12 rotate-[-24deg] rounded-full border border-white/20" />
+      </>
+    );
+  }
+
+  if (id === "fitness-health") {
+    return (
+      <>
+        <div className="absolute bottom-16 left-5 h-16 w-[70%] rotate-[-8deg] rounded-2xl border border-white/18 bg-white/12" />
+        <div className="absolute right-7 top-14 h-20 w-7 rounded-full border border-white/24 bg-pearl/16" />
+        <div className="absolute right-16 bottom-14 h-11 w-11 rounded-full border border-white/22 bg-ink/8" />
+        <div className="absolute right-8 bottom-11 h-7 w-7 rounded-full border border-white/22 bg-white/13" />
+      </>
+    );
+  }
+
+  if (id === "family-home") {
+    return (
+      <>
+        <div className="absolute right-5 top-8 h-28 w-20 rounded-t-full border border-white/18 bg-white/11" />
+        <div className="absolute left-5 bottom-16 h-12 w-[70%] rounded-2xl bg-ink/8" />
+        <div className="absolute left-8 bottom-12 h-5 w-16 rounded-full bg-white/18" />
+        <div className="absolute right-10 bottom-12 h-12 w-8 rounded-t-full border border-white/20 bg-pearl/15" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="absolute left-0 top-24 h-px w-full bg-white/25" />
+      <div className="absolute bottom-14 left-4 h-20 w-[78%] rounded-[999px] border border-white/18 bg-white/10" />
+      <div className="absolute right-7 top-10 h-14 w-14 rounded-full bg-white/18" />
+      <div className="absolute left-6 bottom-20 h-px w-[72%] rotate-[-8deg] bg-white/25" />
+    </>
+  );
+}
+
 export function Hero() {
   return (
-    <section className="px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-      <div className="mx-auto grid max-w-7xl items-center gap-6 lg:min-h-[calc(100svh-10.5rem)] lg:grid-cols-[0.94fr_1.06fr] xl:gap-10">
+    <section className="px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+      <div className="mx-auto grid max-w-7xl items-center gap-5 lg:min-h-[calc(100svh-8.75rem)] lg:grid-cols-[0.94fr_1.06fr] xl:gap-9">
         <div className="max-w-xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold">
             <Sparkles aria-hidden className="h-3 w-3" />
             AI vision board wallpapers
           </div>
 
-          <h1 className="max-w-[9.5ch] font-display text-[3.35rem] font-normal leading-[0.91] tracking-[-0.04em] text-ink sm:text-[4.25rem] lg:text-[5.35rem]">
+          <h1 className="max-w-[9.5ch] font-display text-[3.15rem] font-normal leading-[0.92] tracking-[-0.04em] text-ink sm:text-[4rem] lg:text-[4.95rem]">
             Create a wallpaper for the life you&apos;re{" "}
             <em className="font-display italic text-cocoa">becoming.</em>
           </h1>
 
-          <p className="mt-4 max-w-sm text-[13px] font-light leading-6 text-taupe sm:text-[14px]">
+          <p className="mt-3 max-w-sm text-[13px] font-light leading-6 text-taupe sm:text-[14px]">
             Answer a few thoughtful prompts and generate a personalized phone,
             desktop, or custom wallpaper around your goals and future self.
           </p>
 
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <Link
               href="/create"
               className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 text-[12.5px] font-medium text-pearl transition hover:-translate-y-px hover:bg-cocoa sm:w-auto"
@@ -63,7 +131,7 @@ export function Hero() {
             </Link>
           </div>
 
-          <div className="mt-5 grid max-w-md grid-cols-2 gap-x-3 gap-y-2">
+          <div className="mt-4 grid max-w-md grid-cols-2 gap-x-3 gap-y-2">
             {trustItems.map((item) => (
               <div
                 key={item.label}
@@ -79,7 +147,7 @@ export function Hero() {
         </div>
 
         <div id="examples" className="scroll-mt-20 overflow-hidden">
-          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:gap-3.5">
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
             {exampleWallpapers.map((example, index) => (
               <Link
                 key={example.id}
@@ -88,7 +156,7 @@ export function Hero() {
                 aria-label={`Start with ${example.title} mood`}
               >
                 <article
-                  className="relative aspect-[0.68/1] overflow-hidden rounded-[22px] border border-[rgba(180,160,130,0.22)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:border-gold/45 sm:aspect-auto sm:h-[clamp(205px,28svh,258px)]"
+                  className="relative aspect-[0.68/1] overflow-hidden rounded-[20px] border border-[rgba(180,160,130,0.22)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:border-gold/45 sm:aspect-auto sm:h-[clamp(190px,25svh,232px)]"
                   style={{ background: example.gradient }}
                 >
                   <div
@@ -96,17 +164,13 @@ export function Hero() {
                     style={{ background: cardTextures[index] }}
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.18),transparent_38%),linear-gradient(to_top,rgba(30,26,22,0.45),rgba(30,26,22,0.05)_48%,transparent)]" />
-                  <div className="absolute -right-8 top-10 h-28 w-28 rounded-full border border-white/20 bg-white/10 blur-[1px]" />
-                  <div className="absolute -bottom-10 left-4 h-28 w-40 rotate-[-10deg] rounded-[999px] border border-white/15 bg-white/10" />
+                  <CardScene id={example.id} />
                   <span className="absolute left-3 top-3 rounded-full border border-white/40 bg-pearl/78 px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.13em] text-cocoa backdrop-blur-md">
                     {example.title}
                   </span>
-                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] font-display text-[1.45rem] font-normal italic leading-[1.03] tracking-[-0.035em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)] sm:text-[1.52rem] lg:text-[1.62rem]">
+                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] font-display text-[1.38rem] font-normal italic leading-[1.03] tracking-[-0.035em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)] sm:text-[1.42rem] lg:text-[1.5rem]">
                     {example.quote}
                   </p>
-                  <span className="pointer-events-none absolute right-3 top-3 hidden rounded-full border border-white/35 bg-ink/18 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.14em] text-white/82 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 group-focus-visible:opacity-100 lg:inline-flex">
-                    Start
-                  </span>
                 </article>
               </Link>
             ))}

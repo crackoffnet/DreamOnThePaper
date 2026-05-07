@@ -5,7 +5,7 @@ import { HowItWorksPopover } from "@/components/HowItWorksPopover";
 export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-[rgba(180,160,130,0.2)] bg-[rgba(245,240,232,0.92)] backdrop-blur-xl">
-      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[52px] w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="focus-ring flex items-center gap-2 rounded-full"

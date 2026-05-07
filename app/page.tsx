@@ -56,7 +56,7 @@ export default function Home() {
       <Header />
       <HomepageStateReset />
       <Hero />
-      <footer className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 pb-4 text-[11px] font-light text-taupe sm:px-6 lg:px-8">
+      <footer className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 pb-2 text-[10.5px] font-light text-taupe sm:px-6 lg:px-8">
         <span>
           Dream On The Paper <span aria-hidden>&middot;</span> Created by GAX
           Global
