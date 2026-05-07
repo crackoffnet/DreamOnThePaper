@@ -17,19 +17,21 @@ export type RateLimitResult = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const CHECKOUT_LIMIT_PER_HOUR = 20;
-const PREVIEW_LIMIT_PER_DAY = 3;
-const EMAIL_IP_LIMIT_PER_HOUR = 5;
+const PREVIEW_ATTEMPT_LIMIT_PER_HOUR = 10;
+const PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY = 3;
+const EMAIL_IP_LIMIT_PER_HOUR = 20;
 const EMAIL_ORDER_LIMIT = 3;
 
 export const rateLimitConfig = {
   checkoutLimitPerHour: CHECKOUT_LIMIT_PER_HOUR,
-  previewLimitPerDay: PREVIEW_LIMIT_PER_DAY,
+  previewAttemptLimitPerHour: PREVIEW_ATTEMPT_LIMIT_PER_HOUR,
+  previewSuccessLimitPerIpPerDay: PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY,
   emailIpLimitPerHour: EMAIL_IP_LIMIT_PER_HOUR,
   emailOrderLimit: EMAIL_ORDER_LIMIT,
 };
 
 export async function checkPreviewRateLimit(ipOrSession: string) {
-  return (await checkRateLimitKey(previewIpKey(ipOrSession), PREVIEW_LIMIT_PER_DAY, DAY_MS)).allowed;
+  return (await checkPreviewSuccessLimit(ipOrSession)).allowed;
 }
 
 export async function checkCheckoutRateLimit(ip: string) {
@@ -49,7 +51,42 @@ export async function checkEmailOrderRateLimit(orderId: string) {
 }
 
 export async function recordPreviewUse(ipOrSession: string) {
-  return (await checkRateLimitKey(`preview-session:${ipOrSession}`, 1, DAY_MS)).allowed;
+  return recordPreviewSuccess(ipOrSession, ipOrSession);
+}
+
+export async function checkPreviewAttemptLimit(ip: string) {
+  return checkRateLimitKey(previewAttemptIpKey(ip), PREVIEW_ATTEMPT_LIMIT_PER_HOUR, HOUR_MS);
+}
+
+export async function checkPreviewSuccessLimit(ip: string) {
+  return peekRateLimitKey(
+    previewSuccessIpKey(ip),
+    PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY,
+    DAY_MS,
+  );
+}
+
+export async function checkPreviewSessionSuccess(previewSessionId: string) {
+  return peekRateLimitKey(previewSuccessSessionKey(previewSessionId), 1, DAY_MS);
+}
+
+export async function recordPreviewSuccess(ip: string, previewSessionId: string) {
+  const ipResult = await checkRateLimitKey(
+    previewSuccessIpKey(ip),
+    PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY,
+    DAY_MS,
+  );
+  const sessionResult = await checkRateLimitKey(
+    previewSuccessSessionKey(previewSessionId),
+    1,
+    DAY_MS,
+  );
+
+  return {
+    allowed: ipResult.allowed && sessionResult.allowed,
+    ipResult,
+    sessionResult,
+  };
 }
 
 export async function checkRateLimitKey(
@@ -84,6 +121,26 @@ export async function checkRateLimitKey(
   return result(true, key, count, limit, stored.resetAt, now);
 }
 
+export async function peekRateLimitKey(
+  key: string,
+  limit: number,
+  windowMs: number,
+) {
+  const kv = getRateLimitKv();
+  const now = Date.now();
+  const stored = await kv.get<RateLimitEntry>(key, "json");
+
+  if (!stored || stored.resetAt <= now) {
+    return result(true, key, 0, limit, now + windowMs, now);
+  }
+
+  if (stored.count >= limit) {
+    return result(false, key, stored.count, limit, stored.resetAt, now);
+  }
+
+  return result(true, key, stored.count, limit, stored.resetAt, now);
+}
+
 export async function checkIpRateLimit(
   request: Request,
   scope: string,
@@ -94,7 +151,7 @@ export async function checkIpRateLimit(
 }
 
 export async function consumePreviewSession(previewSessionId: string) {
-  return recordPreviewUse(previewSessionId);
+  return (await checkPreviewSessionSuccess(previewSessionId)).allowed;
 }
 
 export async function consumeFinalSession(sessionId: string) {
@@ -135,8 +192,16 @@ function checkoutIpKey(ip: string) {
   return `checkout:${ip}:${hourBucket()}`;
 }
 
-function previewIpKey(ip: string) {
-  return `preview:${ip}:${dateBucket()}`;
+function previewAttemptIpKey(ip: string) {
+  return `preview:attempt:ip:${ip}:${hourBucket()}`;
+}
+
+function previewSuccessIpKey(ip: string) {
+  return `preview:success:ip:${ip}:${dateBucket()}`;
+}
+
+function previewSuccessSessionKey(sessionId: string) {
+  return `preview:success:session:${sessionId}`;
 }
 
 function emailIpKey(ip: string) {

@@ -7,10 +7,16 @@ import {
 } from "@/lib/schemas";
 import {
   assertSameOrigin,
+  getClientIp,
   safeLog,
 } from "@/lib/security";
 import { getRuntimeEnv } from "@/lib/env";
-import { checkIpRateLimit, consumePreviewSession } from "@/lib/rateLimit";
+import {
+  checkPreviewAttemptLimit,
+  checkPreviewSessionSuccess,
+  checkPreviewSuccessLimit,
+  recordPreviewSuccess,
+} from "@/lib/rateLimit";
 import {
   storeOrder,
   type OrderSnapshot,
@@ -34,13 +40,36 @@ type OpenAIImageResponse = {
 };
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+
   try {
     if (!assertSameOrigin(request)) {
       return previewError("Request origin is not allowed.", 403);
     }
 
-    if (!(await checkIpRateLimit(request, "preview", 3, 24 * 60 * 60 * 1000))) {
-      return previewError("Too many preview requests. Please try again later.", 429);
+    const env = getRuntimeEnv();
+    const bypassToken = request.headers.get("x-admin-bypass-token");
+    const hasRateLimitBypass =
+      Boolean(env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN) &&
+      bypassToken === env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN;
+    const clientIp = getClientIp(request);
+
+    if (!hasRateLimitBypass) {
+      const attemptLimit = await checkPreviewAttemptLimit(clientIp);
+      if (!attemptLimit.allowed) {
+        logPreviewRateLimit({
+          requestId,
+          failureReason: "Preview attempt limit exceeded",
+          limitType: "attempt",
+          retryAfterSeconds: attemptLimit.retryAfterSeconds,
+        });
+        return previewError(
+          "Too many preview attempts. Please wait and try again.",
+          429,
+          "PREVIEW_ATTEMPT_LIMIT",
+          attemptLimit.retryAfterSeconds,
+        );
+      }
     }
 
     const body = await request.json().catch(() => null);
@@ -63,26 +92,56 @@ export async function POST(request: Request) {
       return previewError("Please keep the wallpaper request safe and respectful.");
     }
 
-    if (!(await consumePreviewSession(parsed.data.previewSessionId))) {
-      return previewError(
-        "You already created your free preview. Unlock the full wallpaper to continue.",
-        409,
+    if (!hasRateLimitBypass) {
+      const sessionSuccess = await checkPreviewSessionSuccess(
+        parsed.data.previewSessionId,
       );
+      if (!sessionSuccess.allowed) {
+        return previewError(
+          "You already created your free preview. Unlock the full wallpaper to continue.",
+          409,
+          "PREVIEW_SESSION_USED",
+          sessionSuccess.retryAfterSeconds,
+        );
+      }
+
+      const successLimit = await checkPreviewSuccessLimit(clientIp);
+      if (!successLimit.allowed) {
+        logPreviewRateLimit({
+          requestId,
+          failureReason: "Preview daily success limit exceeded",
+          limitType: "success",
+          retryAfterSeconds: successLimit.retryAfterSeconds,
+        });
+        return previewError(
+          "You've reached today's preview limit. Please try again tomorrow.",
+          429,
+          "PREVIEW_DAILY_LIMIT",
+          successLimit.retryAfterSeconds,
+        );
+      }
     }
 
     const input = parsed.data as WallpaperInput;
-    const env = getRuntimeEnv();
     const meta = getWallpaperMeta(input);
     const prompt = buildPreviewWallpaperPrompt(input);
     const dbOrder = await createOrder(input);
 
     if (!dbOrder) {
-      return previewError("Preview generation failed", 503);
+      return previewError(
+        "We couldn't create your preview right now. Please try again.",
+        503,
+        "PREVIEW_GENERATION_FAILED",
+      );
     }
 
     if (!env.OPENAI_API_KEY) {
       if (process.env.NODE_ENV === "production") {
-        return previewError("Preview generation is not configured yet.", 503);
+        return previewError(
+          "We couldn't create your preview right now. Please try again.",
+          503,
+          "PREVIEW_GENERATION_FAILED",
+        );
       }
 
       const savedPreview = await savePreviewImageFromDataUrl(
@@ -91,13 +150,20 @@ export async function POST(request: Request) {
       );
 
       if (!savedPreview) {
-        return previewError("Preview generation failed", 500);
+        return previewError(
+          "We couldn't create your preview right now. Please try again.",
+          500,
+          "PREVIEW_GENERATION_FAILED",
+        );
       }
       await attachPreviewImage(dbOrder.id, savedPreview.key);
       const order = orderSnapshotFromDbOrder(dbOrder, input, savedPreview.url);
       storeOrder(order);
       const orderToken = await signCheckoutOrderToken(order);
       const orderSnapshotToken = await signOrderSnapshot(order);
+      if (!hasRateLimitBypass) {
+        await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
+      }
       console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
 
       return NextResponse.json({
@@ -133,7 +199,11 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       safeLog("OpenAI preview generation failed", response.status);
-      return previewError("Preview generation failed", 502);
+      return previewError(
+        "We couldn't create your preview right now. Please try again.",
+        502,
+        "PREVIEW_GENERATION_FAILED",
+      );
     }
 
     const result = (await response.json()) as OpenAIImageResponse;
@@ -145,13 +215,20 @@ export async function POST(request: Request) {
         : null;
 
     if (!savedPreview) {
-      return previewError("Preview generation failed", 502);
+      return previewError(
+        "We couldn't create your preview right now. Please try again.",
+        502,
+        "PREVIEW_GENERATION_FAILED",
+      );
     }
     await attachPreviewImage(dbOrder.id, savedPreview.key);
     const order = orderSnapshotFromDbOrder(dbOrder, input, savedPreview.url);
     storeOrder(order);
     const orderToken = await signCheckoutOrderToken(order);
     const orderSnapshotToken = await signOrderSnapshot(order);
+    if (!hasRateLimitBypass) {
+      await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
+    }
     console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
 
     return NextResponse.json({
@@ -168,7 +245,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     safeLog("Preview generation error", error);
-    return previewError("Preview generation failed", 500);
+    return previewError(
+      "We couldn't create your preview right now. Please try again.",
+      500,
+      "PREVIEW_GENERATION_FAILED",
+    );
   }
 }
 
@@ -229,15 +310,36 @@ function imageIdFromUrl(value: string) {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function previewError(message: string, status = 400) {
+function previewError(
+  message: string,
+  status = 400,
+  code?: string,
+  retryAfterSeconds?: number,
+) {
   return NextResponse.json(
     {
       success: false,
+      code,
       message,
       error: message,
     },
-    { status },
+    {
+      status,
+      headers:
+        retryAfterSeconds && status === 429
+          ? { "Retry-After": String(retryAfterSeconds) }
+          : undefined,
+    },
   );
+}
+
+function logPreviewRateLimit(details: {
+  requestId: string;
+  failureReason: string;
+  limitType: "attempt" | "success";
+  retryAfterSeconds: number;
+}) {
+  console.error("[preview-rate-limit]", details);
 }
 
 function hasOversizedCustomDimensions(body: unknown) {

@@ -7,9 +7,13 @@ export function GET() {
 
   return NextResponse.json(
     {
-      checkoutLimitPerHour: rateLimitConfig.checkoutLimitPerHour,
-      previewLimitPerDay: rateLimitConfig.previewLimitPerDay,
+      ok: true,
       hasKvBinding: Boolean(bindings.DREAM_RATE_LIMITS),
+      previewAttemptLimitPerHour: rateLimitConfig.previewAttemptLimitPerHour,
+      previewSuccessLimitPerIpPerDay:
+        rateLimitConfig.previewSuccessLimitPerIpPerDay,
+      checkoutLimitPerHour: rateLimitConfig.checkoutLimitPerHour,
+      emailIpLimitPerHour: rateLimitConfig.emailIpLimitPerHour,
     },
     {
       headers: {

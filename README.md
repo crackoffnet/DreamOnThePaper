@@ -32,6 +32,7 @@ STRIPE_SINGLE_PRICE_ID=
 STRIPE_BUNDLE_PRICE_ID=
 STRIPE_PREMIUM_PRICE_ID=
 CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
+PREVIEW_RATE_LIMIT_BYPASS_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
@@ -130,6 +131,10 @@ the file is small enough for email delivery. Until `BREVO_API_KEY`,
 `FROM_EMAIL`, and `FROM_NAME` are configured, email delivery is disabled and
 users should download the PNG.
 
+For deliverability and privacy, wallpaper delivery emails are attachment-only
+transactional emails. They do not include public image links, download links,
+website links, tracked buttons, prompts, private answers, or order tokens.
+
 Brevo's free plan currently includes 300 email sends/day, which is enough for
 the MVP.
 
@@ -166,15 +171,23 @@ Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`,
 send it from customer-facing browser code.
 
 Checkout creation is limited to 20 attempts per IP/hour. Preview generation
-stays stricter at 3 per IP/day plus one browser-session preview. Rate-limit KV
-keys are bucketed for easier testing cleanup:
+uses a fair preview policy: 10 preview attempts per IP/hour for abuse
+protection, 3 successful previews per IP/day, and one successful free preview
+per browser session. Failed OpenAI/R2/D1 preview generations count toward the
+attempt limit but do not consume successful preview quota. Rate-limit KV keys
+are bucketed for easier testing cleanup:
 
 - Checkout: `checkout:{ip}:{YYYY-MM-DDTHH}`
-- Preview: `preview:{ip}:{YYYY-MM-DD}`
+- Preview attempts: `preview:attempt:ip:{ip}:{YYYY-MM-DDTHH}`
+- Preview IP successes: `preview:success:ip:{ip}:{YYYY-MM-DD}`
+- Preview session successes: `preview:success:session:{sessionId}`
 
 During testing, use the Cloudflare KV dashboard for `DREAM_RATE_LIMITS` to
 delete the current checkout key for your IP/hour bucket if you need to unblock
-manual retries.
+manual retries. You can also delete the relevant preview attempt/success keys
+for your current IP bucket. `PREVIEW_RATE_LIMIT_BYPASS_TOKEN` is optional for
+manual curl/Postman testing only and must not be sent from customer-facing
+browser code.
 
 The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one generated final image.
 

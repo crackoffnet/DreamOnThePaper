@@ -65,6 +65,8 @@ export type GenerateResponse = {
   mimeType?: string;
   meta?: WallpaperMeta;
   mock?: boolean;
+  code?: string;
+  retryAfterSeconds?: number;
   message?: string;
   error?: string;
 };

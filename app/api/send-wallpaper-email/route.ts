@@ -120,7 +120,9 @@ export async function POST(request: Request) {
         to: [{ email: parsed.data.email }],
         subject: "Your Dream On The Paper wallpaper is ready",
         htmlContent:
-          "<p>Your personalized wallpaper is ready.</p><p>Download it from the attachment below.</p>",
+          "<p>Your personalized wallpaper is ready.</p><p>Your final wallpaper is attached to this email.</p><p>If the attachment is blocked by your email provider, return to your checkout success page and use the Download Wallpaper button.</p>",
+        textContent:
+          "Your personalized wallpaper is ready.\nYour final wallpaper is attached to this email.\nIf the attachment is blocked, return to your checkout success page and use Download Wallpaper.",
         attachment: [
           {
             name: `dream-on-the-paper-wallpaper-${order.id.slice(0, 8)}.png`,
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
         statusText: response.statusText,
         brevoError: brevoError.slice(0, 500),
       });
-      return emailError("Email delivery failed. Please download your wallpaper.", 502);
+      return emailError("Email delivery failed. Please use Download Wallpaper.", 502);
     }
 
     console.info("[brevo-email]", {

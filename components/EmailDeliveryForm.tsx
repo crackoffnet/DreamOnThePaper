@@ -33,7 +33,7 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
         throw new Error(emailErrorMessage(response.status, data));
       }
 
-      setStatus("Wallpaper sent. Check your inbox.");
+      setStatus("Wallpaper sent. Check your inbox or junk folder.");
       setEmail("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to send email.");
@@ -100,7 +100,7 @@ function emailErrorMessage(
   }
 
   if (status === 502) {
-    return "Email delivery failed. Please download your wallpaper.";
+    return "Email delivery failed. Please use Download Wallpaper.";
   }
 
   if (status === 429) {
@@ -111,5 +111,5 @@ function emailErrorMessage(
     return "This wallpaper is too large to email. Please use the download button.";
   }
 
-  return data.message || data.error || "Unable to send email.";
+  return data.message || data.error || "Email delivery failed. Please use Download Wallpaper.";
 }

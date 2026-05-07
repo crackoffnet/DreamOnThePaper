@@ -218,6 +218,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isGenerating) {
+      return;
+    }
+
     setError("");
     setIsGenerating(true);
 
@@ -270,9 +274,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
       const imageUrl = await imageUrlFromPayload(data);
 
       if (!response.ok || data.success === false || !imageUrl || !data.meta) {
-        throw new Error(
-          data.message || data.error || "Unable to create your preview.",
-        );
+        throw new Error(formatPreviewError(data));
       }
 
       sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
@@ -483,7 +485,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
             {isGenerating || draft?.previewStatus === "generating" ? (
               <LoadingGeneration label="Creating your preview..." />
             ) : null}
-            {draft?.previewStatus === "failed" && !isGenerating ? (
+            {draft?.previewStatus === "failed" && !isGenerating && !error ? (
               <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                 Preview generation failed. You can edit your answers and try
                 again if your free preview is still available.
@@ -673,6 +675,30 @@ function getMoodPreset(value: string | null):
   };
 
   return value && value in presets ? presets[value] : null;
+}
+
+function formatPreviewError(data: GenerateResponse) {
+  const retryText = data.retryAfterSeconds
+    ? ` Try again in about ${Math.max(1, Math.ceil(data.retryAfterSeconds / 60))} minutes.`
+    : "";
+
+  if (data.code === "PREVIEW_ATTEMPT_LIMIT") {
+    return `Too many preview attempts. Please wait and try again.${retryText}`;
+  }
+
+  if (data.code === "PREVIEW_DAILY_LIMIT") {
+    return "You've reached today's free preview limit. Please try again tomorrow.";
+  }
+
+  if (data.code === "PREVIEW_GENERATION_FAILED") {
+    return "We couldn't create your preview right now. You can edit your answers and try again.";
+  }
+
+  if (data.code === "PREVIEW_SESSION_USED") {
+    return "You already created your free preview. Unlock the full wallpaper to continue.";
+  }
+
+  return data.message || data.error || "Unable to create your preview.";
 }
 
 type CustomSizeFieldsProps = {
