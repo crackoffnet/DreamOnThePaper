@@ -20,6 +20,8 @@ export type RuntimeEnv = {
   BREVO_API_KEY?: string;
   FROM_EMAIL?: string;
   FROM_NAME?: string;
+  BREVO_FROM_EMAIL?: string;
+  BREVO_FROM_NAME?: string;
 };
 
 const runtimeEnvNames = [
@@ -40,6 +42,8 @@ const runtimeEnvNames = [
   "BREVO_API_KEY",
   "FROM_EMAIL",
   "FROM_NAME",
+  "BREVO_FROM_EMAIL",
+  "BREVO_FROM_NAME",
 ] as const satisfies readonly (keyof RuntimeEnv)[];
 
 export function getRuntimeEnv(): RuntimeEnv {
@@ -54,7 +58,20 @@ export function getRuntimeEnv(): RuntimeEnv {
 export function isFromNameUsingFallback() {
   const cloudflareEnv = getCloudflareEnv();
   return !(
-    process.env.FROM_NAME || stringFromCloudflareEnv(cloudflareEnv, "FROM_NAME")
+    process.env.FROM_NAME ||
+    stringFromCloudflareEnv(cloudflareEnv, "FROM_NAME") ||
+    process.env.BREVO_FROM_NAME ||
+    stringFromCloudflareEnv(cloudflareEnv, "BREVO_FROM_NAME")
+  );
+}
+
+export function isFromEmailUsingFallback() {
+  const cloudflareEnv = getCloudflareEnv();
+  return !(
+    process.env.FROM_EMAIL ||
+    stringFromCloudflareEnv(cloudflareEnv, "FROM_EMAIL") ||
+    process.env.BREVO_FROM_EMAIL ||
+    stringFromCloudflareEnv(cloudflareEnv, "BREVO_FROM_EMAIL")
   );
 }
 
@@ -97,7 +114,19 @@ function runtimeEnvValue(
     return (
       process.env.FROM_NAME ||
       stringFromCloudflareEnv(cloudflareEnv, "FROM_NAME") ||
+      process.env.BREVO_FROM_NAME ||
+      stringFromCloudflareEnv(cloudflareEnv, "BREVO_FROM_NAME") ||
       DEFAULT_FROM_NAME
+    );
+  }
+
+  if (name === "FROM_EMAIL") {
+    return (
+      process.env.FROM_EMAIL ||
+      stringFromCloudflareEnv(cloudflareEnv, "FROM_EMAIL") ||
+      process.env.BREVO_FROM_EMAIL ||
+      stringFromCloudflareEnv(cloudflareEnv, "BREVO_FROM_EMAIL") ||
+      "hello@dreamonthepaper.com"
     );
   }
 

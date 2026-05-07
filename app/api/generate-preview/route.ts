@@ -27,6 +27,8 @@ import {
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   checkPreviewAttemptLimit,
+  checkPreviewBrowserHourlyLimit,
+  checkPreviewIpHourlyLimit,
 } from "@/lib/rateLimit";
 import {
   assertSameOrigin,
@@ -44,6 +46,7 @@ import {
   getPreviewAvailability,
   recordPreviewAttempt,
   setActiveBrowserOrder,
+  trackPreviewEntitlement,
 } from "@/lib/previewEntitlements";
 import {
   savePreviewImageFromBase64,
@@ -138,14 +141,38 @@ export async function POST(request: Request) {
     }
 
     if (!hasRateLimitBypass) {
-      const attemptLimit = await checkPreviewAttemptLimit(clientIp);
-      if (!attemptLimit.allowed) {
+      const [browserLimit, ipLimit, attemptLimit] = await Promise.all([
+        checkPreviewBrowserHourlyLimit(browserId),
+        checkPreviewIpHourlyLimit(clientIp),
+        checkPreviewAttemptLimit(clientIp),
+      ]);
+      const limitingResult =
+        !browserLimit.allowed
+          ? browserLimit
+          : !ipLimit.allowed
+            ? ipLimit
+            : !attemptLimit.allowed
+              ? attemptLimit
+              : null;
+
+      if (limitingResult) {
         logPreviewRateLimit({
           requestId,
-          failureReason: "Preview attempt limit exceeded",
+          failureReason: "Preview abuse limit exceeded",
           limitType: "attempt",
-          retryAfterSeconds: attemptLimit.retryAfterSeconds,
+          retryAfterSeconds: limitingResult.retryAfterSeconds,
           ipHash: requestMetadata.ipHash,
+        });
+        void recordPreviewAttempt({
+          browserId,
+          ipHash: requestMetadata.ipHash,
+          uaHash,
+          outcome: "rate_limited",
+          denialReason: !browserLimit.allowed
+            ? "browser_hourly_limit"
+            : !ipLimit.allowed
+              ? "ip_hourly_limit"
+              : "attempt_limit",
         });
         void trackOrderEvent({
           eventType: "preview_failed",
@@ -153,14 +180,14 @@ export async function POST(request: Request) {
           metadata: {
             requestId,
             reason: "attempt_limit",
-            code: "PREVIEW_ATTEMPT_LIMIT",
+            code: "PREVIEW_RATE_LIMITED",
           },
         });
         return previewError(
-          "Too many preview attempts. Please wait and try again.",
+          "Too many preview requests. Please wait a few minutes and try again.",
           429,
-          "PREVIEW_ATTEMPT_LIMIT",
-          attemptLimit.retryAfterSeconds,
+          "PREVIEW_RATE_LIMITED",
+          limitingResult.retryAfterSeconds,
           browserIdentity,
         );
       }
@@ -192,6 +219,8 @@ export async function POST(request: Request) {
         "Please complete your wallpaper settings and try again.",
         400,
         "PREVIEW_INVALID_INPUT",
+        undefined,
+        browserIdentity,
       );
     }
 
@@ -244,12 +273,27 @@ export async function POST(request: Request) {
     }
 
     const previewAvailability = await getPreviewAvailability(browserId);
+    if (false) {
+      console.error("[preview-entitlement]", {
+        requestId,
+        failureReason: "Preview entitlement check failed",
+        errorName: "PreviewEntitlementUnavailable",
+        errorMessage: previewAvailability.message,
+      });
+      return previewError(
+        "Preview checking is temporarily unavailable. Please try again soon.",
+        503,
+        "PREVIEW_ENTITLEMENT_UNAVAILABLE",
+        undefined,
+        browserIdentity,
+      );
+    }
     if (!hasRateLimitBypass && !previewAvailability.hasPreviewAvailable) {
       void recordPreviewAttempt({
         browserId,
         ipHash: requestMetadata.ipHash,
         uaHash,
-        allowed: false,
+        outcome: "rate_limited",
         denialReason: "preview_limit_reached",
       }).catch((error) => {
         console.warn("[generate-preview]", {
@@ -269,7 +313,7 @@ export async function POST(request: Request) {
         "You’ve already used your free preview for this browser.",
         429,
         "PREVIEW_LIMIT_REACHED",
-        retryAfterSecondsFromIso(previewAvailability.nextPreviewAt),
+        undefined,
         browserIdentity,
         {
           hasPreviewAvailable: false,
@@ -363,6 +407,14 @@ export async function POST(request: Request) {
     });
 
     if (!aiResult.success) {
+      void recordPreviewAttempt({
+        browserId,
+        orderId: dbOrder.id,
+        ipHash: requestMetadata.ipHash,
+        uaHash,
+        outcome: "failed",
+        denialReason: aiResult.code,
+      });
       void trackOrderEvent({
         orderId,
         eventType: "preview_failed",
@@ -375,7 +427,9 @@ export async function POST(request: Request) {
       return previewError(
         aiResult.message,
         aiResult.status,
-        aiResult.code,
+        aiResult.code === "PREVIEW_GENERATION_FAILED"
+          ? "PREVIEW_AI_FAILED"
+          : aiResult.code,
         undefined,
         browserIdentity,
       );
@@ -401,6 +455,14 @@ export async function POST(request: Request) {
           process.env.NODE_ENV !== "production" && error instanceof Error
             ? error.stack
             : undefined,
+      });
+      void recordPreviewAttempt({
+        browserId,
+        orderId: dbOrder.id,
+        ipHash: requestMetadata.ipHash,
+        uaHash,
+        outcome: "failed",
+        denialReason: "preview_storage_failed",
       });
       return previewError(
         "Preview storage is temporarily unavailable. Please try again soon.",
@@ -445,18 +507,27 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!hasRateLimitBypass) {
+    if (false && !hasRateLimitBypass) {
       const entitlementResult = await consumePreviewEntitlement({
         browserId,
         ipHash: requestMetadata.ipHash,
         uaHash,
       });
+      if ("unavailable" in entitlementResult && entitlementResult.unavailable) {
+        return previewError(
+          entitlementResult.message,
+          503,
+          "PREVIEW_ENTITLEMENT_UNAVAILABLE",
+          undefined,
+          browserIdentity,
+        );
+      }
       if (!entitlementResult.allowed) {
         return previewError(
           "You’ve already used your free preview for this browser.",
           429,
           "PREVIEW_LIMIT_REACHED",
-          retryAfterSecondsFromIso(entitlementResult.nextPreviewAt),
+          undefined,
           browserIdentity,
           {
             hasPreviewAvailable: false,
@@ -467,13 +538,25 @@ export async function POST(request: Request) {
       }
     }
 
-    await setActiveBrowserOrder(browserId, dbOrder.id);
+    void trackPreviewEntitlement({
+      browserId,
+      ipHash: requestMetadata.ipHash,
+      uaHash,
+    });
+
+    await setActiveBrowserOrder(browserId, dbOrder.id).catch((error) => {
+      console.warn("[generate-preview]", {
+        requestId,
+        failureReason: "Browser session persistence failed",
+        errorMessage: error instanceof Error ? error.message : "Unknown browser session error",
+      });
+    });
     void recordPreviewAttempt({
       browserId,
       orderId: dbOrder.id,
       ipHash: requestMetadata.ipHash,
       uaHash,
-      allowed: true,
+      outcome: "generated",
       denialReason: null,
     }).catch((error) => {
       console.warn("[generate-preview]", {
@@ -505,8 +588,8 @@ export async function POST(request: Request) {
       meta,
       preview: true,
       mock: false,
-      hasPreviewAvailable: false,
-      nextPreviewAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      hasPreviewAvailable: true,
+      nextPreviewAt: null,
       activeOrderId: dbOrder.id,
     };
 
@@ -532,6 +615,14 @@ export async function POST(request: Request) {
       requestMetadata,
       metadata: { requestId, reason: "unhandled_preview_error" },
     });
+    void recordPreviewAttempt({
+      browserId: browserIdentity.browserId,
+      orderId: orderId || null,
+      ipHash: requestMetadata.ipHash,
+      uaHash: await hashUserAgent(requestMetadata.userAgent),
+      outcome: "failed",
+      denialReason: "unhandled_preview_error",
+    }).catch(() => {});
     return previewError(
       "We couldn't create your preview right now. Please try again.",
       500,
@@ -883,7 +974,10 @@ function previewError(
     | "PREVIEW_DAILY_LIMIT"
     | "PREVIEW_SESSION_USED"
     | "PREVIEW_LIMIT_REACHED"
+    | "PREVIEW_ENTITLEMENT_UNAVAILABLE"
+    | "PREVIEW_RATE_LIMITED"
     | "PREVIEW_AI_UNAVAILABLE"
+    | "PREVIEW_AI_FAILED"
     | "PREVIEW_STORAGE_UNAVAILABLE"
     | "PREVIEW_GENERATION_FAILED"
     | "PREVIEW_INTERNAL_ERROR",
@@ -928,17 +1022,4 @@ function logPreviewRateLimit(details: {
   ipHash?: string;
 }) {
   console.error("[preview-rate-limit]", details);
-}
-
-function retryAfterSecondsFromIso(value: string | null) {
-  if (!value) {
-    return undefined;
-  }
-
-  const ms = Date.parse(value) - Date.now();
-  if (!Number.isFinite(ms) || ms <= 0) {
-    return undefined;
-  }
-
-  return Math.max(1, Math.ceil(ms / 1000));
 }

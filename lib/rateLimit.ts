@@ -17,14 +17,16 @@ export type RateLimitResult = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const CHECKOUT_LIMIT_PER_HOUR = 20;
-const PREVIEW_ATTEMPT_LIMIT_PER_HOUR = 10;
+const PREVIEW_BROWSER_LIMIT_PER_HOUR = 10;
+const PREVIEW_IP_LIMIT_PER_HOUR = 30;
 const PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY = 3;
 const EMAIL_IP_LIMIT_PER_HOUR = 20;
 const EMAIL_ORDER_LIMIT = 3;
 
 export const rateLimitConfig = {
   checkoutLimitPerHour: CHECKOUT_LIMIT_PER_HOUR,
-  previewAttemptLimitPerHour: PREVIEW_ATTEMPT_LIMIT_PER_HOUR,
+  previewBrowserLimitPerHour: PREVIEW_BROWSER_LIMIT_PER_HOUR,
+  previewIpLimitPerHour: PREVIEW_IP_LIMIT_PER_HOUR,
   previewSuccessLimitPerIpPerDay: PREVIEW_SUCCESS_LIMIT_PER_IP_PER_DAY,
   emailIpLimitPerHour: EMAIL_IP_LIMIT_PER_HOUR,
   emailOrderLimit: EMAIL_ORDER_LIMIT,
@@ -55,7 +57,23 @@ export async function recordPreviewUse(ipOrSession: string) {
 }
 
 export async function checkPreviewAttemptLimit(ip: string) {
-  return checkRateLimitKey(previewAttemptIpKey(ip), PREVIEW_ATTEMPT_LIMIT_PER_HOUR, HOUR_MS);
+  return checkPreviewIpHourlyLimit(ip);
+}
+
+export async function checkPreviewBrowserHourlyLimit(browserId: string) {
+  return checkRateLimitKey(
+    previewBrowserKey(browserId),
+    PREVIEW_BROWSER_LIMIT_PER_HOUR,
+    HOUR_MS,
+  );
+}
+
+export async function checkPreviewIpHourlyLimit(ip: string) {
+  return checkRateLimitKey(
+    previewIpKey(ip),
+    PREVIEW_IP_LIMIT_PER_HOUR,
+    HOUR_MS,
+  );
 }
 
 export async function checkPreviewSuccessLimit(ip: string) {
@@ -212,8 +230,12 @@ function checkoutIpKey(ip: string) {
   return `checkout:${ip}:${hourBucket()}`;
 }
 
-function previewAttemptIpKey(ip: string) {
-  return `preview:attempt:ip:${ip}:${hourBucket()}`;
+function previewBrowserKey(browserId: string) {
+  return `preview:browser:${browserId}:${hourBucket()}`;
+}
+
+function previewIpKey(ip: string) {
+  return `preview:ip:${ip}:${hourBucket()}`;
 }
 
 function previewSuccessIpKey(ip: string) {

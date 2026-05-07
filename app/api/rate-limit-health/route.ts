@@ -9,9 +9,8 @@ export function GET() {
     {
       ok: true,
       hasKvBinding: Boolean(bindings.DREAM_RATE_LIMITS),
-      previewAttemptLimitPerHour: rateLimitConfig.previewAttemptLimitPerHour,
-      previewSuccessLimitPerIpPerDay:
-        rateLimitConfig.previewSuccessLimitPerIpPerDay,
+      previewBrowserLimitPerHour: rateLimitConfig.previewBrowserLimitPerHour,
+      previewIpLimitPerHour: rateLimitConfig.previewIpLimitPerHour,
       checkoutLimitPerHour: rateLimitConfig.checkoutLimitPerHour,
       emailIpLimitPerHour: rateLimitConfig.emailIpLimitPerHour,
     },
