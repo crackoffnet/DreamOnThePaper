@@ -231,6 +231,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         input: form,
       });
       setDraft(activeDraft);
+      const [width, height] = meta.imageSize.split("x").map(Number);
 
       if (activeDraft.previewStatus === "ready" && activeDraft.previewImageUrl) {
         router.push(
@@ -263,7 +264,21 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          wallpaperType: form.device,
           ...form,
+          width,
+          height,
+          mood: initialMood || form.style,
+          answers: {
+            goals: form.goals,
+            lifestyle: form.lifestyle,
+            career: form.career,
+            personalLife: form.personalLife,
+            health: form.health,
+            place: form.place,
+            feelingWords: form.feelingWords,
+            reminder: form.reminder,
+          },
           website,
           previewSessionId: getDraftPreviewSessionId(activeDraft.id),
         }),
@@ -692,6 +707,22 @@ function formatPreviewError(data: GenerateResponse) {
 
   if (data.code === "PREVIEW_GENERATION_FAILED") {
     return "We couldn't create your preview right now. You can edit your answers and try again.";
+  }
+
+  if (data.code === "PREVIEW_INVALID_INPUT") {
+    return "Please complete your wallpaper settings and try again.";
+  }
+
+  if (data.code === "PREVIEW_AI_UNAVAILABLE") {
+    return "Preview generation is temporarily unavailable. Please try again soon.";
+  }
+
+  if (data.code === "PREVIEW_STORAGE_UNAVAILABLE") {
+    return "Preview storage is temporarily unavailable. Please try again soon.";
+  }
+
+  if (data.code === "PREVIEW_INTERNAL_ERROR") {
+    return "We couldn't create your preview right now. Please try again.";
   }
 
   if (data.code === "PREVIEW_SESSION_USED") {

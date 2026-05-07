@@ -94,31 +94,41 @@ export async function checkRateLimitKey(
   limit: number,
   windowMs: number,
 ) {
-  const kv = getRateLimitKv();
-  const now = Date.now();
-  const stored = await kv.get<RateLimitEntry>(key, "json");
+  try {
+    const kv = getRateLimitKv();
+    const now = Date.now();
+    const stored = await kv.get<RateLimitEntry>(key, "json");
 
-  if (!stored || stored.resetAt <= now) {
-    const resetAt = now + windowMs;
+    if (!stored || stored.resetAt <= now) {
+      const resetAt = now + windowMs;
+      await kv.put(
+        key,
+        JSON.stringify({ count: 1, resetAt }),
+        { expirationTtl: Math.ceil(windowMs / 1000) },
+      );
+      return result(true, key, 1, limit, resetAt, now);
+    }
+
+    if (stored.count >= limit) {
+      return result(false, key, stored.count, limit, stored.resetAt, now);
+    }
+
+    const count = stored.count + 1;
     await kv.put(
       key,
-      JSON.stringify({ count: 1, resetAt }),
-      { expirationTtl: Math.ceil(windowMs / 1000) },
+      JSON.stringify({ count, resetAt: stored.resetAt }),
+      { expirationTtl: Math.max(1, Math.ceil((stored.resetAt - now) / 1000)) },
     );
-    return result(true, key, 1, limit, resetAt, now);
-  }
+    return result(true, key, count, limit, stored.resetAt, now);
+  } catch (error) {
+    console.warn("[rate-limit]", {
+      key,
+      failureReason: "KV check failed, allowing request",
+      errorMessage: error instanceof Error ? error.message : "Unknown KV error",
+    });
 
-  if (stored.count >= limit) {
-    return result(false, key, stored.count, limit, stored.resetAt, now);
+    return result(true, key, 0, limit, Date.now() + windowMs, Date.now());
   }
-
-  const count = stored.count + 1;
-  await kv.put(
-    key,
-    JSON.stringify({ count, resetAt: stored.resetAt }),
-    { expirationTtl: Math.max(1, Math.ceil((stored.resetAt - now) / 1000)) },
-  );
-  return result(true, key, count, limit, stored.resetAt, now);
 }
 
 export async function peekRateLimitKey(
@@ -126,19 +136,29 @@ export async function peekRateLimitKey(
   limit: number,
   windowMs: number,
 ) {
-  const kv = getRateLimitKv();
-  const now = Date.now();
-  const stored = await kv.get<RateLimitEntry>(key, "json");
+  try {
+    const kv = getRateLimitKv();
+    const now = Date.now();
+    const stored = await kv.get<RateLimitEntry>(key, "json");
 
-  if (!stored || stored.resetAt <= now) {
-    return result(true, key, 0, limit, now + windowMs, now);
+    if (!stored || stored.resetAt <= now) {
+      return result(true, key, 0, limit, now + windowMs, now);
+    }
+
+    if (stored.count >= limit) {
+      return result(false, key, stored.count, limit, stored.resetAt, now);
+    }
+
+    return result(true, key, stored.count, limit, stored.resetAt, now);
+  } catch (error) {
+    console.warn("[rate-limit]", {
+      key,
+      failureReason: "KV peek failed, allowing request",
+      errorMessage: error instanceof Error ? error.message : "Unknown KV error",
+    });
+
+    return result(true, key, 0, limit, Date.now() + windowMs, Date.now());
   }
-
-  if (stored.count >= limit) {
-    return result(false, key, stored.count, limit, stored.resetAt, now);
-  }
-
-  return result(true, key, stored.count, limit, stored.resetAt, now);
 }
 
 export async function checkIpRateLimit(

@@ -1,16 +1,29 @@
 import { NextResponse } from "next/server";
-import { createMockWallpaperSvg } from "@/lib/mock";
 import {
   containsAbusiveInput,
   hasMeaningfulInput,
   previewGenerationSchema,
 } from "@/lib/schemas";
-import {
-  assertSameOrigin,
-  getClientIp,
-  safeLog,
-} from "@/lib/security";
+import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
+import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
+import {
+  attachPreviewImage,
+  createOrder,
+  type DbOrder,
+} from "@/lib/orders";
+import {
+  hashOperationalValue,
+  patchOrderTracking,
+  trackOrderEvent,
+} from "@/lib/orderEvents";
+import {
+  type OrderSnapshot,
+  signCheckoutOrderToken,
+  signOrderSnapshot,
+  storeOrder,
+} from "@/lib/order-state";
+import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   checkPreviewAttemptLimit,
   checkPreviewSessionSuccess,
@@ -18,34 +31,68 @@ import {
   recordPreviewSuccess,
 } from "@/lib/rateLimit";
 import {
-  storeOrder,
-  type OrderSnapshot,
-  signCheckoutOrderToken,
-  signOrderSnapshot,
-} from "@/lib/order-state";
-import { attachPreviewImage, createOrder, type DbOrder } from "@/lib/orders";
-import type { WallpaperInput } from "@/lib/types";
+  assertSameOrigin,
+  getClientIp,
+  safeLog,
+} from "@/lib/security";
+import {
+  savePreviewImageFromBase64,
+} from "@/lib/storage";
+import type {
+  DeviceType,
+  GenerateResponse,
+  QuoteTone,
+  RatioType,
+  ThemeType,
+  WallpaperInput,
+  WallpaperStyle,
+} from "@/lib/types";
+import {
+  isWallpaperProductId,
+  wallpaperProducts,
+  wallpaperTypeFromDevice,
+} from "@/lib/wallpaperProducts";
 import {
   buildPreviewWallpaperPrompt,
   getPreviewImageSize,
   getWallpaperMeta,
+  isValidRatioForDevice,
 } from "@/lib/wallpaper";
-import {
-  savePreviewImageFromBase64,
-  savePreviewImageFromDataUrl,
-} from "@/lib/storage";
-import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
-import { getRequestMetadata } from "@/lib/requestMetadata";
-import {
-  hashOperationalValue,
-  patchOrderTracking,
-  trackOrderEvent,
-} from "@/lib/orderEvents";
-import { wallpaperProducts, wallpaperTypeFromDevice } from "@/lib/wallpaperProducts";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
 };
+
+type PreviewRouteResponse = GenerateResponse & {
+  wallpaperType?: string;
+};
+
+type PreviewGenerationSuccess = {
+  success: true;
+  result: OpenAIImageResponse;
+};
+
+type PreviewGenerationFailure = {
+  success: false;
+  status: number;
+  code:
+    | "PREVIEW_AI_UNAVAILABLE"
+    | "PREVIEW_GENERATION_FAILED"
+    | "PREVIEW_INTERNAL_ERROR";
+  message: string;
+};
+
+type NormalizedPreviewBody = {
+  wallpaperType: "mobile" | "tablet" | "desktop" | "custom";
+  input: WallpaperInput;
+  previewSessionId: string;
+  website: string;
+  width: number;
+  height: number;
+  mood: string;
+};
+
+const MAX_TOTAL_PIXELS = 3840 * 2160;
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -58,11 +105,23 @@ export async function POST(request: Request) {
     }
 
     const env = getRuntimeEnv();
+    const bindings = getOptionalCloudflareBindings();
     const bypassToken = request.headers.get("x-admin-bypass-token");
     const hasRateLimitBypass =
       Boolean(env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN) &&
       bypassToken === env.PREVIEW_RATE_LIMIT_BYPASS_TOKEN;
     const clientIp = getClientIp(request);
+
+    const rawBody = await request.json().catch(() => null);
+    const normalizedBody = normalizePreviewRequestBody(rawBody);
+
+    if (!normalizedBody) {
+      return previewError(
+        "Please complete your wallpaper settings and try again.",
+        400,
+        "PREVIEW_INVALID_INPUT",
+      );
+    }
 
     if (!hasRateLimitBypass) {
       const attemptLimit = await checkPreviewAttemptLimit(clientIp);
@@ -76,7 +135,11 @@ export async function POST(request: Request) {
         void trackOrderEvent({
           eventType: "preview_failed",
           requestMetadata,
-          metadata: { requestId, reason: "attempt_limit", code: "PREVIEW_ATTEMPT_LIMIT" },
+          metadata: {
+            requestId,
+            reason: "attempt_limit",
+            code: "PREVIEW_ATTEMPT_LIMIT",
+          },
         });
         return previewError(
           "Too many preview attempts. Please wait and try again.",
@@ -87,14 +150,11 @@ export async function POST(request: Request) {
       }
     }
 
-    const body = await request.json().catch(() => null);
-    if (hasOversizedCustomDimensions(body)) {
-      return previewError(
-        "Custom size is too large. Keep it within 3840px per side and 3840 x 2160 total pixels.",
-      );
-    }
-
-    const parsed = previewGenerationSchema.safeParse(body);
+    const parsed = previewGenerationSchema.safeParse({
+      ...normalizedBody.input,
+      previewSessionId: normalizedBody.previewSessionId,
+      website: normalizedBody.website,
+    });
 
     if (!parsed.success || parsed.data.website) {
       void trackOrderEvent({
@@ -102,21 +162,66 @@ export async function POST(request: Request) {
         requestMetadata,
         metadata: { requestId, reason: "invalid_input" },
       });
-      return previewError("Please check your wallpaper answers and try again.");
+      return previewError(
+        "Please complete your wallpaper settings and try again.",
+        400,
+        "PREVIEW_INVALID_INPUT",
+      );
     }
 
     if (!hasMeaningfulInput(parsed.data)) {
-      return previewError("Please add a little more detail first.");
+      return previewError(
+        "Please complete your wallpaper settings and try again.",
+        400,
+        "PREVIEW_INVALID_INPUT",
+      );
     }
 
     const joined = Object.values(parsed.data).join(" ");
     if (containsAbusiveInput(joined)) {
-      return previewError("Please keep the wallpaper request safe and respectful.");
+      return previewError(
+        "Please keep the wallpaper request safe and respectful.",
+        400,
+        "PREVIEW_INVALID_INPUT",
+      );
+    }
+
+    if (!bindings.DB || !bindings.WALLPAPER_BUCKET) {
+      console.error("[generate-preview]", {
+        requestId,
+        failureReason: "Missing preview storage bindings",
+        hasDb: Boolean(bindings.DB),
+        hasWallpaperBucket: Boolean(bindings.WALLPAPER_BUCKET),
+      });
+      return previewError(
+        "Preview storage is temporarily unavailable. Please try again soon.",
+        503,
+        "PREVIEW_STORAGE_UNAVAILABLE",
+      );
+    }
+
+    if (!bindings.DREAM_RATE_LIMITS) {
+      console.warn("[generate-preview]", {
+        requestId,
+        failureReason: "Rate limit KV binding missing; continuing without KV enforcement",
+      });
+    }
+
+    if (!env.OPENAI_API_KEY) {
+      console.error("[generate-preview]", {
+        requestId,
+        failureReason: "Missing OPENAI_API_KEY",
+      });
+      return previewError(
+        "Preview generation is temporarily unavailable. Please try again soon.",
+        503,
+        "PREVIEW_AI_UNAVAILABLE",
+      );
     }
 
     if (!hasRateLimitBypass) {
       const sessionSuccess = await checkPreviewSessionSuccess(
-        parsed.data.previewSessionId,
+        normalizedBody.previewSessionId,
       );
       if (!sessionSuccess.allowed) {
         return previewError(
@@ -136,7 +241,7 @@ export async function POST(request: Request) {
           retryAfterSeconds: successLimit.retryAfterSeconds,
         });
         return previewError(
-          "You've reached today's preview limit. Please try again tomorrow.",
+          "You've reached today's free preview limit. Please try again tomorrow.",
           429,
           "PREVIEW_DAILY_LIMIT",
           successLimit.retryAfterSeconds,
@@ -145,36 +250,33 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data as WallpaperInput;
-    const wallpaperType = wallpaperTypeFromDevice(input.device);
-    const product = wallpaperProducts[wallpaperType];
+    const product = wallpaperProducts[normalizedBody.wallpaperType];
     const imageConfig = getImageGenerationConfig().preview;
     const meta = getWallpaperMeta(input);
     const prompt = buildPreviewWallpaperPrompt(input);
+
     void trackOrderEvent({
       eventType: "preview_requested",
       requestMetadata,
       packageType: "single",
       metadata: {
         requestId,
+        wallpaperType: normalizedBody.wallpaperType,
         device: input.device,
         ratio: input.ratio,
         theme: input.theme,
         style: input.style,
       },
     });
+
     const dbOrder = await createOrder(input);
     orderId = dbOrder?.id;
 
     if (!dbOrder) {
-      void trackOrderEvent({
-        eventType: "preview_failed",
-        requestMetadata,
-        metadata: { requestId, reason: "order_create_failed" },
-      });
       return previewError(
         "We couldn't create your preview right now. Please try again.",
         503,
-        "PREVIEW_GENERATION_FAILED",
+        "PREVIEW_INTERNAL_ERROR",
       );
     }
 
@@ -189,12 +291,13 @@ export async function POST(request: Request) {
       utm_campaign: requestMetadata.utmCampaign,
       landing_path: requestMetadata.landingPath,
       package_type: "single",
-      wallpaper_type: wallpaperType,
+      wallpaper_type: normalizedBody.wallpaperType,
       package_name: product.label,
       amount_cents: product.amount,
       currency: "usd",
       custom_width: input.customWidth || null,
       custom_height: input.customHeight || null,
+      mood: normalizedBody.mood || null,
       answers_hash: await hashOperationalValue(
         [
           input.goals,
@@ -209,127 +312,69 @@ export async function POST(request: Request) {
       ),
     });
 
-    if (!env.OPENAI_API_KEY) {
-      if (process.env.NODE_ENV === "production") {
-        return previewError(
-          "We couldn't create your preview right now. Please try again.",
-          503,
-          "PREVIEW_GENERATION_FAILED",
-        );
-      }
-
-      const savedPreview = await savePreviewImageFromDataUrl(
-        dbOrder.id,
-        createMockWallpaperSvg(input, { preview: true }),
-      );
-
-      if (!savedPreview) {
-        return previewError(
-          "We couldn't create your preview right now. Please try again.",
-          500,
-          "PREVIEW_GENERATION_FAILED",
-        );
-      }
-      await attachPreviewImage(dbOrder.id, savedPreview.key);
-      const order = orderSnapshotFromDbOrder(dbOrder, input, savedPreview.url);
-      storeOrder(order);
-      const orderToken = await signCheckoutOrderToken(order);
-      const orderSnapshotToken = await signOrderSnapshot(order);
-      void patchOrderTracking(dbOrder.id, {
-        preview_r2_key: savedPreview.key,
-        preview_created_at: new Date().toISOString(),
-        order_token_hash: await hashOperationalValue(orderToken),
-      });
-      void trackOrderEvent({
-        orderId: dbOrder.id,
-        eventType: "preview_generated",
-        statusAfter: "preview_created",
-        packageType: "single",
-        requestMetadata,
-        metadata: { requestId, previewStored: true },
-      });
-      if (!hasRateLimitBypass) {
-        await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
-      }
-      console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
-
-      return NextResponse.json({
-        success: true,
-        orderId: order.orderId,
-        previewImageId: order.previewImageId || null,
-        previewImageUrl: savedPreview.url,
-        orderToken,
-        orderSnapshotToken,
-        imageUrl: savedPreview.url,
-        meta,
-        preview: true,
-        mock: true,
-      });
-    }
-
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: imageConfig.model,
-        prompt,
-        size: getPreviewImageSize(input),
-        quality: imageConfig.quality,
-        output_format: imageConfig.outputFormat,
-        output_compression: imageConfig.compression,
-        moderation: "auto",
-        n: 1,
-      }),
+    const aiResult = await generatePreviewImage({
+      requestId,
+      apiKey: env.OPENAI_API_KEY,
+      prompt,
+      imageConfig,
+      input,
     });
 
-    if (!response.ok) {
-      safeLog("OpenAI preview generation failed", response.status);
+    if (!aiResult.success) {
       void trackOrderEvent({
         orderId,
         eventType: "preview_failed",
         requestMetadata,
-        metadata: { requestId, providerStatus: response.status },
+        metadata: {
+          requestId,
+          reason: aiResult.code,
+        },
       });
-      return previewError(
-        "We couldn't create your preview right now. Please try again.",
-        502,
-        "PREVIEW_GENERATION_FAILED",
-      );
+      return previewError(aiResult.message, aiResult.status, aiResult.code);
     }
 
-    const result = (await response.json()) as OpenAIImageResponse;
-    const image = result.data?.[0];
-    const savedPreview = image?.b64_json
-      ? await savePreviewImageFromBase64(
-          dbOrder.id,
-          image.b64_json,
-          "image/jpeg",
-        )
-      : image?.url
-        ? await saveRemotePreviewImage(dbOrder.id, image.url)
-        : null;
+    const image = aiResult.result.data?.[0];
+    let savedPreview: Awaited<ReturnType<typeof savePreviewImageFromBase64>> | null =
+      null;
+
+    try {
+      savedPreview = image?.b64_json
+        ? await savePreviewImageFromBase64(dbOrder.id, image.b64_json, "image/jpeg")
+        : image?.url
+          ? await saveRemotePreviewImage(dbOrder.id, image.url)
+          : null;
+    } catch (error) {
+      console.error("[generate-preview]", {
+        requestId,
+        failureReason: "Preview image save failed",
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : "Unknown storage error",
+        stack:
+          process.env.NODE_ENV !== "production" && error instanceof Error
+            ? error.stack
+            : undefined,
+      });
+      return previewError(
+        "Preview storage is temporarily unavailable. Please try again soon.",
+        503,
+        "PREVIEW_STORAGE_UNAVAILABLE",
+      );
+    }
 
     if (!savedPreview) {
-      void trackOrderEvent({
-        orderId,
-        eventType: "preview_failed",
-        requestMetadata,
-        metadata: { requestId, reason: "preview_r2_save_failed" },
-      });
       return previewError(
-        "We couldn't create your preview right now. Please try again.",
-        502,
-        "PREVIEW_GENERATION_FAILED",
+        "Preview storage is temporarily unavailable. Please try again soon.",
+        503,
+        "PREVIEW_STORAGE_UNAVAILABLE",
       );
     }
+
     await attachPreviewImage(dbOrder.id, savedPreview.key);
     const order = orderSnapshotFromDbOrder(dbOrder, input, savedPreview.url);
     storeOrder(order);
     const orderToken = await signCheckoutOrderToken(order);
     const orderSnapshotToken = await signOrderSnapshot(order);
+
     void patchOrderTracking(dbOrder.id, {
       preview_r2_key: savedPreview.key,
       preview_created_at: new Date().toISOString(),
@@ -341,15 +386,28 @@ export async function POST(request: Request) {
       statusAfter: "preview_created",
       packageType: "single",
       requestMetadata,
-      metadata: { requestId, previewStored: true },
+      metadata: {
+        requestId,
+        wallpaperType: normalizedBody.wallpaperType,
+        previewStored: true,
+      },
     });
-    if (!hasRateLimitBypass) {
-      await recordPreviewSuccess(clientIp, parsed.data.previewSessionId);
-    }
-    console.info(JSON.stringify({ event: "preview_created", orderId: order.orderId }));
 
-    return NextResponse.json({
+    if (!hasRateLimitBypass) {
+      await recordPreviewSuccess(clientIp, normalizedBody.previewSessionId);
+    }
+
+    console.info("[generate-preview]", {
+      requestId,
+      orderId: order.orderId,
+      wallpaperType: normalizedBody.wallpaperType,
+      model: imageConfig.model,
+      event: "preview_created",
+    });
+
+    const response: PreviewRouteResponse = {
       success: true,
+      wallpaperType: normalizedBody.wallpaperType,
       orderId: order.orderId,
       previewImageId: order.previewImageId || null,
       previewImageUrl: savedPreview.url,
@@ -359,8 +417,21 @@ export async function POST(request: Request) {
       meta,
       preview: true,
       mock: false,
-    });
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
+    console.error("[generate-preview]", {
+      requestId,
+      failureReason: "Unhandled generate-preview error",
+      errorName: error instanceof Error ? error.name : "Error",
+      errorMessage:
+        error instanceof Error ? error.message : "Unknown preview error",
+      stack:
+        process.env.NODE_ENV !== "production" && error instanceof Error
+          ? error.stack
+          : undefined,
+    });
     safeLog("Preview generation error", error);
     void trackOrderEvent({
       orderId,
@@ -371,7 +442,7 @@ export async function POST(request: Request) {
     return previewError(
       "We couldn't create your preview right now. Please try again.",
       500,
-      "PREVIEW_GENERATION_FAILED",
+      "PREVIEW_INTERNAL_ERROR",
     );
   }
 }
@@ -413,11 +484,265 @@ async function saveRemotePreviewImage(orderId: string, url: string) {
 
   const bytes = new Uint8Array(await response.arrayBuffer());
   const contentType = response.headers.get("content-type") || "image/png";
-  return savePreviewImageFromBase64(
-    orderId,
-    bytesToBase64(bytes),
-    contentType,
-  );
+  return savePreviewImageFromBase64(orderId, bytesToBase64(bytes), contentType);
+}
+
+async function generatePreviewImage(input: {
+  requestId: string;
+  apiKey: string;
+  prompt: string;
+  imageConfig: ReturnType<typeof getImageGenerationConfig>["preview"];
+  input: WallpaperInput;
+}): Promise<PreviewGenerationSuccess | PreviewGenerationFailure> {
+  const models = [input.imageConfig.model];
+  if (input.imageConfig.model !== "gpt-image-1") {
+    models.push("gpt-image-1");
+  }
+
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    console.info("[generate-preview]", {
+      requestId: input.requestId,
+      step: "openai_preview_request",
+      model,
+      size: getPreviewImageSize(input.input),
+      quality: input.imageConfig.quality,
+    });
+
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${input.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        prompt: input.prompt,
+        size: getPreviewImageSize(input.input),
+        quality: input.imageConfig.quality,
+        output_format: input.imageConfig.outputFormat,
+        output_compression: input.imageConfig.compression,
+        moderation: "auto",
+        n: 1,
+      }),
+    });
+
+    if (response.ok) {
+      return {
+        success: true,
+        result: (await response.json()) as OpenAIImageResponse,
+      };
+    }
+
+    const responseText = await response.text().catch(() => "");
+    console.error("[generate-preview]", {
+      requestId: input.requestId,
+      failureReason: "OpenAI preview generation failed",
+      model,
+      providerStatus: response.status,
+      errorMessage: responseText.slice(0, 300),
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        success: false,
+        status: 503,
+        code: "PREVIEW_AI_UNAVAILABLE",
+        message:
+          "Preview generation is temporarily unavailable. Please try again soon.",
+      };
+    }
+
+    if (response.status === 400 && index < models.length - 1) {
+      continue;
+    }
+
+    return {
+      success: false,
+      status: 502,
+      code: "PREVIEW_GENERATION_FAILED",
+      message: "We couldn't create your preview right now. Please try again.",
+    };
+  }
+
+  return {
+    success: false,
+    status: 503,
+    code: "PREVIEW_AI_UNAVAILABLE",
+    message: "Preview generation is temporarily unavailable. Please try again soon.",
+  };
+}
+
+function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+
+  const payload = body as Record<string, unknown>;
+  const device = normalizeDevice(payload.device, payload.wallpaperType);
+  if (!device) {
+    return null;
+  }
+
+  const wallpaperType = wallpaperTypeFromDevice(device);
+  const ratio = normalizeRatio(payload.ratio, device);
+  const theme = normalizeTheme(payload.theme);
+  const style = normalizeStyle(payload.style);
+  const quoteTone = normalizeQuoteTone(payload.quoteTone);
+  const previewSessionId = stringValue(payload.previewSessionId);
+  const website = stringValue(payload.website);
+  const mood = stringValue(payload.mood);
+  const answers =
+    payload.answers && typeof payload.answers === "object"
+      ? (payload.answers as Record<string, unknown>)
+      : {};
+  const width = numberValue(payload.width);
+  const height = numberValue(payload.height);
+  const customWidth = numberValue(payload.customWidth) ?? width;
+  const customHeight = numberValue(payload.customHeight) ?? height;
+
+  if (!ratio || !theme || !style || !previewSessionId) {
+    return null;
+  }
+
+  if (device === "custom") {
+    if (
+      typeof customWidth !== "number" ||
+      typeof customHeight !== "number" ||
+      customWidth <= 0 ||
+      customHeight <= 0 ||
+      customWidth > 3840 ||
+      customHeight > 3840 ||
+      customWidth * customHeight > MAX_TOTAL_PIXELS
+    ) {
+      return null;
+    }
+  }
+
+  const input: WallpaperInput = {
+    device,
+    ratio,
+    theme,
+    style,
+    goals: stringValue(payload.goals) || stringValue(answers.goals),
+    lifestyle: stringValue(payload.lifestyle) || stringValue(answers.lifestyle),
+    career: stringValue(payload.career) || stringValue(answers.career),
+    personalLife:
+      stringValue(payload.personalLife) || stringValue(answers.personalLife),
+    health: stringValue(payload.health) || stringValue(answers.health),
+    place: stringValue(payload.place) || stringValue(answers.place),
+    feelingWords:
+      stringValue(payload.feelingWords) || stringValue(answers.feelingWords),
+    reminder: stringValue(payload.reminder) || stringValue(answers.reminder),
+    quoteTone,
+    customWidth: device === "custom" ? customWidth : undefined,
+    customHeight: device === "custom" ? customHeight : undefined,
+  };
+
+  const meta = getWallpaperMeta(input);
+  const [resolvedWidth, resolvedHeight] = meta.imageSize.split("x").map(Number);
+
+  if (!isValidRatioForDevice(device, ratio)) {
+    return null;
+  }
+
+  return {
+    wallpaperType,
+    input,
+    previewSessionId,
+    website,
+    width: resolvedWidth,
+    height: resolvedHeight,
+    mood,
+  };
+}
+
+function normalizeDevice(
+  device: unknown,
+  wallpaperType: unknown,
+): DeviceType | null {
+  if (device === "mobile" || device === "tablet" || device === "desktop" || device === "custom") {
+    return device;
+  }
+
+  if (isWallpaperProductId(wallpaperType)) {
+    return wallpaperType;
+  }
+
+  if (typeof device !== "string") {
+    return null;
+  }
+
+  const normalized = device.toLowerCase();
+  if (normalized.includes("phone") || normalized.includes("mobile")) {
+    return "mobile";
+  }
+  if (normalized.includes("ipad") || normalized.includes("tablet")) {
+    return "tablet";
+  }
+  if (normalized.includes("desktop")) {
+    return "desktop";
+  }
+  if (normalized.includes("custom")) {
+    return "custom";
+  }
+
+  return null;
+}
+
+function normalizeRatio(value: unknown, device: DeviceType): RatioType | "" {
+  if (typeof value !== "string") {
+    return device === "custom" ? "custom" : "";
+  }
+
+  return value as RatioType;
+}
+
+function normalizeTheme(value: unknown): ThemeType | "" {
+  if (value === "light" || value === "dark") {
+    return value;
+  }
+
+  return "";
+}
+
+function normalizeStyle(value: unknown): WallpaperStyle | "" {
+  if (
+    value === "soft-luxury" ||
+    value === "minimal" ||
+    value === "dreamy" ||
+    value === "nature" ||
+    value === "feminine" ||
+    value === "wealth-business" ||
+    value === "family-home" ||
+    value === "fitness-health" ||
+    value === "freedom-travel"
+  ) {
+    return value;
+  }
+
+  return "";
+}
+
+function normalizeQuoteTone(value: unknown): QuoteTone {
+  if (
+    value === "soft-emotional" ||
+    value === "powerful-confident" ||
+    value === "spiritual-calm" ||
+    value === "none"
+  ) {
+    return value;
+  }
+
+  return "soft-emotional";
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -436,7 +761,15 @@ function imageIdFromUrl(value: string) {
 function previewError(
   message: string,
   status = 400,
-  code?: string,
+  code?:
+    | "PREVIEW_INVALID_INPUT"
+    | "PREVIEW_ATTEMPT_LIMIT"
+    | "PREVIEW_DAILY_LIMIT"
+    | "PREVIEW_SESSION_USED"
+    | "PREVIEW_AI_UNAVAILABLE"
+    | "PREVIEW_STORAGE_UNAVAILABLE"
+    | "PREVIEW_GENERATION_FAILED"
+    | "PREVIEW_INTERNAL_ERROR",
   retryAfterSeconds?: number,
 ) {
   return NextResponse.json(
@@ -445,6 +778,7 @@ function previewError(
       code,
       message,
       error: message,
+      retryAfterSeconds,
     },
     {
       status,
@@ -463,18 +797,4 @@ function logPreviewRateLimit(details: {
   retryAfterSeconds: number;
 }) {
   console.error("[preview-rate-limit]", details);
-}
-
-function hasOversizedCustomDimensions(body: unknown) {
-  if (!body || typeof body !== "object") {
-    return false;
-  }
-
-  const customBody = body as { customWidth?: unknown; customHeight?: unknown };
-  const width =
-    typeof customBody.customWidth === "number" ? customBody.customWidth : 0;
-  const height =
-    typeof customBody.customHeight === "number" ? customBody.customHeight : 0;
-
-  return width > 3840 || height > 3840 || width * height > 3840 * 2160;
 }

@@ -96,33 +96,71 @@ export async function createOrder(input: WallpaperInput) {
   const meta = getWallpaperMeta(input);
   const [width, height] = meta.imageSize.split("x").map(Number);
 
-  await db
-    .prepare(
-      `INSERT INTO orders (
-        id, status, package_type, wallpaper_type, device, ratio, width, height, theme, style,
-        quote_tone, prompt_hash, sanitized_answers_json, created_at, updated_at,
-        expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      "preview_created",
-      "single",
-      input.device,
-      input.device,
-      input.ratio,
-      width,
-      height,
-      input.theme,
-      input.style,
-      input.quoteTone,
-      promptHash,
-      JSON.stringify(sanitizeAnswers(input)),
-      now,
-      now,
-      now + ORDER_TTL_SECONDS * 1000,
-    )
-    .run();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO orders (
+          id, status, package_type, wallpaper_type, device, ratio, width, height, theme, style,
+          quote_tone, prompt_hash, sanitized_answers_json, created_at, updated_at,
+          expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        "preview_created",
+        "single",
+        input.device,
+        input.device,
+        input.ratio,
+        width,
+        height,
+        input.theme,
+        input.style,
+        input.quoteTone,
+        promptHash,
+        JSON.stringify(sanitizeAnswers(input)),
+        now,
+        now,
+        now + ORDER_TTL_SECONDS * 1000,
+      )
+      .run();
+  } catch (error) {
+    if (!isMissingWallpaperTypeColumnError(error)) {
+      throw error;
+    }
+
+    console.warn("[orders]", {
+      failureReason: "orders.wallpaper_type column missing, using legacy insert",
+      errorMessage: error instanceof Error ? error.message : "Unknown D1 error",
+    });
+
+    await db
+      .prepare(
+        `INSERT INTO orders (
+          id, status, package_type, device, ratio, width, height, theme, style,
+          quote_tone, prompt_hash, sanitized_answers_json, created_at, updated_at,
+          expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        "preview_created",
+        "single",
+        input.device,
+        input.ratio,
+        width,
+        height,
+        input.theme,
+        input.style,
+        input.quoteTone,
+        promptHash,
+        JSON.stringify(sanitizeAnswers(input)),
+        now,
+        now,
+        now + ORDER_TTL_SECONDS * 1000,
+      )
+      .run();
+  }
 
   return getOrder(id);
 }
@@ -492,4 +530,9 @@ function sanitizeText(value: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 300);
+}
+
+function isMissingWallpaperTypeColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return message.includes("no column named wallpaper_type");
 }
