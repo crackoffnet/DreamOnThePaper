@@ -18,12 +18,6 @@ export function Header() {
           </span>
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-2">
-          <Link
-            href="/#examples"
-            className="focus-ring hidden rounded-full px-3 py-2 text-[12.5px] font-medium text-taupe transition hover:text-ink sm:inline-flex"
-          >
-            Examples
-          </Link>
           <HowItWorksPopover />
           <Link
             href="/create"

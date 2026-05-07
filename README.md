@@ -214,6 +214,31 @@ Production helper modules are available for Cloudflare bindings:
 - Non-production deploy command: `npm run upload`
 - Root directory: `/` or blank/repo root
 
+## Production Security
+
+Recommended Cloudflare production settings:
+
+- SSL/TLS mode: Full (strict)
+- Always Use HTTPS: enabled
+- HSTS: enabled in Cloudflare when ready, matching the app fallback
+  `Strict-Transport-Security: max-age=31536000`
+- Minimum TLS version: TLS 1.2
+- TLS 1.3: enabled
+
+The app also sends production security headers from `next.config.ts`:
+
+- `Strict-Transport-Security: max-age=31536000`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy` with `frame-ancestors 'none'`
+
+The current CSP is compatibility-focused for Next.js/OpenNext and still allows
+`'unsafe-inline'` and `'unsafe-eval'` for scripts. Future hardening TODO:
+replace inline script allowances with a CSP nonce and remove `'unsafe-eval'`
+after validating Next/OpenNext and Cloudflare runtime behavior.
+
 ## Commands
 
 ```bash

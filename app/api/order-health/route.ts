@@ -19,16 +19,30 @@ export async function GET(request: Request) {
   const order = await getOrder(parsed.data.orderId);
 
   if (!order) {
-    return NextResponse.json({ exists: false });
+    return NextResponse.json(
+      { exists: false },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      },
+    );
   }
 
-  return NextResponse.json({
-    exists: true,
-    status: order.status,
-    hasPreviewR2Key: Boolean(order.preview_r2_key),
-    hasFinalR2Key: Boolean(order.final_r2_key),
-    hasStripeSessionId: Boolean(order.stripe_session_id),
-    stripePaymentStatus: order.stripe_payment_status || null,
-    finalGenerationAttempts: order.final_generation_attempts,
-  });
+  return NextResponse.json(
+    {
+      exists: true,
+      status: order.status,
+      hasPreviewImage: Boolean(order.preview_r2_key),
+      hasFinalImage: Boolean(order.final_r2_key),
+      finalGenerationAttempts: order.final_generation_attempts,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  );
 }

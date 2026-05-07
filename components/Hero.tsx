@@ -1,5 +1,4 @@
 import {
-  ArrowDown,
   ArrowRight,
   BadgeCheck,
   CreditCard,
@@ -96,8 +95,8 @@ function CardScene({ id }: { id: string }) {
 
 export function Hero() {
   return (
-    <section className="px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
-      <div className="mx-auto grid max-w-7xl items-center gap-5 lg:min-h-[calc(100svh-8.75rem)] lg:grid-cols-[0.94fr_1.06fr] xl:gap-9">
+    <section className="px-4 pb-2 pt-3 sm:px-6 lg:px-8 lg:pb-2 lg:pt-4">
+      <div className="mx-auto grid max-w-7xl items-center gap-5 lg:grid-cols-[0.94fr_1.06fr] xl:gap-9">
         <div className="max-w-xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold">
             <Sparkles aria-hidden className="h-3 w-3" />
@@ -122,16 +121,9 @@ export function Hero() {
               Create My Wallpaper
               <ArrowRight aria-hidden className="h-3.5 w-3.5" />
             </Link>
-            <Link
-              href="/#examples"
-              className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full px-4 text-[12.5px] font-medium text-cocoa transition hover:text-ink sm:w-auto"
-            >
-              View examples
-              <ArrowDown aria-hidden className="h-3.5 w-3.5" />
-            </Link>
           </div>
 
-          <div className="mt-4 grid max-w-md grid-cols-2 gap-x-3 gap-y-2">
+          <div className="mt-3 grid max-w-md grid-cols-2 gap-x-3 gap-y-2">
             {trustItems.map((item) => (
               <div
                 key={item.label}
