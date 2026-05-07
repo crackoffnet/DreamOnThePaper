@@ -45,6 +45,8 @@ export type DbOrder = {
   status: OrderStatus;
   package_type: PackageId | null;
   wallpaper_type?: WallpaperProductId | string | null;
+  preset_id?: string | null;
+  ratio_label?: string | null;
   package_name?: string | null;
   amount_cents?: number | null;
   currency?: string | null;
@@ -54,6 +56,12 @@ export type DbOrder = {
   height: number;
   custom_width?: number | null;
   custom_height?: number | null;
+  source_width?: number | null;
+  source_height?: number | null;
+  final_width?: number | null;
+  final_height?: number | null;
+  output_format?: string | null;
+  generation_status?: string | null;
   theme: string;
   style: string;
   mood?: string | null;
@@ -61,7 +69,11 @@ export type DbOrder = {
   prompt_hash: string;
   sanitized_answers_json: string;
   preview_r2_key: string | null;
+  preview_asset_key?: string | null;
+  preview_input_hash?: string | null;
+  preview_stale?: number | null;
   final_r2_key: string | null;
+  final_asset_key?: string | null;
   stripe_session_id: string | null;
   stripe_checkout_session_id?: string | null;
   stripe_payment_intent_id?: string | null;
@@ -101,20 +113,27 @@ export async function createOrder(input: WallpaperInput) {
     await db
       .prepare(
         `INSERT INTO orders (
-          id, status, package_type, wallpaper_type, device, ratio, width, height, theme, style,
+          id, status, package_type, wallpaper_type, preset_id, ratio_label, device, ratio,
+          width, height, final_width, final_height, output_format, generation_status, theme, style,
           quote_tone, prompt_hash, sanitized_answers_json, created_at, updated_at,
           expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
         "preview_created",
         "single",
         input.device,
+        meta.presetId,
+        meta.ratioLabel,
         input.device,
         input.ratio,
         width,
         height,
+        width,
+        height,
+        "png",
+        "preview_created",
         input.theme,
         input.style,
         input.quoteTone,
@@ -126,12 +145,12 @@ export async function createOrder(input: WallpaperInput) {
       )
       .run();
   } catch (error) {
-    if (!isMissingWallpaperTypeColumnError(error)) {
+    if (!isLegacyOrderColumnError(error)) {
       throw error;
     }
 
     console.warn("[orders]", {
-      failureReason: "orders.wallpaper_type column missing, using legacy insert",
+      failureReason: "orders exact sizing columns missing, using legacy insert",
       errorMessage: error instanceof Error ? error.message : "Unknown D1 error",
     });
 
@@ -318,13 +337,71 @@ export async function attachPreviewImage(orderId: string, previewR2Key: string) 
   await getDb()
     .prepare(
       `UPDATE orders
-       SET preview_r2_key = ?, preview_generated_at = ?, updated_at = ?
+       SET preview_r2_key = ?, preview_asset_key = ?, preview_generated_at = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .bind(previewR2Key, now, now, orderId)
+    .bind(previewR2Key, previewR2Key, now, now, orderId)
     .run();
 
   return getOrder(orderId);
+}
+
+export async function replacePreviewImage(input: {
+  orderId: string;
+  previewR2Key: string;
+  previewInputHash: string;
+}) {
+  const now = Date.now();
+  try {
+    await getDb()
+      .prepare(
+        `UPDATE orders
+         SET preview_r2_key = ?,
+             preview_asset_key = ?,
+             preview_input_hash = ?,
+             preview_stale = 0,
+             preview_generated_at = ?,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        input.previewR2Key,
+        input.previewR2Key,
+        input.previewInputHash,
+        now,
+        now,
+        input.orderId,
+      )
+      .run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (
+      !message.includes("no such column: preview_input_hash") &&
+      !message.includes("no such column: preview_stale")
+    ) {
+      throw error;
+    }
+
+    await getDb()
+      .prepare(
+        `UPDATE orders
+         SET preview_r2_key = ?,
+             preview_asset_key = ?,
+             preview_generated_at = ?,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        input.previewR2Key,
+        input.previewR2Key,
+        now,
+        now,
+        input.orderId,
+      )
+      .run();
+  }
+
+  return getOrder(input.orderId);
 }
 
 export async function attachStripeSession(
@@ -459,10 +536,11 @@ export async function markFinalGenerated(orderId: string, finalR2Key: string) {
   await getDb()
     .prepare(
       `UPDATE orders
-       SET status = ?, final_r2_key = ?, final_generated_at = ?, updated_at = ?
+       SET status = ?, generation_status = ?, final_r2_key = ?, final_asset_key = ?,
+           output_format = 'png', final_generated_at = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .bind("final_generated", finalR2Key, now, now, orderId)
+    .bind("final_generated", "generated", finalR2Key, finalR2Key, now, now, orderId)
     .run();
 
   return getOrder(orderId);
@@ -587,7 +665,15 @@ function sanitizeText(value: string) {
     .slice(0, 300);
 }
 
-function isMissingWallpaperTypeColumnError(error: unknown) {
+function isLegacyOrderColumnError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
-  return message.includes("no column named wallpaper_type");
+  return (
+    message.includes("no column named wallpaper_type") ||
+    message.includes("no column named preset_id") ||
+    message.includes("no column named ratio_label") ||
+    message.includes("no column named final_width") ||
+    message.includes("no column named final_height") ||
+    message.includes("no column named output_format") ||
+    message.includes("no column named generation_status")
+  );
 }

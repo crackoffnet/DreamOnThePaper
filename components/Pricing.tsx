@@ -18,7 +18,7 @@ import {
   wallpaperProducts,
   type WallpaperProductId,
 } from "@/lib/wallpaperProducts";
-import { getTargetDimensionsLabel } from "@/lib/wallpaperDimensions";
+import { getWallpaperPresetForSelection } from "@/lib/wallpaperPresets";
 import { clearBrokenCheckoutState, getCurrentDraft } from "@/lib/wallpaperDraft";
 import { labels } from "@/lib/wallpaper";
 
@@ -257,8 +257,8 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         </div>
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
-          <p>Selected size: {labels.ratios[state.meta.ratio]}</p>
-          <p>Target dimensions: {getTargetDimensionsLabel(inputFromMeta(state.meta))}</p>
+          <p>Selected size: {state.meta.ratioLabel}</p>
+          <p>Final file: PNG · {state.meta.finalWidth} × {state.meta.finalHeight} px</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>
@@ -318,33 +318,30 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
 }
 
 function metaFromCheckoutOrder(order: CheckoutOrderToken): WallpaperMeta {
+  const width = Number(order.width);
+  const height = Number(order.height);
+  const preset = getWallpaperPresetForSelection({
+    device: order.device as DeviceType,
+    ratio: order.ratio as RatioType,
+    customWidth: width,
+    customHeight: height,
+  });
   return {
     device: order.device as DeviceType,
     ratio: order.ratio as RatioType,
     theme: order.theme as ThemeType,
     style: order.style as WallpaperStyle,
     quoteTone: order.quoteTone as QuoteTone,
-    imageSize: `${order.width}x${order.height}`,
-    aspectRatio: `${order.width} / ${order.height}`,
+    presetId: preset.id,
+    selectedLabel: preset.label,
+    ratioLabel: preset.ratioLabel,
+    finalWidth: preset.width,
+    finalHeight: preset.height,
+    outputFormat: "PNG",
+    modelSize: preset.modelSize,
+    imageSize: `${preset.width}x${preset.height}`,
+    aspectRatio: preset.aspect,
   };
-}
-
-function inputFromMeta(meta: WallpaperMeta) {
-  return {
-    device: meta.device,
-    ratio: meta.ratio,
-    theme: meta.theme,
-    style: meta.style,
-    quoteTone: meta.quoteTone,
-    goals: "",
-    lifestyle: "",
-    career: "",
-    personalLife: "",
-    health: "",
-    place: "",
-    feelingWords: "",
-    reminder: "",
-  } as const;
 }
 
 async function validateStoredOrderToken(orderToken: string) {

@@ -1,0 +1,10 @@
+ALTER TABLE orders ADD COLUMN preset_id TEXT;
+ALTER TABLE orders ADD COLUMN ratio_label TEXT;
+ALTER TABLE orders ADD COLUMN source_width INTEGER;
+ALTER TABLE orders ADD COLUMN source_height INTEGER;
+ALTER TABLE orders ADD COLUMN final_width INTEGER;
+ALTER TABLE orders ADD COLUMN final_height INTEGER;
+ALTER TABLE orders ADD COLUMN output_format TEXT;
+ALTER TABLE orders ADD COLUMN generation_status TEXT;
+ALTER TABLE orders ADD COLUMN preview_asset_key TEXT;
+ALTER TABLE orders ADD COLUMN final_asset_key TEXT;

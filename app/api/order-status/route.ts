@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       order.status === "final_generated" && !resolved.hasR2Object
         ? "failed"
         : order.status;
+    const meta = getWallpaperMeta(inputFromDbOrder(order));
     const state =
       effectiveStatus === "failed"
         ? "final_failed_retryable"
@@ -92,9 +93,13 @@ export async function POST(request: Request) {
       expectedAssets: resolved.expectedAssets,
       completedAssets: resolved.completedAssets,
       failedAssets: resolved.inconsistent ? 1 : 0,
-      finalWidth: finalAssets[0]?.width || undefined,
-      finalHeight: finalAssets[0]?.height || undefined,
-      meta: resolved.hasR2Object ? getWallpaperMeta(inputFromDbOrder(order)) : undefined,
+      finalWidth: finalAssets[0]?.width || order.final_width || meta.finalWidth || undefined,
+      finalHeight: finalAssets[0]?.height || order.final_height || meta.finalHeight || undefined,
+      selectedLabel: meta.selectedLabel,
+      ratioLabel: meta.ratioLabel,
+      outputFormat: "PNG",
+      finalUrl: finalImageUrl,
+      meta: resolved.hasR2Object ? meta : undefined,
       message:
         effectiveStatus === "failed"
           ? "Your payment is verified, but the final file is missing. Please retry generation."

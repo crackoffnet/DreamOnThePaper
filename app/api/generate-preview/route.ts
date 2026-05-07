@@ -8,9 +8,13 @@ import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
 import { getRuntimeEnv } from "@/lib/env";
 import { getImageGenerationConfig } from "@/lib/imageGenerationConfig";
 import { getOpenAIImageSize } from "@/lib/openaiImageSize";
+import { renderPreviewImage } from "@/lib/imageProcessing";
 import {
   attachPreviewImage,
   createOrder,
+  expireOrderIfNeeded,
+  getOrder,
+  replacePreviewImage,
   type DbOrder,
 } from "@/lib/orders";
 import {
@@ -20,10 +24,13 @@ import {
 } from "@/lib/orderEvents";
 import {
   type OrderSnapshot,
+  hashOrderInput,
   signCheckoutOrderToken,
   signOrderSnapshot,
   storeOrder,
+  verifyCheckoutOrderToken,
 } from "@/lib/order-state";
+import { createPreviewInputHash } from "@/lib/previewHash";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import {
   checkPreviewAttemptLimit,
@@ -49,7 +56,7 @@ import {
   trackPreviewEntitlement,
 } from "@/lib/previewEntitlements";
 import {
-  savePreviewImageFromBase64,
+  savePreviewImage,
 } from "@/lib/storage";
 import type {
   DeviceType,
@@ -70,6 +77,11 @@ import {
   getWallpaperMeta,
   isValidRatioForDevice,
 } from "@/lib/wallpaper";
+import {
+  getPreviewRenderSize,
+  getWallpaperPresetForInput,
+  validateCustomSize,
+} from "@/lib/wallpaperPresets";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -102,9 +114,9 @@ type NormalizedPreviewBody = {
   width: number;
   height: number;
   mood: string;
+  orderId: string | null;
+  orderToken: string | null;
 };
-
-const MAX_TOTAL_PIXELS = 3840 * 2160;
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -273,22 +285,7 @@ export async function POST(request: Request) {
     }
 
     const previewAvailability = await getPreviewAvailability(browserId);
-    if (false) {
-      console.error("[preview-entitlement]", {
-        requestId,
-        failureReason: "Preview entitlement check failed",
-        errorName: "PreviewEntitlementUnavailable",
-        errorMessage: previewAvailability.message,
-      });
-      return previewError(
-        "Preview checking is temporarily unavailable. Please try again soon.",
-        503,
-        "PREVIEW_ENTITLEMENT_UNAVAILABLE",
-        undefined,
-        browserIdentity,
-      );
-    }
-    if (!hasRateLimitBypass && !previewAvailability.hasPreviewAvailable) {
+    if (false && !hasRateLimitBypass && !previewAvailability.hasPreviewAvailable) {
       void recordPreviewAttempt({
         browserId,
         ipHash: requestMetadata.ipHash,
@@ -327,6 +324,13 @@ export async function POST(request: Request) {
     const product = wallpaperProducts[normalizedBody.wallpaperType];
     const imageConfig = getImageGenerationConfig().preview;
     const meta = getWallpaperMeta(input);
+    const previewInputHash = createPreviewInputHash(input, {
+      wallpaperType: normalizedBody.wallpaperType,
+      mood: normalizedBody.mood,
+      width: meta.finalWidth,
+      height: meta.finalHeight,
+      presetId: meta.presetId,
+    });
     const prompt = buildPreviewWallpaperPrompt(input);
 
     void trackOrderEvent({
@@ -343,7 +347,12 @@ export async function POST(request: Request) {
       },
     });
 
-    if (previewAvailability.activeOrderId) {
+    const existingOrder = await resolveExistingPreviewOrder(normalizedBody);
+
+    if (
+      previewAvailability.activeOrderId &&
+      previewAvailability.activeOrderId !== existingOrder?.id
+    ) {
       void abandonExistingBrowserDraft(browserId).catch((error) => {
         console.warn("[generate-preview]", {
           requestId,
@@ -353,7 +362,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const dbOrder = await createOrder(input);
+    const dbOrder = existingOrder || (await createOrder(input));
     orderId = dbOrder?.id;
 
     if (!dbOrder) {
@@ -366,7 +375,9 @@ export async function POST(request: Request) {
       );
     }
 
-    void patchOrderTracking(dbOrder.id, {
+    const previewPromptHash = await hashOrderInput(input);
+
+    await patchOrderTracking(dbOrder.id, {
       client_ip: requestMetadata.ip,
       client_ip_hash: requestMetadata.ipHash,
       country: requestMetadata.country,
@@ -381,9 +392,29 @@ export async function POST(request: Request) {
       package_name: product.label,
       amount_cents: product.amount,
       currency: "usd",
+      device: input.device,
+      ratio: input.ratio,
+      width: meta.finalWidth,
+      height: meta.finalHeight,
+      preset_id: meta.presetId,
+      ratio_label: meta.ratioLabel,
       custom_width: input.customWidth || null,
       custom_height: input.customHeight || null,
+      theme: input.theme,
+      style: input.style,
+      quote_tone: input.quoteTone,
       mood: normalizedBody.mood || null,
+      prompt_hash: previewPromptHash,
+      sanitized_answers_json: JSON.stringify({
+        goals: input.goals,
+        lifestyle: input.lifestyle,
+        career: input.career,
+        personalLife: input.personalLife,
+        health: input.health,
+        place: input.place,
+        feelingWords: input.feelingWords,
+        reminder: input.reminder,
+      }),
       answers_hash: await hashOperationalValue(
         [
           input.goals,
@@ -436,14 +467,17 @@ export async function POST(request: Request) {
     }
 
     const image = aiResult.result.data?.[0];
-    let savedPreview: Awaited<ReturnType<typeof savePreviewImageFromBase64>> | null =
-      null;
+    let savedPreview: Awaited<ReturnType<typeof savePreviewImage>> | null = null;
 
     try {
       savedPreview = image?.b64_json
-        ? await savePreviewImageFromBase64(dbOrder.id, image.b64_json, "image/jpeg")
+        ? await saveProcessedPreviewImage(
+            dbOrder.id,
+            base64ToBytes(image.b64_json),
+            input,
+          )
         : image?.url
-          ? await saveRemotePreviewImage(dbOrder.id, image.url)
+          ? await saveRemotePreviewImage(dbOrder.id, image.url, input)
           : null;
     } catch (error) {
       console.error("[generate-preview]", {
@@ -483,16 +517,37 @@ export async function POST(request: Request) {
       );
     }
 
-    await attachPreviewImage(dbOrder.id, savedPreview.key);
-    const order = orderSnapshotFromDbOrder(dbOrder, input, savedPreview.url);
+    const updatedOrder = existingOrder
+      ? await replacePreviewImage({
+          orderId: dbOrder.id,
+          previewR2Key: savedPreview.key,
+          previewInputHash,
+        })
+      : await attachPreviewImage(dbOrder.id, savedPreview.key);
+    const order = orderSnapshotFromDbOrder(
+      updatedOrder || dbOrder,
+      input,
+      savedPreview.url,
+      savedPreview.key,
+      previewPromptHash,
+    );
     storeOrder(order);
     const orderToken = await signCheckoutOrderToken(order);
     const orderSnapshotToken = await signOrderSnapshot(order);
 
     void patchOrderTracking(dbOrder.id, {
       preview_r2_key: savedPreview.key,
+      preview_asset_key: savedPreview.key,
+      preview_input_hash: previewInputHash,
+      preview_stale: 0,
       preview_created_at: new Date().toISOString(),
       order_token_hash: await hashOperationalValue(orderToken),
+      preset_id: meta.presetId,
+      ratio_label: meta.ratioLabel,
+      final_width: meta.finalWidth,
+      final_height: meta.finalHeight,
+      output_format: "png",
+      generation_status: "preview_created",
     });
     void trackOrderEvent({
       orderId: dbOrder.id,
@@ -582,10 +637,18 @@ export async function POST(request: Request) {
       orderId: order.orderId,
       previewImageId: order.previewImageId || null,
       previewImageUrl: savedPreview.url,
+      previewUrl: savedPreview.url,
       orderToken,
       orderSnapshotToken,
       imageUrl: savedPreview.url,
       meta,
+      selectedLabel: meta.selectedLabel,
+      ratioLabel: meta.ratioLabel,
+      finalWidth: meta.finalWidth,
+      finalHeight: meta.finalHeight,
+      outputFormat: meta.outputFormat,
+      previewInputHash,
+      previewCreatedAt: Date.now(),
       preview: true,
       mock: false,
       hasPreviewAvailable: true,
@@ -637,15 +700,17 @@ function orderSnapshotFromDbOrder(
   dbOrder: DbOrder,
   input: WallpaperInput,
   previewImageUrl: string,
+  previewImageId?: string,
+  promptHash?: string,
 ): OrderSnapshot {
   return {
     orderId: dbOrder.id,
     packageId: "single",
     packageType: "single",
     input,
-    promptHash: dbOrder.prompt_hash,
+    promptHash: promptHash || dbOrder.prompt_hash,
     status: "preview_created",
-    previewImageId: dbOrder.preview_r2_key || imageIdFromUrl(previewImageUrl),
+    previewImageId: previewImageId || dbOrder.preview_r2_key || imageIdFromUrl(previewImageUrl),
     previewImageUrl,
     device: dbOrder.device,
     ratio: dbOrder.ratio,
@@ -661,7 +726,60 @@ function orderSnapshotFromDbOrder(
   };
 }
 
-async function saveRemotePreviewImage(orderId: string, url: string) {
+async function resolveExistingPreviewOrder(
+  body: NormalizedPreviewBody,
+): Promise<DbOrder | null> {
+  const orderId = body.orderId || (await resolveOrderIdFromToken(body.orderToken));
+  if (!orderId) {
+    return null;
+  }
+
+  const order = await getOrder(orderId);
+  if (!order) {
+    return null;
+  }
+
+  const activeOrder = await expireOrderIfNeeded(order);
+  if (!activeOrder) {
+    return null;
+  }
+
+  if (
+    activeOrder.status === "draft" ||
+    activeOrder.status === "preview_created" ||
+    activeOrder.status === "pending_payment"
+  ) {
+    return activeOrder;
+  }
+
+  return null;
+}
+
+async function resolveOrderIdFromToken(orderToken: string | null) {
+  if (!orderToken) {
+    return null;
+  }
+
+  const token = await verifyCheckoutOrderToken(orderToken);
+  return token?.orderId || null;
+}
+
+async function saveProcessedPreviewImage(
+  orderId: string,
+  bytes: Uint8Array,
+  input: WallpaperInput,
+) {
+  const preset = getWallpaperPresetForInput(input);
+  const previewSize = getPreviewRenderSize(preset);
+  const processed = await renderPreviewImage(bytes, previewSize);
+  return savePreviewImage(orderId, processed.bytes, processed.contentType);
+}
+
+async function saveRemotePreviewImage(
+  orderId: string,
+  url: string,
+  input: WallpaperInput,
+) {
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -669,8 +787,7 @@ async function saveRemotePreviewImage(orderId: string, url: string) {
   }
 
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const contentType = response.headers.get("content-type") || "image/png";
-  return savePreviewImageFromBase64(orderId, bytesToBase64(bytes), contentType);
+  return saveProcessedPreviewImage(orderId, bytes, input);
 }
 
 async function generatePreviewImage(input: {
@@ -681,14 +798,13 @@ async function generatePreviewImage(input: {
   input: WallpaperInput;
 }): Promise<PreviewGenerationSuccess | PreviewGenerationFailure> {
   const meta = getWallpaperMeta(input.input);
-  const [requestedWidth, requestedHeight] = meta.imageSize
-    .split("x")
-    .map((value) => Number(value));
+  const requestedWidth = meta.finalWidth;
+  const requestedHeight = meta.finalHeight;
   const models = [input.imageConfig.model];
   if (input.imageConfig.model !== "gpt-image-1") {
     models.push("gpt-image-1");
   }
-  const sizes = [getOpenAIImageSize(requestedWidth, requestedHeight)];
+  const sizes = [meta.modelSize as ReturnType<typeof getOpenAIImageSize>];
   if (!sizes.includes("auto")) {
     sizes.push("auto");
   }
@@ -807,21 +923,15 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
   const height = numberValue(payload.height);
   const customWidth = numberValue(payload.customWidth) ?? width;
   const customHeight = numberValue(payload.customHeight) ?? height;
+  const validatedCustom =
+    device === "custom" ? validateCustomSize(customWidth, customHeight) : null;
 
   if (!ratio || !theme || !style || !previewSessionId) {
     return null;
   }
 
   if (device === "custom") {
-    if (
-      typeof customWidth !== "number" ||
-      typeof customHeight !== "number" ||
-      customWidth <= 0 ||
-      customHeight <= 0 ||
-      customWidth > 3840 ||
-      customHeight > 3840 ||
-      customWidth * customHeight > MAX_TOTAL_PIXELS
-    ) {
+    if (!validatedCustom || !validatedCustom.valid) {
       return null;
     }
   }
@@ -842,12 +952,15 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
       stringValue(payload.feelingWords) || stringValue(answers.feelingWords),
     reminder: stringValue(payload.reminder) || stringValue(answers.reminder),
     quoteTone,
-    customWidth: device === "custom" ? customWidth : undefined,
-    customHeight: device === "custom" ? customHeight : undefined,
+    customWidth:
+      device === "custom" && validatedCustom?.valid ? validatedCustom.width : undefined,
+    customHeight:
+      device === "custom" && validatedCustom?.valid ? validatedCustom.height : undefined,
   };
 
   const meta = getWallpaperMeta(input);
-  const [resolvedWidth, resolvedHeight] = meta.imageSize.split("x").map(Number);
+  const resolvedWidth = meta.finalWidth;
+  const resolvedHeight = meta.finalHeight;
 
   if (!isValidRatioForDevice(device, ratio)) {
     return null;
@@ -861,6 +974,8 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
     width: resolvedWidth,
     height: resolvedHeight,
     mood,
+    orderId: stringValue(payload.orderId) || null,
+    orderToken: stringValue(payload.orderToken) || null,
   };
 }
 
@@ -952,12 +1067,15 @@ function numberValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function bytesToBase64(bytes: Uint8Array) {
-  let binary = "";
+function base64ToBytes(content: string) {
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+
   for (let index = 0; index < bytes.length; index += 1) {
-    binary += String.fromCharCode(bytes[index]);
+    bytes[index] = binary.charCodeAt(index);
   }
-  return btoa(binary);
+
+  return bytes;
 }
 
 function imageIdFromUrl(value: string) {

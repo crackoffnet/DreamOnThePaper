@@ -46,6 +46,13 @@ export type WallpaperMeta = {
   theme: ThemeType;
   style: WallpaperStyle;
   quoteTone: QuoteTone;
+  presetId: string;
+  selectedLabel: string;
+  ratioLabel: string;
+  finalWidth: number;
+  finalHeight: number;
+  outputFormat: "PNG";
+  modelSize: string;
   imageSize: string;
   aspectRatio: string;
 };
@@ -55,6 +62,8 @@ export type GenerateResponse = {
   orderId?: string;
   previewImageId?: string | null;
   previewImageUrl?: string;
+  previewInputHash?: string;
+  previewCreatedAt?: number;
   orderToken?: string;
   resultAccessToken?: string;
   orderSnapshotToken?: string;
@@ -62,6 +71,11 @@ export type GenerateResponse = {
   finalImageUrl?: string;
   finalWidth?: number;
   finalHeight?: number;
+  selectedLabel?: string;
+  ratioLabel?: string;
+  outputFormat?: "PNG";
+  previewUrl?: string;
+  finalUrl?: string;
   finalAssets?: FinalAssetResult[];
   imageBase64?: string;
   mimeType?: string;

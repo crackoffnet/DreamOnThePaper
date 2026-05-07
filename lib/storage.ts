@@ -15,7 +15,11 @@ export async function savePreviewImage(
   bytes: Uint8Array,
   contentType: string,
 ) {
-  return saveImageAtKey(`previews/${orderId}.webp`, bytes, contentType);
+  return saveImageAtKey(
+    `previews/${orderId}/${crypto.randomUUID()}.${extensionForContentType(contentType)}`,
+    bytes,
+    contentType,
+  );
 }
 
 export async function savePreviewImageFromBase64(
@@ -50,6 +54,19 @@ export async function saveFinalAssetImage(
   contentType: string,
 ) {
   return saveImageAtKey(`finals/${orderId}/${assetType}.png`, bytes, contentType);
+}
+
+export async function saveFinalSourceImage(
+  orderId: string,
+  assetType: string,
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  return saveImageAtKey(
+    `finals/${orderId}/${assetType}-source.${extensionForContentType(contentType)}`,
+    bytes,
+    contentType,
+  );
 }
 
 export async function saveFinalAssetImageFromBase64(

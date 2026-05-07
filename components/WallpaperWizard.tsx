@@ -51,6 +51,7 @@ import {
   getPreviewOptimizedLabel,
   getTargetDimensionsLabel,
 } from "@/lib/wallpaperDimensions";
+import { createPreviewInputHash } from "@/lib/previewHash";
 
 const questions: Array<{
   key: keyof Pick<
@@ -134,6 +135,23 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     activeOrderId: null as string | null,
   });
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
+  const currentPreviewInputHash = useMemo(
+    () =>
+      createPreviewInputHash(form, {
+        wallpaperType: form.device,
+        mood: initialMood || form.style,
+        width: meta.finalWidth,
+        height: meta.finalHeight,
+        presetId: meta.presetId,
+      }),
+    [form, initialMood, meta.finalHeight, meta.finalWidth, meta.presetId],
+  );
+  const hasPreview = Boolean(draft?.previewImageUrl);
+  const isPreviewStale = Boolean(
+    hasPreview &&
+      ((draft?.previewInputHash && draft.previewInputHash !== currentPreviewInputHash) ||
+        draft?.previewStale),
+  );
 
   useEffect(() => {
     ensureAppStateVersion();
@@ -255,9 +273,29 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     setStep(4);
   }
 
-  function tryDifferentStyle() {
+  function goToCheckout(activeDraft: WallpaperDraft | null) {
+    if (!activeDraft) {
+      return;
+    }
+
+    router.push(checkoutHref(activeDraft));
+  }
+
+  async function tryDifferentStyle() {
+    if (isGenerating) {
+      return;
+    }
+
     setError("");
-    setStep(3);
+    const currentIndex = styles.indexOf(form.style);
+    const nextStyle = styles[(currentIndex + 1) % styles.length];
+    const nextInput = {
+      ...form,
+      style: nextStyle,
+    };
+    setForm(nextInput);
+    setDraft(updateDraftInput(nextInput));
+    await runPreviewGeneration(nextInput);
   }
 
   function startNewWallpaper() {
@@ -273,35 +311,31 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     setStep(0);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (isGenerating) {
-      return;
-    }
-
+  async function runPreviewGeneration(nextInput: WallpaperInput) {
     setError("");
     setIsGenerating(true);
 
     try {
       const activeDraft = saveCurrentDraft({
         ...(draft || getCurrentDraft()),
-        input: form,
+        input: nextInput,
       });
       setDraft(activeDraft);
-      const [width, height] = meta.imageSize.split("x").map(Number);
-
-      if (activeDraft.previewStatus === "ready" && activeDraft.previewImageUrl) {
-        router.push(
-          checkoutHref(activeDraft),
-        );
-        return;
-      }
+      const nextMeta = getWallpaperMeta(nextInput);
+      const [width, height] = nextMeta.imageSize.split("x").map(Number);
+      const nextPreviewInputHash = createPreviewInputHash(nextInput, {
+        wallpaperType: nextInput.device,
+        mood: initialMood || nextInput.style,
+        width: nextMeta.finalWidth,
+        height: nextMeta.finalHeight,
+        presetId: nextMeta.presetId,
+      });
 
       if (website) {
         throw new Error("Unable to continue. Please try again.");
       }
 
-      const customIssue = getCustomSizeIssue(form);
+      const customIssue = getCustomSizeIssue(nextInput);
       if (customIssue) {
         throw new Error(customIssue);
       }
@@ -312,21 +346,23 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wallpaperType: form.device,
-          ...form,
+          wallpaperType: nextInput.device,
+          ...nextInput,
           width,
           height,
-          mood: initialMood || form.style,
+          mood: initialMood || nextInput.style,
           answers: {
-            goals: form.goals,
-            lifestyle: form.lifestyle,
-            career: form.career,
-            personalLife: form.personalLife,
-            health: form.health,
-            place: form.place,
-            feelingWords: form.feelingWords,
-            reminder: form.reminder,
+            goals: nextInput.goals,
+            lifestyle: nextInput.lifestyle,
+            career: nextInput.career,
+            personalLife: nextInput.personalLife,
+            health: nextInput.health,
+            place: nextInput.place,
+            feelingWords: nextInput.feelingWords,
+            reminder: nextInput.reminder,
           },
+          orderId: activeDraft.orderId || undefined,
+          orderToken: activeDraft.orderToken || undefined,
           website,
           previewSessionId: getDraftPreviewSessionId(activeDraft.id),
         }),
@@ -343,7 +379,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         throw new Error(formatPreviewError(data));
       }
 
-      sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(form));
+      sessionStorage.setItem("dreamWallpaperInput", JSON.stringify(nextInput));
       sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(data.meta));
       saveDreamState({
         orderId: data.orderId || null,
@@ -351,8 +387,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         orderSnapshotToken: data.orderSnapshotToken || null,
         previewImageUrl: imageUrl,
         previewImageId: data.previewImageId || null,
-        previewCreatedAt: Date.now(),
-        wallpaperType: form.device,
+        previewInputHash: data.previewInputHash || nextPreviewInputHash,
+        previewCreatedAt: data.previewCreatedAt || Date.now(),
+        previewStale: false,
+        wallpaperType: nextInput.device,
         status: "preview_created",
       });
       const readyDraft = markDraftReady(imageUrl, data.meta, {
@@ -360,6 +398,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         previewImageId: data.previewImageId,
         orderToken: data.orderToken,
         orderSnapshotToken: data.orderSnapshotToken,
+        previewInputHash: data.previewInputHash || nextPreviewInputHash,
+        previewCreatedAt: data.previewCreatedAt || Date.now(),
       });
       setDraft(readyDraft);
       setPreviewAvailability({
@@ -371,7 +411,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
       removeEphemeralImage("finalImageUrl");
       sessionStorage.removeItem("dreamWallpaperMeta");
       sessionStorage.removeItem("dreamOrderToken");
-      router.push(checkoutHref(readyDraft));
+      setStep(stepTitles.length - 1);
+      setIsGenerating(false);
     } catch (generationError) {
       setError(
         generationError instanceof Error
@@ -386,6 +427,15 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
       );
       setIsGenerating(false);
     }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isGenerating) {
+      return;
+    }
+
+    await runPreviewGeneration(form);
   }
 
   return (
@@ -496,8 +546,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
             <div className="rounded-2xl border border-cocoa/10 bg-white/60 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
                 <Sparkles aria-hidden className="h-4 w-4 text-gold" />
-                {draft?.previewStatus === "ready"
-                  ? "Your free preview is ready."
+                {hasPreview
+                  ? isPreviewStale
+                    ? "Your preview needs an update."
+                    : "Your free preview is ready."
                   : "Ready to create preview"}
               </div>
               <div className="grid gap-2 text-sm text-taupe sm:grid-cols-2">
@@ -507,11 +559,12 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                 <p>Style: {labels.styles[form.style]}</p>
               </div>
             </div>
-            {draft?.previewStatus === "ready" && draft.previewImageUrl ? (
+            {draft?.previewImageUrl ? (
               <div className="rounded-2xl border border-gold/20 bg-white/70 p-4">
                 <p className="text-sm leading-6 text-taupe">
-                  You can review it, edit your answers, or unlock the full
-                  wallpaper download.
+                  {isPreviewStale
+                    ? "Your answers changed. Generate a new preview to see the updated concept."
+                    : "You can review it, edit your answers, or unlock the full wallpaper download."}
                 </p>
                 <div className="mt-3 overflow-hidden rounded-2xl border border-white/70 bg-linen">
                   <div className="relative">
@@ -523,7 +576,9 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                     />
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/5 via-transparent to-ink/35" />
                     <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/50 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold backdrop-blur">
-                      Low-resolution preview
+                      {isPreviewStale
+                        ? "Preview from previous answers"
+                        : "Low-resolution preview"}
                     </div>
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       <span className="-rotate-12 text-4xl font-serif italic tracking-[0.1em] text-white/28">
@@ -533,13 +588,42 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                   </div>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={tryDifferentStyle}
-                    className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
-                  >
-                    Try Different Style
-                  </button>
+                  {isPreviewStale ? (
+                    <>
+                      <button
+                        type="submit"
+                        disabled={isGenerating}
+                        className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Generate New Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => goToCheckout(draft)}
+                        className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink"
+                      >
+                        Continue with Current Preview
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="submit"
+                        disabled={isGenerating}
+                        className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-medium text-pearl disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Generate New Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void tryDifferentStyle()}
+                        disabled={isGenerating}
+                        className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full border border-cocoa/10 bg-white/65 px-4 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Try Different Style
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={editAnswers}
@@ -549,11 +633,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      router.push(
-                        checkoutHref(draft),
-                      )
-                    }
+                    onClick={() => goToCheckout(draft)}
                     className="focus-ring inline-flex min-h-10 items-center justify-center rounded-full bg-gold px-4 text-sm font-medium text-ink"
                   >
                     Unlock Full Wallpaper
@@ -566,8 +646,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
             ) : null}
             {draft?.previewStatus === "failed" && !isGenerating && !error ? (
               <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                Preview generation failed. You can edit your answers and try
-                again in a moment.
+                We could not create the updated preview right now. Your last preview is still available, and you can try again in a moment.
               </p>
             ) : null}
           </div>
@@ -598,6 +677,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               Next
               <ArrowRight aria-hidden className="h-4 w-4" />
             </button>
+          ) : hasPreview ? (
+            <div className="text-right text-[11px] leading-5 text-taupe">
+              Free previews are low-resolution and watermarked. Your paid download is a clean high-resolution PNG.
+            </div>
           ) : (
             <div className="flex flex-col items-end gap-2">
               <p className="max-w-xs text-right text-[11px] leading-5 text-taupe">
@@ -646,7 +729,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           <p className="font-semibold text-cocoa">Preview frame</p>
           <p>{labels.devices[form.device]}</p>
           <p>{getAspectRatioLabel(form)}</p>
-          <p>Target: {getTargetDimensionsLabel(form)}</p>
+          <p>Final file: PNG · {getTargetDimensionsLabel(form)}</p>
           <p className="text-gold">{getPreviewOptimizedLabel(form)}</p>
         </div>
       </aside>

@@ -7,11 +7,11 @@ import type {
   WallpaperMeta,
   WallpaperStyle,
 } from "@/lib/types";
-import { getOpenAIImageSize } from "@/lib/openaiImageSize";
 import {
   getTargetDimensionsLabel,
   getWallpaperDimensionConfig,
 } from "@/lib/wallpaperDimensions";
+import { getWallpaperPresetForInput } from "@/lib/wallpaperPresets";
 
 export const devices = ["mobile", "desktop", "tablet", "custom"] as const satisfies readonly DeviceType[];
 export const themes = ["light", "dark"] as const satisfies readonly ThemeType[];
@@ -100,6 +100,7 @@ export const defaultWallpaperInput: WallpaperInput = {
 };
 
 export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
+  const preset = getWallpaperPresetForInput(input);
   const dimensions = getWallpaperDimensionConfig(input);
 
   return {
@@ -108,21 +109,24 @@ export function getWallpaperMeta(input: WallpaperInput): WallpaperMeta {
     theme: input.theme,
     style: input.style,
     quoteTone: input.quoteTone,
+    presetId: preset.id,
+    selectedLabel: preset.label,
+    ratioLabel: preset.ratioLabel,
+    finalWidth: preset.width,
+    finalHeight: preset.height,
+    outputFormat: "PNG",
+    modelSize: preset.modelSize,
     aspectRatio: dimensions.aspectRatio,
-    imageSize: `${dimensions.targetWidth}x${dimensions.targetHeight}`,
+    imageSize: `${preset.width}x${preset.height}`,
   };
 }
 
 export function getPreviewImageSize(input: WallpaperInput) {
-  const meta = getWallpaperMeta(input);
-  const [width, height] = meta.imageSize.split("x").map(Number);
-  return getOpenAIImageSize(width, height);
+  return getWallpaperMeta(input).modelSize;
 }
 
 export function getFinalImageSize(input: WallpaperInput) {
-  const meta = getWallpaperMeta(input);
-  const [width, height] = meta.imageSize.split("x").map(Number);
-  return getOpenAIImageSize(width, height);
+  return getWallpaperMeta(input).modelSize;
 }
 
 export function getResolutionLabel(input: WallpaperInput) {
@@ -146,8 +150,8 @@ export function buildPreviewWallpaperPrompt(input: WallpaperInput) {
 
   return `Create a fast low-resolution preview of a personalized vision board wallpaper.
 Device: ${labels.devices[input.device]}
-Aspect ratio: ${getAspectRatioLabel(input)}
-Resolution target: ${getResolutionLabel(input)}
+Selected size: ${getAspectRatioLabel(input)}
+Final delivery size: ${getResolutionLabel(input)}
 Theme: ${labels.themes[input.theme]}
 Style: ${labels.styles[input.style]}
 Mood: calm, elegant, aspirational.
@@ -167,8 +171,8 @@ export function buildFinalWallpaperPrompt(input: WallpaperInput) {
 
   return `Create a premium, elegant, minimal vision board wallpaper.
 Device: ${labels.devices[input.device]}
-Aspect ratio: ${getAspectRatioLabel(input)}
-Resolution target: ${getResolutionLabel(input)}
+Selected size: ${getAspectRatioLabel(input)}
+Final delivery size: ${getResolutionLabel(input)}
 Style: ${labels.styles[input.style]}
 Theme: ${labels.themes[input.theme]}, warm neutral tones, cream, beige, muted gold, and refined contrast.
 Composition: clean, spacious, not cluttered, wallpaper-friendly, with negative space for app icons and desktop folders.

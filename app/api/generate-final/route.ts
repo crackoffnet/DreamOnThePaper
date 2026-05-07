@@ -15,7 +15,7 @@ import {
 } from "@/lib/orders";
 import { getRuntimeEnv, getRuntimeEnvPresence } from "@/lib/env";
 import { assertSameOrigin, safeLog } from "@/lib/security";
-import { saveFinalAssetImage } from "@/lib/storage";
+import { saveFinalAssetImage, saveFinalSourceImage } from "@/lib/storage";
 import {
   assetToResult,
   resolveServableFinalAssets,
@@ -34,11 +34,7 @@ import { packages, type PackageId } from "@/lib/packages";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import { patchOrderTracking, trackOrderEvent } from "@/lib/orderEvents";
 import { getImageGenerationConfig, type ImageQuality } from "@/lib/imageGenerationConfig";
-import {
-  getOpenAIImageDimensions,
-  getOpenAIImageSize,
-} from "@/lib/openaiImageSize";
-import { readImageDimensions } from "@/lib/imageDimensions";
+import { detectSourceImageSize, renderFinalWallpaper } from "@/lib/imageProcessing";
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string; url?: string }>;
@@ -349,8 +345,8 @@ export async function POST(request: Request) {
         metadata: {
           requestId,
           assetType: item.assetType,
-          width: item.width,
-          height: item.height,
+          width: item.finalWidth,
+          height: item.finalHeight,
           fileSizeBytes: savedFinal.size,
         },
       });
@@ -474,6 +470,7 @@ async function finalAssetsSuccess(
   const input = inputFromDbOrder(order);
   const finalAssets = assets.map((asset) => assetToResult(asset));
   const primary = finalAssets[0];
+  const meta = getWallpaperMeta(input);
 
   return NextResponse.json({
     success: true,
@@ -482,11 +479,15 @@ async function finalAssetsSuccess(
     finalImageUrl: primary?.imageUrl,
     finalWidth: primary?.width,
     finalHeight: primary?.height,
+    selectedLabel: meta.selectedLabel,
+    ratioLabel: meta.ratioLabel,
+    outputFormat: "PNG",
+    finalUrl: primary?.imageUrl,
     finalAssets,
     packageType: "single",
     wallpaperType: order.wallpaper_type || order.device,
     packageName: packages.single.name,
-    meta: getWallpaperMeta(input),
+    meta,
     reused,
   });
 }
@@ -522,7 +523,14 @@ function finalStatusError(
   );
 }
 
-async function saveRemoteFinalImage(orderId: string, assetType: string, url: string) {
+async function saveRemoteFinalImage(
+  orderId: string,
+  assetType: string,
+  url: string,
+  finalWidth: number,
+  finalHeight: number,
+  modelSize: string,
+) {
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -531,10 +539,29 @@ async function saveRemoteFinalImage(orderId: string, assetType: string, url: str
 
   const bytes = new Uint8Array(await response.arrayBuffer());
   const contentType = response.headers.get("content-type") || "image/png";
-  const saved = await saveFinalAssetImage(orderId, assetType, bytes, contentType);
+  const sourceDimensions = detectSourceImageSize(
+    bytes,
+    modelSizeToDimensions(modelSize),
+    contentType,
+  );
+  await saveFinalSourceImage(orderId, assetType, bytes, "image/png");
+  const rendered = await renderFinalWallpaper(bytes, {
+    width: finalWidth,
+    height: finalHeight,
+  });
+  const saved = await saveFinalAssetImage(
+    orderId,
+    assetType,
+    rendered.bytes,
+    rendered.contentType,
+  );
   return {
-    ...saved,
-    dimensions: readImageDimensions(bytes, contentType),
+    savedFinal: saved,
+    sourceDimensions,
+    finalDimensions: {
+      width: rendered.width,
+      height: rendered.height,
+    },
   };
 }
 
@@ -556,21 +583,21 @@ async function generateFinalAsset(input: {
     packageType,
     step: "prompt_built",
     assetType: item.assetType,
-    width: item.width,
-    height: item.height,
+    width: item.finalWidth,
+    height: item.finalHeight,
     durationMs: Date.now() - promptStartedAt,
   });
 
   const openAiStartedAt = Date.now();
-  const openAiSize = getOpenAIImageSize(item.width, item.height);
+  const openAiSize = item.modelSize;
   logFinalTiming({
     requestId,
     orderId,
     packageType,
     step: "openai_start",
     assetType: item.assetType,
-    width: item.width,
-    height: item.height,
+    width: item.finalWidth,
+    height: item.finalHeight,
     model: imageConfig.model,
     quality: imageConfig.quality,
     openAiSize,
@@ -597,8 +624,8 @@ async function generateFinalAsset(input: {
     packageType,
     step: "openai_complete",
     assetType: item.assetType,
-    width: item.width,
-    height: item.height,
+    width: item.finalWidth,
+    height: item.finalHeight,
     quality: imageConfig.quality,
     model: imageConfig.model,
     openAiSize,
@@ -613,12 +640,13 @@ async function generateFinalAsset(input: {
   const result = (await response.json()) as OpenAIImageResponse;
   const image = result.data?.[0];
   let savedFinal: Awaited<ReturnType<typeof saveFinalAssetImage>> | null = null;
-  let actualDimensions: { width: number; height: number } | null = null;
+  let sourceDimensions: { width: number; height: number } | null = null;
+  let finalDimensions: { width: number; height: number } | null = null;
 
   if (image?.b64_json) {
     const decodeStartedAt = Date.now();
     const bytes = base64ToBytes(image.b64_json);
-    actualDimensions = readImageDimensions(bytes, "image/png");
+    sourceDimensions = detectSourceImageSize(bytes, modelSizeToDimensions(openAiSize));
     logFinalTiming({
       requestId,
       orderId,
@@ -629,12 +657,33 @@ async function generateFinalAsset(input: {
       bytes: bytes.byteLength,
     });
 
+    await saveFinalSourceImage(orderId, item.assetType, bytes, "image/png");
+
+    const resizeStartedAt = Date.now();
+    const rendered = await renderFinalWallpaper(bytes, {
+      width: item.finalWidth,
+      height: item.finalHeight,
+    });
+    finalDimensions = {
+      width: rendered.width,
+      height: rendered.height,
+    };
+    logFinalTiming({
+      requestId,
+      orderId,
+      packageType,
+      step: "final_resize_complete",
+      assetType: item.assetType,
+      durationMs: Date.now() - resizeStartedAt,
+      bytes: rendered.bytes.byteLength,
+    });
+
     const uploadStartedAt = Date.now();
     savedFinal = await saveFinalAssetImage(
       orderId,
       item.assetType,
-      bytes,
-      "image/png",
+      rendered.bytes,
+      rendered.contentType,
     );
     logFinalTiming({
       requestId,
@@ -647,9 +696,17 @@ async function generateFinalAsset(input: {
     });
   } else if (image?.url) {
     const uploadStartedAt = Date.now();
-    const remoteSaved = await saveRemoteFinalImage(orderId, item.assetType, image.url);
-    savedFinal = remoteSaved;
-    actualDimensions = remoteSaved?.dimensions || null;
+    const remoteSaved = await saveRemoteFinalImage(
+      orderId,
+      item.assetType,
+      image.url,
+      item.finalWidth,
+      item.finalHeight,
+      item.modelSize,
+    );
+    savedFinal = remoteSaved?.savedFinal || null;
+    sourceDimensions = remoteSaved?.sourceDimensions || null;
+    finalDimensions = remoteSaved?.finalDimensions || null;
     logFinalTiming({
       requestId,
       orderId,
@@ -666,9 +723,10 @@ async function generateFinalAsset(input: {
   }
 
   const d1StartedAt = Date.now();
-  const resolvedDimensions =
-    actualDimensions ||
-    getOpenAIImageDimensions(openAiSize) || { width: item.width, height: item.height };
+  const resolvedDimensions = finalDimensions || {
+    width: item.finalWidth,
+    height: item.finalHeight,
+  };
   await insertFinalAsset({
     orderId,
     assetType: item.assetType,
@@ -677,6 +735,19 @@ async function generateFinalAsset(input: {
     r2Key: savedFinal.key,
     fileSizeBytes: savedFinal.size,
     promptHash,
+  });
+  await patchOrderTracking(orderId, {
+    wallpaper_type: item.wallpaperType,
+    preset_id: item.presetId,
+    ratio_label: item.ratioLabel,
+    source_width: sourceDimensions?.width || null,
+    source_height: sourceDimensions?.height || null,
+    final_width: resolvedDimensions.width,
+    final_height: resolvedDimensions.height,
+    output_format: "png",
+    generation_status: "generated",
+    final_asset_key: savedFinal.key,
+    final_r2_key: savedFinal.key,
   });
   logFinalTiming({
     requestId,
@@ -727,6 +798,16 @@ function base64ToBytes(content: string) {
 
 async function getReadyAssets(order: DbOrder, packageType: PackageId) {
   return resolveServableFinalAssets(order, packageType);
+}
+
+function modelSizeToDimensions(size: string) {
+  if (size === "1024x1536") {
+    return { width: 1024, height: 1536 };
+  }
+  if (size === "1536x1024") {
+    return { width: 1536, height: 1024 };
+  }
+  return { width: 1024, height: 1024 };
 }
 
 

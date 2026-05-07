@@ -21,6 +21,8 @@ const explicitStateKeys = [
   "dreamOrderToken",
   "dreamPreviewImageUrl",
   "dreamPreviewImageId",
+  "dreamPreviewInputHash",
+  "dreamPreviewStale",
   "dreamWallpaperAnswers",
   "dreamWallpaperDraft",
   "dreamCheckoutPackage",
@@ -66,6 +68,8 @@ export type DreamState = {
   wallpaperType?: string | null;
   previewImageUrl?: string | null;
   previewImageId?: string | null;
+  previewInputHash?: string | null;
+  previewStale?: boolean | null;
   finalGenerationToken?: string | null;
   resultAccessToken?: string | null;
   finalImageUrl?: string | null;
@@ -84,6 +88,7 @@ export type CurrentOrderState = {
   orderToken?: string | null;
   previewImageUrl?: string | null;
   previewImageId?: string | null;
+  previewInputHash?: string | null;
   finalGenerationToken?: string | null;
   resultAccessToken?: string | null;
   finalImageUrl?: string | null;
@@ -238,6 +243,7 @@ export function saveCurrentOrderState(state: CurrentOrderState) {
     orderToken: state.orderToken ?? null,
     previewImageUrl: state.previewImageUrl ?? null,
     previewImageId: state.previewImageId ?? null,
+    previewInputHash: state.previewInputHash ?? null,
     finalGenerationToken: state.finalGenerationToken ?? null,
     resultAccessToken: state.resultAccessToken ?? null,
     finalImageUrl: state.finalImageUrl ?? null,
@@ -261,6 +267,7 @@ export function getCurrentOrderState(): CurrentOrderState {
     orderToken: state?.orderToken || null,
     previewImageUrl: state?.previewImageUrl || null,
     previewImageId: state?.previewImageId || null,
+    previewInputHash: state?.previewInputHash || null,
     finalGenerationToken: state?.finalGenerationToken || null,
     resultAccessToken: state?.resultAccessToken || null,
     finalImageUrl: state?.finalImageUrl || null,
@@ -303,6 +310,8 @@ function mirrorDreamStateKeys(state: DreamState) {
   setOrRemove("previewImageUrl", state.previewImageUrl);
   setOrRemove("dreamPreviewImageUrl", state.previewImageUrl);
   setOrRemove("dreamPreviewImageId", state.previewImageId);
+  setOrRemove("dreamPreviewInputHash", state.previewInputHash);
+  setOrRemove("dreamPreviewStale", state.previewStale ? "true" : null);
   setOrRemove("dreamFinalGenerationToken", state.finalGenerationToken);
   setOrRemove("dreamResultAccessToken", state.resultAccessToken);
   setOrRemove("finalImageUrl", state.finalImageUrl);
@@ -420,6 +429,8 @@ function hydrateLegacyDreamState(): DreamState {
     wallpaperType: sessionStorage.getItem("dreamWallpaperType"),
     previewImageUrl: sessionStorage.getItem("previewImageUrl"),
     previewImageId: sessionStorage.getItem("dreamPreviewImageId"),
+    previewInputHash: sessionStorage.getItem("dreamPreviewInputHash"),
+    previewStale: sessionStorage.getItem("dreamPreviewStale") === "true",
     finalGenerationToken,
     resultAccessToken,
     finalImageUrl,

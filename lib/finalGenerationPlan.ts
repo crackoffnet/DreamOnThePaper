@@ -6,14 +6,19 @@ import {
   wallpaperProductFromDevice,
 } from "@/lib/wallpaperProducts";
 import { inputFromDbOrder } from "@/lib/orders";
-import { normalizeGenerationSize } from "@/lib/imageGenerationConfig";
 import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
+import { getWallpaperPresetForInput } from "@/lib/wallpaperPresets";
+import type { OpenAIImageSize } from "@/lib/openaiImageSize";
 
 export type FinalGenerationPlanItem = {
   assetType: FinalAssetType;
+  wallpaperType: FinalAssetType;
   label: string;
-  width: number;
-  height: number;
+  presetId: string;
+  ratioLabel: string;
+  finalWidth: number;
+  finalHeight: number;
+  modelSize: OpenAIImageSize;
   input: WallpaperInput;
   variationPrompt: string;
 };
@@ -23,7 +28,7 @@ export function buildFinalGenerationPlan(
   _packageType: PackageId,
 ): FinalGenerationPlanItem[] {
   const baseInput = inputFromDbOrder(order);
-  const selectedSize = normalizeGenerationSize(order.width, order.height, "final");
+  const preset = getWallpaperPresetForInput(baseInput);
   const wallpaperType = wallpaperProductFromDevice(
     order.wallpaper_type || order.device,
   );
@@ -31,9 +36,13 @@ export function buildFinalGenerationPlan(
   return [
     {
       assetType: wallpaperType,
+      wallpaperType,
       label: labelForWallpaperType(wallpaperType),
-      width: selectedSize.width,
-      height: selectedSize.height,
+      presetId: preset.id,
+      ratioLabel: preset.ratioLabel,
+      finalWidth: preset.width,
+      finalHeight: preset.height,
+      modelSize: preset.modelSize,
       input: baseInput,
       variationPrompt:
         "Single final PNG wallpaper: polished, refined, and optimized for the selected device or custom size.",
@@ -50,7 +59,8 @@ export function buildFinalAssetPrompt(item: FinalGenerationPlanItem) {
 
   return `Create a premium, elegant, minimal vision board wallpaper.
 Asset: ${item.label}
-Target dimensions: ${item.width} x ${item.height} px
+Selected size: ${item.ratioLabel}
+Final delivery size: ${item.finalWidth} x ${item.finalHeight} px
 Device: ${labels.devices[input.device]}
 Aspect ratio: ${getAspectRatioLabel(input)}
 Resolution target: ${getResolutionLabel(input)}

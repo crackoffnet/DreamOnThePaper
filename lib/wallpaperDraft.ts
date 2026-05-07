@@ -6,6 +6,7 @@ import {
   ensureFreshDreamState,
   saveDreamState,
 } from "@/lib/clientState";
+import { createPreviewInputHash } from "@/lib/previewHash";
 import { defaultWallpaperInput } from "@/lib/wallpaper";
 
 export type WallpaperDraft = {
@@ -18,6 +19,9 @@ export type WallpaperDraft = {
   orderToken?: string | null;
   orderSnapshotToken?: string | null;
   previewMeta?: WallpaperMeta | null;
+  previewInputHash?: string | null;
+  previewCreatedAt?: number | null;
+  previewStale?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -82,6 +86,8 @@ export function saveCurrentDraft(draft: WallpaperDraft) {
     orderSnapshotToken: next.orderSnapshotToken || null,
     previewImageUrl: next.previewImageUrl || null,
     previewImageId: next.previewImageId || null,
+    previewInputHash: next.previewInputHash || null,
+    previewStale: next.previewStale || false,
     wallpaperType: next.input.device,
     status:
       next.previewStatus === "ready"
@@ -94,9 +100,15 @@ export function saveCurrentDraft(draft: WallpaperDraft) {
 }
 
 export function updateDraftInput(input: WallpaperInput) {
+  const draft = getCurrentDraft();
+  const currentInputHash = createPreviewInputHash(input);
+  const hasPreview = Boolean(draft.previewImageUrl);
+
   return saveCurrentDraft({
-    ...getCurrentDraft(),
+    ...draft,
     input,
+    previewStale:
+      hasPreview && Boolean(draft.previewInputHash) && draft.previewInputHash !== currentInputHash,
   });
 }
 
@@ -115,6 +127,8 @@ export function markDraftReady(
     previewImageId?: string | null;
     orderToken?: string;
     orderSnapshotToken?: string;
+    previewInputHash?: string;
+    previewCreatedAt?: number;
   },
 ) {
   const draft = getCurrentDraft();
@@ -127,6 +141,10 @@ export function markDraftReady(
     orderToken: order?.orderToken || draft.orderToken || null,
     orderSnapshotToken: order?.orderSnapshotToken || draft.orderSnapshotToken || null,
     previewMeta: meta,
+    previewInputHash:
+      order?.previewInputHash || createPreviewInputHash(draft.input),
+    previewCreatedAt: order?.previewCreatedAt || Date.now(),
+    previewStale: false,
   });
   savePreviewPolicy({
     freePreviewUsed: true,
@@ -138,7 +156,9 @@ export function markDraftReady(
     orderSnapshotToken: ready.orderSnapshotToken || null,
     previewImageUrl: ready.previewImageUrl || null,
     previewImageId: ready.previewImageId || null,
-    previewCreatedAt: Date.now(),
+    previewInputHash: ready.previewInputHash || null,
+    previewCreatedAt: ready.previewCreatedAt || Date.now(),
+    previewStale: false,
     wallpaperType: ready.input.device,
     status: "preview_created",
   });
@@ -146,9 +166,11 @@ export function markDraftReady(
 }
 
 export function markDraftFailed() {
+  const draft = getCurrentDraft();
   return saveCurrentDraft({
-    ...getCurrentDraft(),
+    ...draft,
     previewStatus: "failed",
+    previewStale: Boolean(draft.previewImageUrl),
   });
 }
 
@@ -165,6 +187,9 @@ export function createNewWallpaperDraft() {
     orderToken: null,
     orderSnapshotToken: null,
     previewMeta: null,
+    previewInputHash: null,
+    previewCreatedAt: null,
+    previewStale: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -203,6 +228,9 @@ function hydrateLegacyDraft(): WallpaperDraft {
     orderToken: sessionStorage.getItem("dreamCheckoutOrderToken") || null,
     orderSnapshotToken: sessionStorage.getItem("dreamOrderSnapshotToken") || null,
     previewMeta,
+    previewInputHash: sessionStorage.getItem("dreamPreviewInputHash"),
+    previewCreatedAt: timestampValue(sessionStorage.getItem("dreamPreviewCreatedAt")),
+    previewStale: sessionStorage.getItem("dreamPreviewStale") === "true",
     createdAt: now,
     updatedAt: now,
   };
@@ -232,15 +260,40 @@ function syncLegacyStorage(draft: WallpaperDraft) {
 
   if (draft.previewImageUrl) {
     sessionStorage.setItem("previewImageUrl", draft.previewImageUrl);
-    sessionStorage.setItem("dreamPreviewCreatedAt", String(Date.now()));
+  } else {
+    sessionStorage.removeItem("previewImageUrl");
+  }
+
+  if (draft.previewCreatedAt) {
+    sessionStorage.setItem("dreamPreviewCreatedAt", String(draft.previewCreatedAt));
+  } else {
+    sessionStorage.removeItem("dreamPreviewCreatedAt");
+  }
+
+  if (draft.previewInputHash) {
+    sessionStorage.setItem("dreamPreviewInputHash", draft.previewInputHash);
+  } else {
+    sessionStorage.removeItem("dreamPreviewInputHash");
+  }
+
+  if (draft.previewStale) {
+    sessionStorage.setItem("dreamPreviewStale", "true");
+  } else {
+    sessionStorage.removeItem("dreamPreviewStale");
   }
 
   if (draft.previewMeta) {
     sessionStorage.setItem("dreamPreviewMeta", JSON.stringify(draft.previewMeta));
+  } else {
+    sessionStorage.removeItem("dreamPreviewMeta");
   }
 }
 
 function repairDraft(draft: WallpaperDraft): WallpaperDraft {
+  const previewInputHash =
+    draft.previewInputHash ||
+    (draft.previewImageUrl ? createPreviewInputHash(draft.input) : null);
+
   if (
     draft.previewStatus === "ready" &&
     (!draft.orderId || !draft.previewImageUrl || !draft.orderToken)
@@ -255,10 +308,20 @@ function repairDraft(draft: WallpaperDraft): WallpaperDraft {
       orderToken: null,
       orderSnapshotToken: null,
       previewMeta: null,
+      previewInputHash: null,
+      previewCreatedAt: null,
+      previewStale: false,
     };
   }
 
-  return draft;
+  return {
+    ...draft,
+    previewInputHash,
+    previewCreatedAt:
+      draft.previewCreatedAt ||
+      timestampValue(sessionStorage.getItem("dreamPreviewCreatedAt")),
+    previewStale: Boolean(draft.previewStale),
+  };
 }
 
 function repairStalePreviewPolicy() {
@@ -282,6 +345,9 @@ export function clearBrokenCheckoutState() {
   sessionStorage.removeItem("dreamOrderId");
   sessionStorage.removeItem("dreamPreviewImageId");
   sessionStorage.removeItem("dreamPreviewCreated");
+  sessionStorage.removeItem("dreamPreviewCreatedAt");
+  sessionStorage.removeItem("dreamPreviewInputHash");
+  sessionStorage.removeItem("dreamPreviewStale");
   sessionStorage.removeItem("dreamPreviewMeta");
   sessionStorage.removeItem("previewImageUrl");
 }
@@ -297,4 +363,13 @@ function readJson<T>(key: string) {
   } catch {
     return null;
   }
+}
+
+function timestampValue(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }

@@ -8,9 +8,8 @@ import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
 import { StartOverButton } from "@/components/StartOverButton";
 import { getEphemeralImage } from "@/lib/client-images";
-import type { FinalAssetResult, WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
-import { getTargetDimensionsLabel } from "@/lib/wallpaperDimensions";
+import type { FinalAssetResult, WallpaperMeta } from "@/lib/types";
+import { labels } from "@/lib/wallpaper";
 import {
   labelForWallpaperType,
   wallpaperProductFromDevice,
@@ -19,7 +18,6 @@ import {
 
 type StoredResult = {
   imageUrl: string;
-  input: WallpaperInput | null;
   meta: WallpaperMeta | null;
   dimensions: WallpaperDimensions | null;
   finalAssets: FinalAssetResult[];
@@ -48,7 +46,6 @@ type FinalAssetHealth = {
 export function ResultPreview() {
   const [result, setResult] = useState<StoredResult>({
     imageUrl: "",
-    input: null,
     meta: null,
     dimensions: null,
     finalAssets: [],
@@ -65,9 +62,6 @@ export function ResultPreview() {
 
   useEffect(() => {
     const imageUrl = getEphemeralImage("finalImageUrl");
-    const input = parseJson<WallpaperInput>(
-      sessionStorage.getItem("dreamWallpaperInput"),
-    );
     const meta = parseJson<WallpaperMeta>(sessionStorage.getItem("dreamWallpaperMeta"));
     const dimensions = parseJson<WallpaperDimensions>(
       sessionStorage.getItem("dreamWallpaperDimensions"),
@@ -79,7 +73,7 @@ export function ResultPreview() {
       storedWallpaperType || meta?.device,
     );
 
-    setResult({ imageUrl, input, meta, dimensions, finalAssets, wallpaperType });
+    setResult({ imageUrl, meta, dimensions, finalAssets, wallpaperType });
     setResultAccessToken(
       sessionStorage.getItem("dreamResultAccessToken") ||
         sessionStorage.getItem("dreamOrderToken") ||
@@ -101,6 +95,8 @@ export function ResultPreview() {
     async function verifyAsset() {
       try {
         let activeToken = resultAccessToken;
+        let activeOrderId = orderId || sessionStorage.getItem("dreamOrderId") || "";
+
         if (!activeToken && sessionId) {
           const refresh = await fetch("/api/verify-checkout-session", {
             method: "POST",
@@ -119,6 +115,7 @@ export function ResultPreview() {
             if (refreshed.orderId) {
               sessionStorage.setItem("dreamOrderId", refreshed.orderId);
               setOrderId(refreshed.orderId);
+              activeOrderId = refreshed.orderId;
             }
             setResultAccessToken(refreshed.resultAccessToken);
             activeToken = refreshed.resultAccessToken;
@@ -132,7 +129,8 @@ export function ResultPreview() {
               state: "session_invalid",
               orderStatus: "failed",
               hasR2Object: false,
-              message: "This session is no longer available. Please start again to create a new wallpaper.",
+              message:
+                "This session is no longer available. Please start again to create a new wallpaper.",
             });
           }
           return;
@@ -141,8 +139,9 @@ export function ResultPreview() {
         let response = await fetch("/api/final-asset-health", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resultAccessToken: activeToken, orderId: orderId || undefined }),
+          body: JSON.stringify({ resultAccessToken: activeToken, orderId: activeOrderId || undefined }),
         });
+
         if (response.status === 403 && sessionId) {
           const refresh = await fetch("/api/verify-checkout-session", {
             method: "POST",
@@ -150,7 +149,7 @@ export function ResultPreview() {
             body: JSON.stringify({ sessionId }),
           });
           const refreshed = (await refresh.json().catch(() => null)) as
-            | { resultAccessToken?: string; finalGenerationToken?: string }
+            | { resultAccessToken?: string; finalGenerationToken?: string; orderId?: string }
             | null;
           if (refresh.ok && refreshed?.resultAccessToken) {
             sessionStorage.setItem("dreamResultAccessToken", refreshed.resultAccessToken);
@@ -158,6 +157,11 @@ export function ResultPreview() {
               "dreamFinalGenerationToken",
               refreshed.finalGenerationToken || refreshed.resultAccessToken,
             );
+            if (refreshed.orderId) {
+              sessionStorage.setItem("dreamOrderId", refreshed.orderId);
+              setOrderId(refreshed.orderId);
+              activeOrderId = refreshed.orderId;
+            }
             setResultAccessToken(refreshed.resultAccessToken);
             activeToken = refreshed.resultAccessToken;
             response = await fetch("/api/final-asset-health", {
@@ -165,11 +169,12 @@ export function ResultPreview() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 resultAccessToken: activeToken,
-                orderId: orderId || undefined,
+                orderId: activeOrderId || undefined,
               }),
             });
           }
         }
+
         const payload = (await response.json()) as FinalAssetHealth;
         if (cancelled) {
           return;
@@ -177,19 +182,17 @@ export function ResultPreview() {
 
         setAssetHealth(payload);
         console.info("[success-page]", {
-          orderId: sessionStorage.getItem("dreamOrderId"),
-          paymentVerified: payload.orderStatus === "paid" || payload.orderStatus === "final_generated",
-          hasFinalAssetRow: payload.hasFinalAssetRow,
-          hasR2Object: payload.hasR2Object,
-          finalStatus: payload.state || payload.orderStatus,
+          orderId: activeOrderId,
+          verifyStatus: response.status,
+          orderStatus: payload.orderStatus,
+          assetCount: payload.finalAssetCount,
         });
 
         if (payload.hasR2Object && payload.assetId && result.meta) {
-          const width = payload.width || result.dimensions?.width || dimensionsFromMeta(result.meta).width;
-          const height =
-            payload.height || result.dimensions?.height || dimensionsFromMeta(result.meta).height;
+          const width = payload.width || result.dimensions?.width || result.meta.finalWidth;
+          const height = payload.height || result.dimensions?.height || result.meta.finalHeight;
           const assetType = payload.assetType || result.wallpaperType;
-          const imageUrl = `/api/final-asset?orderId=${encodeURIComponent(orderId || sessionStorage.getItem("dreamOrderId") || "")}&assetId=${encodeURIComponent(payload.assetId)}`;
+          const imageUrl = `/api/final-asset?orderId=${encodeURIComponent(activeOrderId)}&assetId=${encodeURIComponent(payload.assetId)}`;
           setResult((current) => ({
             ...current,
             imageUrl,
@@ -198,7 +201,7 @@ export function ResultPreview() {
               {
                 id: payload.assetId || "final-asset",
                 assetType,
-                label: assetDisplayLabel(assetType),
+                label: current.meta?.selectedLabel || assetDisplayLabel(assetType),
                 imageUrl,
                 width,
                 height,
@@ -231,12 +234,12 @@ export function ResultPreview() {
     };
   }, [
     isLoading,
-    resultAccessToken,
+    orderId,
+    result.dimensions?.height,
+    result.dimensions?.width,
     result.meta,
     result.wallpaperType,
-    result.dimensions?.width,
-    result.dimensions?.height,
-    orderId,
+    resultAccessToken,
     sessionId,
   ]);
 
@@ -273,12 +276,10 @@ export function ResultPreview() {
   const meta = result.meta;
   const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
   const dimensions = result.dimensions || dimensionsFromMeta(meta);
-  const actualDimensionsLabel = `${dimensions.width} × ${dimensions.height} px`;
-  const targetDimensionsLabel = result.input
-    ? getTargetDimensionsLabel(result.input)
-    : `${meta.imageSize.replace("x", " × ")} px`;
+  const actualDimensionsLabel = formatDimensions(dimensions.width, dimensions.height);
   const asset = result.finalAssets[0];
   const wallpaperTypeLabel = labelForWallpaperType(result.wallpaperType || meta.device);
+  const selectedSizeLabel = meta.ratioLabel;
   const missingFinalAsset =
     !resultAccessToken ||
     imageLoadFailed ||
@@ -295,10 +296,10 @@ export function ResultPreview() {
           <Sparkles aria-hidden className="mb-4 h-6 w-6 text-gold" />
           <h1 className="text-3xl font-semibold text-ink">
             {failureState === "session_invalid"
-              ? "We couldn’t open this wallpaper session."
+              ? "We couldn't open this wallpaper session."
               : failureState === "payment_pending" || failureState === "payment_verified"
                 ? "Payment verification is still in progress."
-                : "We couldn’t finish your wallpaper yet."}
+                : "We couldn't finish your wallpaper yet."}
           </h1>
           <p className="mt-3 text-sm leading-6 text-taupe">
             {failureState === "session_invalid"
@@ -337,15 +338,8 @@ export function ResultPreview() {
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
-          <DetailRow label="Selected size" value={labels.ratios[meta.ratio]} />
-          <DetailRow
-            label="Ratio"
-            value={
-              result.input ? getAspectRatioLabel(result.input) : labels.ratios[meta.ratio]
-            }
-          />
-          <DetailRow label="Target dimensions" value={targetDimensionsLabel} />
-          <DetailRow label="Downloaded file" value={`PNG · ${actualDimensionsLabel}`} />
+          <DetailRow label="Selected size" value={selectedSizeLabel} />
+          <DetailRow label="Final file" value={`PNG · ${actualDimensionsLabel}`} />
           <DetailRow label="Style" value={labels.styles[meta.style]} />
           <DetailRow label="Theme" value={labels.themes[meta.theme]} />
           <DetailRow label="Format" value="PNG" />
@@ -365,7 +359,7 @@ export function ResultPreview() {
             </p>
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            Optimized for {labels.ratios[meta.ratio]} {"·"} {asset.width} × {asset.height} px
+            Delivered in your selected device size.
           </p>
           <Link
             href="/create"
@@ -388,15 +382,13 @@ export function ResultPreview() {
         <div className="flex justify-center">
           <AssetPreviewCard
             asset={asset}
+            captionLabel={meta.selectedLabel}
             resultAccessToken={resultAccessToken}
             single
             aspectRatio={meta.aspectRatio}
             onImageError={() => setImageLoadFailed(true)}
           />
         </div>
-        <p className="mt-3 text-center text-xs font-medium text-taupe">
-          Final PNG · High-resolution · No preview watermark
-        </p>
       </div>
     </section>
   );
@@ -404,19 +396,21 @@ export function ResultPreview() {
 
 function AssetPreviewCard({
   asset,
+  captionLabel,
   resultAccessToken,
   single,
   aspectRatio,
   onImageError,
 }: {
   asset: FinalAssetResult;
+  captionLabel: string;
   resultAccessToken: string;
   single: boolean;
   aspectRatio?: string;
   onImageError: () => void;
 }) {
   const protectedImageUrl = withDownloadToken(asset.imageUrl, resultAccessToken);
-  const dimensionsLabel = `${asset.width} × ${asset.height} px`;
+  const dimensionsLabel = formatDimensions(asset.width, asset.height);
 
   return (
     <div className={single ? "w-full max-w-md" : "rounded-2xl bg-white/35 p-3"}>
@@ -429,16 +423,17 @@ function AssetPreviewCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={protectedImageUrl}
-          alt={`${asset.label} generated wallpaper`}
+          alt={`${captionLabel} generated wallpaper`}
           className="h-full w-full object-cover"
           onError={onImageError}
         />
       </div>
       <div className="mt-3 grid gap-2">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <p className="font-medium text-ink">{asset.label}</p>
-          <p className="text-xs text-taupe">{dimensionsLabel}</p>
-        </div>
+        <p className="text-sm font-medium text-ink">{captionLabel}</p>
+        <p className="text-xs text-taupe">{dimensionsLabel}</p>
+        <p className="text-xs font-medium text-taupe">
+          Final PNG · High-resolution · No preview watermark
+        </p>
       </div>
     </div>
   );
@@ -577,11 +572,9 @@ function parseJson<T>(value: string | null): T | null {
 }
 
 function dimensionsFromMeta(meta: WallpaperMeta) {
-  const [width, height] = meta.imageSize.split("x").map(Number);
-
   return {
-    width: Number.isFinite(width) ? width : 0,
-    height: Number.isFinite(height) ? height : 0,
+    width: Number.isFinite(meta.finalWidth) ? meta.finalWidth : 0,
+    height: Number.isFinite(meta.finalHeight) ? meta.finalHeight : 0,
   };
 }
 
@@ -591,4 +584,8 @@ function assetDisplayLabel(assetType: string) {
   if (assetType === "desktop") return "Desktop wallpaper";
   if (assetType === "custom") return "Custom size wallpaper";
   return "Wallpaper";
+}
+
+function formatDimensions(width: number, height: number) {
+  return `${width} × ${height} px`;
 }
