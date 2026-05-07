@@ -6,7 +6,7 @@ import {
 } from "@/lib/rateLimit";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { getOrder } from "@/lib/orders";
-import { getRuntimeEnv } from "@/lib/env";
+import { getRuntimeEnv, isFromNameUsingFallback } from "@/lib/env";
 import { getImage } from "@/lib/storage";
 
 const unavailableMessage =
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     const brevoApiKey = env.BREVO_API_KEY;
     const fromEmail = env.FROM_EMAIL;
     const fromName = env.FROM_NAME;
+    const fromNameUsesFallback = isFromNameUsingFallback();
     const missingEmailEnv = getMissingEmailEnv(env);
     if (missingEmailEnv.length > 0) {
       logEmailFailure({
@@ -74,6 +75,13 @@ export async function POST(request: Request) {
         },
       });
       return emailError(unavailableMessage, 503);
+    }
+
+    if (fromNameUsesFallback) {
+      console.warn("[brevo-email]", {
+        requestId,
+        warning: "FROM_NAME missing, using fallback",
+      });
     }
 
     const orderLimit = await checkEmailOrderRateLimit(order.id);
@@ -158,7 +166,6 @@ function getMissingEmailEnv(env: ReturnType<typeof getRuntimeEnv>) {
   return [
     ["BREVO_API_KEY", env.BREVO_API_KEY],
     ["FROM_EMAIL", env.FROM_EMAIL],
-    ["FROM_NAME", env.FROM_NAME],
   ]
     .filter(([, value]) => !value)
     .map(([name]) => name);

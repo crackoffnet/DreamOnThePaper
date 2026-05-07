@@ -8,12 +8,18 @@ import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
 import { getEphemeralImage } from "@/lib/client-images";
 import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
-import { getAspectRatioLabel, getResolutionLabel, labels } from "@/lib/wallpaper";
+import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
 
 type StoredResult = {
   imageUrl: string;
   input: WallpaperInput | null;
   meta: WallpaperMeta | null;
+  dimensions: WallpaperDimensions | null;
+};
+
+type WallpaperDimensions = {
+  width: number;
+  height: number;
 };
 
 export function ResultPreview() {
@@ -21,6 +27,7 @@ export function ResultPreview() {
     imageUrl: "",
     input: null,
     meta: null,
+    dimensions: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [orderToken, setOrderToken] = useState("");
@@ -32,8 +39,11 @@ export function ResultPreview() {
       sessionStorage.getItem("dreamWallpaperInput"),
     );
     const meta = parseJson<WallpaperMeta>(sessionStorage.getItem("dreamWallpaperMeta"));
+    const dimensions = parseJson<WallpaperDimensions>(
+      sessionStorage.getItem("dreamWallpaperDimensions"),
+    );
 
-    setResult({ imageUrl, input, meta });
+    setResult({ imageUrl, input, meta, dimensions });
     setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
     setOrderId(sessionStorage.getItem("dreamOrderId") || "");
     const timer = window.setTimeout(() => setIsLoading(false), 500);
@@ -72,6 +82,8 @@ export function ResultPreview() {
   const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
   const protectedImageUrl = withDownloadToken(result.imageUrl, orderToken);
   const filename = `dream-on-the-paper-wallpaper-${orderIdShort}.png`;
+  const dimensions = result.dimensions || dimensionsFromMeta(meta);
+  const dimensionsLabel = `${dimensions.width} \u00d7 ${dimensions.height} px`;
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[0.42fr_0.58fr]">
@@ -83,16 +95,19 @@ export function ResultPreview() {
           Ready to download.
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
-          <p>Device: {labels.devices[meta.device]}</p>
-          <p>
-            Ratio:{" "}
-            {result.input ? getAspectRatioLabel(result.input) : labels.ratios[meta.ratio]}
-          </p>
-          <p>Style: {labels.styles[meta.style]}</p>
-          <p>Theme: {labels.themes[meta.theme]}</p>
-          {result.input?.device === "custom" ? (
-            <p>Resolution: {getResolutionLabel(result.input)}</p>
-          ) : null}
+          <DetailRow label="Device" value={labels.devices[meta.device]} />
+          <DetailRow
+            label="Ratio"
+            value={
+              result.input
+                ? getAspectRatioLabel(result.input)
+                : labels.ratios[meta.ratio]
+            }
+          />
+          <DetailRow label="Dimensions" value={dimensionsLabel} />
+          <DetailRow label="Style" value={labels.styles[meta.style]} />
+          <DetailRow label="Theme" value={labels.themes[meta.theme]} />
+          <DetailRow label="Format" value="PNG" />
         </div>
 
         <div className="mt-6 grid gap-3">
@@ -104,6 +119,9 @@ export function ResultPreview() {
             <Download aria-hidden className="h-4 w-4" />
             Download Wallpaper
           </a>
+          <p className="-mt-1 text-center text-xs font-medium text-taupe">
+            PNG {"\u00b7"} {dimensionsLabel}
+          </p>
           <Link
             href="/create"
             className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-cocoa/10 bg-white/65 px-5 text-sm font-medium text-ink transition hover:bg-white"
@@ -121,22 +139,35 @@ export function ResultPreview() {
         </div>
       </div>
 
-      <div className="flex justify-center rounded-[1.75rem] border border-white/70 bg-white/45 p-4 shadow-soft backdrop-blur-xl">
-        <div
-          className={`relative max-h-[72vh] w-full overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft ${
-            meta.device === "custom" ? "max-w-lg" : "max-w-md"
-          }`}
-          style={{ aspectRatio: meta.aspectRatio }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={protectedImageUrl}
-            alt="Generated Dream On The Paper wallpaper"
-            className="h-full w-full object-cover"
-          />
+      <div className="rounded-[1.75rem] border border-white/70 bg-white/45 p-4 shadow-soft backdrop-blur-xl">
+        <div className="flex justify-center">
+          <div
+            className={`relative max-h-[72vh] w-full overflow-hidden rounded-[1.5rem] border border-white/80 bg-linen shadow-soft ${
+              meta.device === "custom" ? "max-w-lg" : "max-w-md"
+            }`}
+            style={{ aspectRatio: meta.aspectRatio }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={protectedImageUrl}
+              alt="Generated Dream On The Paper wallpaper"
+              className="h-full w-full object-cover"
+            />
+          </div>
         </div>
+        <p className="mt-3 text-center text-xs font-medium text-taupe">
+          Final PNG {"\u00b7"} {dimensionsLabel}
+        </p>
       </div>
     </section>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="font-medium text-ink">{label}:</span> {value}
+    </p>
   );
 }
 
@@ -159,4 +190,13 @@ function parseJson<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function dimensionsFromMeta(meta: WallpaperMeta) {
+  const [width, height] = meta.imageSize.split("x").map(Number);
+
+  return {
+    width: Number.isFinite(width) ? width : 0,
+    height: Number.isFinite(height) ? height : 0,
+  };
 }

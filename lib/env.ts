@@ -1,5 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+export const DEFAULT_FROM_NAME = "Dream On The Paper";
+
 export type RuntimeEnv = {
   OPENAI_API_KEY?: string;
   ORDER_TOKEN_SECRET?: string;
@@ -32,9 +34,16 @@ export function getRuntimeEnv(): RuntimeEnv {
   const cloudflareEnv = getCloudflareEnv();
 
   return runtimeEnvNames.reduce<RuntimeEnv>((env, name) => {
-    env[name] = process.env[name] ?? stringFromCloudflareEnv(cloudflareEnv, name);
+    env[name] = runtimeEnvValue(cloudflareEnv, name);
     return env;
   }, {});
+}
+
+export function isFromNameUsingFallback() {
+  const cloudflareEnv = getCloudflareEnv();
+  return !(
+    process.env.FROM_NAME || stringFromCloudflareEnv(cloudflareEnv, "FROM_NAME")
+  );
 }
 
 export function getRuntimeEnvPresence() {
@@ -68,4 +77,19 @@ function stringFromCloudflareEnv(
 ) {
   const value = env?.[name];
   return typeof value === "string" ? value : undefined;
+}
+
+function runtimeEnvValue(
+  cloudflareEnv: (CloudflareEnv & Record<string, unknown>) | null,
+  name: keyof RuntimeEnv,
+) {
+  if (name === "FROM_NAME") {
+    return (
+      process.env.FROM_NAME ||
+      stringFromCloudflareEnv(cloudflareEnv, "FROM_NAME") ||
+      DEFAULT_FROM_NAME
+    );
+  }
+
+  return process.env[name] ?? stringFromCloudflareEnv(cloudflareEnv, name);
 }

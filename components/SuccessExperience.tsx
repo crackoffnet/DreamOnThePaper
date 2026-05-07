@@ -119,6 +119,15 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
         setEphemeralImage("finalImageUrl", imageUrl);
         sessionStorage.setItem("dreamFinalSessionId", sessionId);
         sessionStorage.setItem("dreamWallpaperMeta", JSON.stringify(generated.meta));
+        if (generated.finalWidth && generated.finalHeight) {
+          sessionStorage.setItem(
+            "dreamWallpaperDimensions",
+            JSON.stringify({
+              width: generated.finalWidth,
+              height: generated.finalHeight,
+            }),
+          );
+        }
         setStep("done");
         setMessage("Your full-resolution wallpaper is ready.");
         console.info("[success] final ready");

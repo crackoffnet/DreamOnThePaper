@@ -105,7 +105,13 @@ export async function POST(request: Request) {
         finalGenerationAttempts,
         event: "existing_final_returned",
       });
-      return finalSuccess(order.final_r2_key, inputFromDbOrder(order), true);
+      return finalSuccess(
+        order.final_r2_key,
+        inputFromDbOrder(order),
+        order.width,
+        order.height,
+        true,
+      );
     }
 
     if (order.status === "final_generating") {
@@ -151,7 +157,13 @@ export async function POST(request: Request) {
       finalGenerationAttempts = latest?.final_generation_attempts;
 
       if (latest?.status === "final_generated" && latest.final_r2_key) {
-        return finalSuccess(latest.final_r2_key, inputFromDbOrder(latest), true);
+        return finalSuccess(
+          latest.final_r2_key,
+          inputFromDbOrder(latest),
+          latest.width,
+          latest.height,
+          true,
+        );
       }
 
       logFinalFailure({
@@ -239,6 +251,8 @@ export async function POST(request: Request) {
       success: true,
       imageUrl: savedFinal.url,
       finalImageUrl: savedFinal.url,
+      finalWidth: order.width,
+      finalHeight: order.height,
       meta: getWallpaperMeta(input),
       reused: false,
     });
@@ -264,11 +278,19 @@ export async function POST(request: Request) {
   }
 }
 
-async function finalSuccess(r2Key: string, input: ReturnType<typeof inputFromDbOrder>, reused: boolean) {
+async function finalSuccess(
+  r2Key: string,
+  input: ReturnType<typeof inputFromDbOrder>,
+  finalWidth: number,
+  finalHeight: number,
+  reused: boolean,
+) {
   return NextResponse.json({
     success: true,
     imageUrl: `/api/wallpaper-image/${encodeURIComponent(r2Key)}`,
     finalImageUrl: `/api/wallpaper-image/${encodeURIComponent(r2Key)}`,
+    finalWidth,
+    finalHeight,
     meta: getWallpaperMeta(input),
     reused,
   });
