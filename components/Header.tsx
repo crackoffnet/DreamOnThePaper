@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { HowItWorksPopover } from "@/components/HowItWorksPopover";
 
 export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-[rgba(180,160,130,0.2)] bg-[rgba(245,240,232,0.92)] backdrop-blur-xl">
-      <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="focus-ring flex items-center gap-2 rounded-full"
@@ -23,11 +24,13 @@ export function Header() {
           >
             Examples
           </Link>
+          <HowItWorksPopover />
           <Link
             href="/create"
             className="focus-ring inline-flex min-h-9 items-center justify-center rounded-full bg-ink px-4 text-[12.5px] font-medium text-pearl transition hover:-translate-y-px hover:bg-cocoa"
           >
             Create
+            <ArrowRight aria-hidden className="ml-1 h-3.5 w-3.5" />
           </Link>
         </nav>
       </div>

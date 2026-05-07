@@ -1,10 +1,6 @@
-import { CompactCTA } from "@/components/CompactCTA";
-import { ExampleGallery } from "@/components/ExampleGallery";
-import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { HomepageStateReset } from "@/components/HomepageStateReset";
 import { Hero } from "@/components/Hero";
-import { ValueStrip } from "@/components/ValueStrip";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -60,10 +56,31 @@ export default function Home() {
       <Header />
       <HomepageStateReset />
       <Hero />
-      <ValueStrip />
-      <ExampleGallery />
-      <CompactCTA />
-      <Footer />
+      <footer className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 pb-4 text-[11px] font-light text-taupe sm:px-6 lg:px-8">
+        <span>
+          Dream On The Paper <span aria-hidden>&middot;</span> Created by GAX
+          Global
+        </span>
+        <nav className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Footer">
+          <a
+            href="https://gax-global.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition hover:text-ink"
+          >
+            GAX Global
+          </a>
+          <a href="/privacy-policy" className="transition hover:text-ink">
+            Privacy
+          </a>
+          <a href="/terms" className="transition hover:text-ink">
+            Terms
+          </a>
+          <a href="/contact" className="transition hover:text-ink">
+            Contact
+          </a>
+        </nav>
+      </footer>
     </main>
   );
 }
