@@ -1,38 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { RotateCcw, X } from "lucide-react";
-import { clearDreamState } from "@/lib/clientState";
+import { startOver as startOverFlow } from "@/lib/clientState";
 
 type StartOverButtonProps = {
   className?: string;
 };
 
 export function StartOverButton({ className = "" }: StartOverButtonProps) {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
-  async function startOver() {
-    const orderToken =
-      sessionStorage.getItem("dreamCheckoutOrderToken") ||
-      sessionStorage.getItem("dreamOrderToken") ||
-      localStorage.getItem("dreamCheckoutOrderToken") ||
-      localStorage.getItem("dreamOrderToken") ||
-      "";
-
-    if (orderToken) {
-      await fetch("/api/order-abandon", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderToken }),
-        keepalive: true,
-      }).catch(() => {});
-    }
-
-    clearDreamState();
+  function startOver() {
     setIsOpen(false);
-    router.replace("/create");
+    startOverFlow({ redirectTo: "/create" });
   }
 
   return (
@@ -53,7 +34,7 @@ export function StartOverButton({ className = "" }: StartOverButtonProps) {
               <div>
                 <h2 className="text-xl font-semibold text-ink">Start over?</h2>
                 <p className="mt-2 text-sm leading-6 text-taupe">
-                  This will clear your current preview and answers.
+                  This will clear your current wallpaper draft and answers.
                 </p>
               </div>
               <button

@@ -34,6 +34,7 @@ const explicitStateKeys = [
   "dreamPackageId",
   "dreamCustomerEmail",
   "dreamFinalSessionId",
+  "dreamFinalAssets",
   "previewImageUrl",
   "finalImageUrl",
 ];
@@ -52,6 +53,10 @@ export type CurrentOrderState = {
 };
 
 export function ensureAppStateVersion() {
+  if (!canUseBrowserStorage()) {
+    return false;
+  }
+
   const currentVersion = sessionStorage.getItem(appStateVersionKey);
 
   if (currentVersion === APP_STATE_VERSION) {
@@ -64,6 +69,10 @@ export function ensureAppStateVersion() {
 }
 
 export function clearDreamState(options: ClearOptions = {}) {
+  if (!canUseBrowserStorage()) {
+    return;
+  }
+
   clearStorage(sessionStorage, options);
   clearStorage(localStorage, options);
 
@@ -72,7 +81,25 @@ export function clearDreamState(options: ClearOptions = {}) {
   }
 }
 
+export function startOver(options: { redirectTo?: string } = {}) {
+  if (!canUseBrowserStorage()) {
+    return;
+  }
+
+  const currentState = getCurrentOrderState();
+  const redirectTo = options.redirectTo || "/create";
+
+  void abandonCurrentOrder(currentState);
+  clearDreamState();
+  window.history.replaceState(null, "", redirectTo);
+  window.location.assign(redirectTo);
+}
+
 export function saveCurrentOrderState(state: CurrentOrderState) {
+  if (!canUseBrowserStorage()) {
+    return;
+  }
+
   setOrRemove("dreamOrderId", state.orderId);
   setOrRemove("dreamCheckoutOrderToken", state.orderToken);
   setOrRemove("previewImageUrl", state.previewImageUrl);
@@ -82,9 +109,19 @@ export function saveCurrentOrderState(state: CurrentOrderState) {
 }
 
 export function getCurrentOrderState(): CurrentOrderState {
+  if (!canUseBrowserStorage()) {
+    return {};
+  }
+
   return {
-    orderId: sessionStorage.getItem("dreamOrderId"),
-    orderToken: sessionStorage.getItem("dreamCheckoutOrderToken"),
+    orderId:
+      sessionStorage.getItem("dreamOrderId") ||
+      localStorage.getItem("dreamOrderId"),
+    orderToken:
+      sessionStorage.getItem("dreamCheckoutOrderToken") ||
+      sessionStorage.getItem("dreamOrderToken") ||
+      localStorage.getItem("dreamCheckoutOrderToken") ||
+      localStorage.getItem("dreamOrderToken"),
     previewImageUrl: sessionStorage.getItem("previewImageUrl"),
     previewImageId: sessionStorage.getItem("dreamPreviewImageId"),
     finalGenerationToken: sessionStorage.getItem("dreamFinalGenerationToken"),
@@ -94,7 +131,17 @@ export function getCurrentOrderState(): CurrentOrderState {
 
 function clearStorage(storage: Storage, options: ClearOptions) {
   const keys = new Set(explicitStateKeys);
-  const matchers = ["dream", "wallpaper", "preview", "order", "checkout", "final"];
+  const matchers = [
+    "dream",
+    "wallpaper",
+    "preview",
+    "order",
+    "checkout",
+    "final",
+    "package",
+    "answers",
+    "session",
+  ];
 
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
@@ -115,6 +162,26 @@ function clearStorage(storage: Storage, options: ClearOptions) {
 
     storage.removeItem(key);
   });
+}
+
+function abandonCurrentOrder(state: CurrentOrderState) {
+  if (!state.orderId && !state.orderToken) {
+    return;
+  }
+
+  fetch("/api/order-abandon", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      orderId: state.orderId || undefined,
+      orderToken: state.orderToken || undefined,
+    }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function canUseBrowserStorage() {
+  return typeof window !== "undefined" && Boolean(window.sessionStorage);
 }
 
 function setOrRemove(key: string, value: string | null | undefined) {
