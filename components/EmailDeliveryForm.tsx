@@ -83,8 +83,8 @@ export function EmailDeliveryForm({ finalGenerationToken }: EmailDeliveryFormPro
       {status ? <p className="mt-2 text-xs text-taupe">{status}</p> : null}
       {!status ? (
         <p className="mt-2 text-xs leading-5 text-taupe">
-          Email delivery uses your verified paid wallpaper only. Please download
-          your PNG as the primary copy.
+          Email delivery uses your verified paid wallpaper. Please download your
+          PNG as the primary copy.
         </p>
       ) : null}
     </form>
@@ -96,7 +96,7 @@ function emailErrorMessage(
   data: { error?: string; message?: string },
 ) {
   if (status === 503) {
-    return "Email delivery is not available yet. Please download your wallpaper.";
+    return "Email delivery is temporarily unavailable. Please use Download Wallpaper.";
   }
 
   if (status === 502) {

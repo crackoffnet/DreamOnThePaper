@@ -81,7 +81,7 @@ export async function saveImage(bytes: Uint8Array, contentType = "image/png") {
 }
 
 export async function getImage(r2Key: string) {
-  return getWallpaperBucket().get(r2Key);
+  return getWallpaperObject(r2Key);
 }
 
 export async function getImageResponse(r2Key: string) {
@@ -205,7 +205,21 @@ async function saveImageAtKey(
   bytes: Uint8Array,
   contentType: string,
 ) {
-  await getWallpaperBucket().put(key, bytes, {
+  await putWallpaperObject(key, bytes, contentType);
+
+  return {
+    key,
+    url: `/api/wallpaper-image/${encodeURIComponent(key)}`,
+    size: bytes.byteLength,
+  };
+}
+
+export async function putWallpaperObject(
+  key: string,
+  body: Uint8Array,
+  contentType: string,
+) {
+  await getWallpaperBucket().put(key, body, {
     httpMetadata: {
       contentType,
       cacheControl: CACHE_CONTROL,
@@ -214,12 +228,10 @@ async function saveImageAtKey(
       contentType,
     },
   });
+}
 
-  return {
-    key,
-    url: `/api/wallpaper-image/${encodeURIComponent(key)}`,
-    size: bytes.byteLength,
-  };
+export async function getWallpaperObject(key: string) {
+  return getWallpaperBucket().get(key);
 }
 
 function base64ToBytes(content: string) {

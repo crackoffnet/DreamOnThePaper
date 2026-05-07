@@ -4,11 +4,11 @@ import {
   type DbOrder,
   type FinalAsset,
   getOrder,
-  getFinalAssets,
   inputFromDbOrder,
   insertFinalAsset,
   markFinalFailed,
   markFinalGenerated,
+  reopenPaidFinalOrder,
   resetFailedFinalGeneration,
   resetStaleFinalGeneration,
   startFinalGeneration,
@@ -18,13 +18,16 @@ import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin, safeLog } from "@/lib/security";
 import { saveFinalAssetImage } from "@/lib/storage";
 import {
+  assetToResult,
+  resolveServableFinalAssets,
+} from "@/lib/finalAssetState";
+import {
   buildFinalAssetPrompt,
   buildFinalGenerationPlan,
   type FinalGenerationPlanItem,
 } from "@/lib/finalGenerationPlan";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 import { packages, type PackageId } from "@/lib/packages";
-import type { FinalAssetResult } from "@/lib/types";
 import { getRequestMetadata } from "@/lib/requestMetadata";
 import { patchOrderTracking, trackOrderEvent } from "@/lib/orderEvents";
 import { getImageGenerationConfig, type ImageQuality } from "@/lib/imageGenerationConfig";
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
 
     const packageType: PackageId = "single";
     const readyAssets = await getReadyAssets(order, packageType);
-    if (readyAssets) {
+    if (readyAssets.assets.length > 0) {
       console.info("[generate-final]", {
         requestId,
         orderId,
@@ -132,7 +135,7 @@ export async function POST(request: Request) {
         finalGenerationAttempts,
         event: "existing_final_returned",
       });
-      return finalAssetsSuccess(order, readyAssets, true);
+      return finalAssetsSuccess(order, readyAssets.assets, true);
     }
 
     if (order.status === "final_generating") {
@@ -175,6 +178,21 @@ export async function POST(request: Request) {
       }
     }
 
+    if (
+      order.status === "final_generated" &&
+      readyAssets.inconsistent &&
+      order.stripe_payment_status === "paid"
+    ) {
+      const reopened = await reopenPaidFinalOrder(orderId);
+      console.warn("[final-generation]", {
+        requestId,
+        orderId,
+        wallpaperType: order.wallpaper_type || order.device,
+        step: "reopen_missing_final_asset_order",
+        status: reopened ? "reopened" : "skipped",
+      });
+    }
+
     const claimableOrder = await getOrder(orderId);
     orderStatus = claimableOrder?.status;
     finalGenerationAttempts = claimableOrder?.final_generation_attempts;
@@ -192,8 +210,8 @@ export async function POST(request: Request) {
       claimableOrder,
       claimablePackageType,
     );
-    if (claimableReadyAssets) {
-      return finalAssetsSuccess(claimableOrder, claimableReadyAssets, true);
+    if (claimableReadyAssets.assets.length > 0) {
+      return finalAssetsSuccess(claimableOrder, claimableReadyAssets.assets, true);
     }
 
     if (claimableOrder.status === "final_generating") {
@@ -217,11 +235,11 @@ export async function POST(request: Request) {
       orderStatus = latest?.status;
       finalGenerationAttempts = latest?.final_generation_attempts;
 
-      if (latest?.status === "final_generated" && latest.final_r2_key) {
+      if (latest?.status === "final_generated") {
         const latestPackageType: PackageId = "single";
         const latestAssets = await getReadyAssets(latest, latestPackageType);
-        if (latestAssets) {
-          return finalAssetsSuccess(latest, latestAssets, true);
+        if (latestAssets.assets.length > 0) {
+          return finalAssetsSuccess(latest, latestAssets.assets, true);
         }
       }
 
@@ -281,10 +299,13 @@ export async function POST(request: Request) {
       durationMs: Date.now() - totalStartedAt,
       expectedAssets: plan.length,
     });
-    const existingAssets = await getFinalAssets(orderId);
+    const existingAssets = await getReadyAssets(
+      claimableOrder,
+      claimablePackageType,
+    );
     const missingItems = plan.filter(
       (item) =>
-        !existingAssets.some(
+        !existingAssets.assets.some(
           (asset) =>
             asset.asset_type === item.assetType &&
             (asset.generation_status || "generated") === "generated",
@@ -348,8 +369,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const finalAssets = await getFinalAssets(orderId);
-    const firstAsset = finalAssets[0];
+    const resolvedFinalAssets = await getReadyAssets(claimableOrder, claimablePackageType);
+    const finalAssets = resolvedFinalAssets.assets;
+    const firstAsset = resolvedFinalAssets.primaryAsset;
+    if (!firstAsset || finalAssets.length === 0) {
+      await markFinalFailed(orderId, "Generated wallpaper file was missing after save");
+      console.error("[final-generation]", {
+        requestId,
+        orderId,
+        wallpaperType: claimableOrder.wallpaper_type || claimableOrder.device,
+        step: "final_asset_missing_after_save",
+        status: "failed",
+      });
+      return finalStatusError(
+        "failed",
+        "Your payment is verified, but the final file is missing. Please retry generation.",
+        500,
+      );
+    }
     await markFinalGenerated(orderId, firstAsset?.r2_key || "");
     void patchOrderTracking(orderId, {
       final_generated_at: Date.now(),
@@ -672,77 +709,10 @@ function base64ToBytes(content: string) {
   return bytes;
 }
 
-function assetToResult(asset: FinalAsset): FinalAssetResult {
-  return {
-    id: asset.id,
-    assetType: asset.asset_type,
-    label: labelForAsset(asset.asset_type),
-    imageUrl: `/api/final-asset?assetId=${encodeURIComponent(asset.id)}`,
-    width: asset.width,
-    height: asset.height,
-    format: "PNG",
-  };
-}
-
 async function getReadyAssets(order: DbOrder, packageType: PackageId) {
-  const plan = buildFinalGenerationPlan(order, packageType);
-  const assets = await getFinalAssets(order.id);
-  const plannedTypes = new Set(plan.map((item) => item.assetType));
-
-  if (
-    plan.every((item) =>
-      assets.some(
-        (asset) =>
-          asset.asset_type === item.assetType &&
-          (asset.generation_status || "generated") === "generated",
-      ),
-    )
-  ) {
-    return assets.filter(
-      (asset) =>
-        plannedTypes.has(asset.asset_type) &&
-        (asset.generation_status || "generated") === "generated",
-    );
-  }
-
-  if (
-    assets.length === 0 &&
-    order.final_r2_key &&
-    packageType === "single"
-  ) {
-    return [
-      {
-        id: `legacy-${order.id}`,
-        order_id: order.id,
-        asset_type: "single",
-        width: order.width,
-        height: order.height,
-        r2_key: order.final_r2_key,
-        format: "png",
-        created_at: order.final_generated_at || order.updated_at,
-      } satisfies FinalAsset,
-    ];
-  }
-
-  if (order.status === "final_generated") {
-    const generated = assets.find(
-      (asset) => (asset.generation_status || "generated") === "generated",
-    );
-    if (generated) {
-      return [generated];
-    }
-  }
-
-  return null;
+  return resolveServableFinalAssets(order, packageType);
 }
 
-function labelForAsset(assetType: string) {
-  if (assetType === "mobile") return "Mobile wallpaper";
-  if (assetType === "tablet") return "Tablet wallpaper";
-  if (assetType === "desktop") return "Desktop wallpaper";
-  if (assetType === "custom") return "Custom size wallpaper";
-  return "Wallpaper";
-}
 
 function logFinalFailure(details: {
   requestId: string;

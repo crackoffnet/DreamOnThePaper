@@ -15,6 +15,7 @@ type WallpaperImageRouteProps = {
 export async function GET(request: Request, { params }: WallpaperImageRouteProps) {
   const { id } = await params;
   const r2Key = decodeURIComponent(id);
+  const requestId = crypto.randomUUID();
   const requestMetadata = await getRequestMetadata(request);
 
   if (!r2Key.startsWith("finals/")) {
@@ -52,6 +53,19 @@ export async function GET(request: Request, { params }: WallpaperImageRouteProps
   }
 
   const response = await getImageResponse(r2Key);
+  if (!response || response.status === 404) {
+    console.warn("[final-asset]", {
+      requestId,
+      orderId: order.id,
+      failureReason: "Legacy wallpaper-image route missing R2 object",
+      hasAssetRow: Boolean(finalAsset),
+      hasR2Object: false,
+    });
+    return new Response("Wallpaper not found.", {
+      status: 404,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
   void createDownloadEvent({
     orderId: order.id,
     customerId: order.customer_id || null,

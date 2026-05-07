@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getFinalAssets, getOrder, inputFromDbOrder } from "@/lib/orders";
+import { getOrder, inputFromDbOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
-import { buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
+import { resolveServableFinalAssets } from "@/lib/finalAssetState";
 import type { PackageId } from "@/lib/packages";
 
 const orderStatusSchema = z.object({
@@ -53,47 +53,34 @@ export async function POST(request: Request) {
       return statusError("Unable to verify this paid order.", 400);
     }
 
-    const assets = await getFinalAssets(order.id);
     const packageType: PackageId = "single";
-    const plan = buildFinalGenerationPlan(order, packageType);
-    const plannedTypes = new Set(plan.map((item) => item.assetType));
-    const expectedAssets = plan.length;
-    const plannedAssets = assets.filter((asset) => plannedTypes.has(asset.asset_type));
-    const completedAssets = plannedAssets.filter(
-      (asset) => (asset.generation_status || "generated") === "generated",
-    ).length;
-    const failedAssets = plannedAssets.filter(
-      (asset) => asset.generation_status === "failed",
-    ).length;
-    const finalAssets = plannedAssets.map((asset) => ({
-      id: asset.id,
-      assetType: asset.asset_type,
-      label: labelForAsset(asset.asset_type),
-      imageUrl: `/api/final-asset?assetId=${encodeURIComponent(asset.id)}`,
-      width: asset.width,
-      height: asset.height,
-      format: "PNG" as const,
-    }));
-    const finalImageUrl =
-      order.status === "final_generated" && order.final_r2_key
-        ? `/api/wallpaper-image/${encodeURIComponent(order.final_r2_key)}`
-        : finalAssets[0]?.imageUrl;
+    const resolved = await resolveServableFinalAssets(order, packageType);
+    const finalAssets = resolved.finalAssets;
+    const finalImageUrl = resolved.finalImageUrl;
+    const effectiveStatus =
+      order.status === "final_generated" && !resolved.hasR2Object
+        ? "failed"
+        : order.status;
 
     return NextResponse.json({
       success: true,
-      status: order.status,
-      hasFinalImage: Boolean(finalImageUrl || finalAssets.length),
+      status: effectiveStatus,
+      hasFinalImage: resolved.hasR2Object,
       finalImageUrl,
       imageUrl: finalImageUrl,
       finalAssets,
       packageType,
       wallpaperType: order.wallpaper_type || order.device,
-      expectedAssets,
-      completedAssets,
-      failedAssets,
-      finalWidth: finalAssets[0]?.width || (finalImageUrl ? order.width : undefined),
-      finalHeight: finalAssets[0]?.height || (finalImageUrl ? order.height : undefined),
-      meta: finalImageUrl ? getWallpaperMeta(inputFromDbOrder(order)) : undefined,
+      expectedAssets: resolved.expectedAssets,
+      completedAssets: resolved.completedAssets,
+      failedAssets: resolved.inconsistent ? 1 : 0,
+      finalWidth: finalAssets[0]?.width || undefined,
+      finalHeight: finalAssets[0]?.height || undefined,
+      meta: resolved.hasR2Object ? getWallpaperMeta(inputFromDbOrder(order)) : undefined,
+      message:
+        effectiveStatus === "failed"
+          ? "Your payment is verified, but the final file is missing. Please retry generation."
+          : undefined,
     });
   } catch (error) {
     console.error("[order-status]", {
@@ -103,14 +90,6 @@ export async function POST(request: Request) {
     });
     return statusError("Unable to check wallpaper status.", 500);
   }
-}
-
-function labelForAsset(assetType: string) {
-  if (assetType === "mobile") return "Mobile wallpaper";
-  if (assetType === "tablet") return "Tablet wallpaper";
-  if (assetType === "desktop") return "Desktop wallpaper";
-  if (assetType === "custom") return "Custom size wallpaper";
-  return "Wallpaper";
 }
 
 function statusError(message: string, status = 400) {

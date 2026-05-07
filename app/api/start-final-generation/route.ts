@@ -1,10 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getFinalAssets, getOrder } from "@/lib/orders";
+import { getOrder } from "@/lib/orders";
 import { verifyFinalGenerationToken } from "@/lib/payment";
 import { assertSameOrigin } from "@/lib/security";
-import { buildFinalGenerationPlan } from "@/lib/finalGenerationPlan";
+import { resolveServableFinalAssets } from "@/lib/finalAssetState";
 import type { PackageId } from "@/lib/packages";
 
 const startFinalSchema = z.object({
@@ -40,8 +40,9 @@ export async function POST(request: Request) {
   }
 
   const packageType: PackageId = "single";
-  const expectedAssets = buildFinalGenerationPlan(order, packageType).length;
-  const completedAssets = (await getFinalAssets(order.id)).length;
+  const resolved = await resolveServableFinalAssets(order, packageType);
+  const expectedAssets = resolved.expectedAssets;
+  const completedAssets = resolved.completedAssets;
 
   console.info("[final-generation-timing]", {
     requestId,
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     durationMs: Date.now() - verifyStartedAt,
   });
 
-  if (order.status === "final_generated" && completedAssets >= expectedAssets) {
+  if (order.status === "final_generated" && resolved.hasR2Object && completedAssets >= expectedAssets) {
     return NextResponse.json({
       success: true,
       status: "ready",

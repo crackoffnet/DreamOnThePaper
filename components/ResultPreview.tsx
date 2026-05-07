@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Download, Loader2, SlidersHorizontal, Sparkles } from "lucide-react";
 import { EmailDeliveryForm } from "@/components/EmailDeliveryForm";
 import { LoadingGeneration } from "@/components/LoadingGeneration";
 import { SharePanel } from "@/components/SharePanel";
+import { StartOverButton } from "@/components/StartOverButton";
 import { getEphemeralImage } from "@/lib/client-images";
-import type { WallpaperInput, WallpaperMeta } from "@/lib/types";
-import type { FinalAssetResult } from "@/lib/types";
+import type { FinalAssetResult, WallpaperInput, WallpaperMeta } from "@/lib/types";
 import { getAspectRatioLabel, labels } from "@/lib/wallpaper";
 import { getTargetDimensionsLabel } from "@/lib/wallpaperDimensions";
 import {
@@ -31,6 +31,19 @@ type WallpaperDimensions = {
   height: number;
 };
 
+type FinalAssetHealth = {
+  success?: boolean;
+  orderStatus?: string;
+  hasFinalAssetRow?: boolean;
+  finalAssetCount?: number;
+  hasR2Object?: boolean;
+  assetId?: string | null;
+  assetType?: string | null;
+  width?: number | null;
+  height?: number | null;
+  message?: string;
+};
+
 export function ResultPreview() {
   const [result, setResult] = useState<StoredResult>({
     imageUrl: "",
@@ -41,8 +54,13 @@ export function ResultPreview() {
     wallpaperType: "mobile",
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingAsset, setIsCheckingAsset] = useState(true);
   const [orderToken, setOrderToken] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [assetHealth, setAssetHealth] = useState<FinalAssetHealth | null>(null);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   useEffect(() => {
     const imageUrl = getEphemeralImage("finalImageUrl");
@@ -63,19 +81,102 @@ export function ResultPreview() {
     setResult({ imageUrl, input, meta, dimensions, finalAssets, wallpaperType });
     setOrderToken(sessionStorage.getItem("dreamOrderToken") || "");
     setOrderId(sessionStorage.getItem("dreamOrderId") || "");
-    const timer = window.setTimeout(() => setIsLoading(false), 500);
+    setSessionId(sessionStorage.getItem("dreamFinalSessionId") || "");
+    const timer = window.setTimeout(() => setIsLoading(false), 250);
     return () => window.clearTimeout(timer);
   }, []);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    if (!orderToken) {
+      setIsCheckingAsset(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function verifyAsset() {
+      try {
+        const response = await fetch("/api/final-asset-health", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ finalGenerationToken: orderToken }),
+        });
+        const payload = (await response.json()) as FinalAssetHealth;
+        if (cancelled) {
+          return;
+        }
+
+        setAssetHealth(payload);
+
+        if (payload.hasR2Object && payload.assetId && result.meta) {
+          const width = payload.width || result.dimensions?.width || dimensionsFromMeta(result.meta).width;
+          const height =
+            payload.height || result.dimensions?.height || dimensionsFromMeta(result.meta).height;
+          const assetType = payload.assetType || result.wallpaperType;
+          const imageUrl = `/api/final-asset?assetId=${encodeURIComponent(payload.assetId)}`;
+          setResult((current) => ({
+            ...current,
+            imageUrl,
+            dimensions: { width, height },
+            finalAssets: [
+              {
+                id: payload.assetId || "final-asset",
+                assetType,
+                label: assetDisplayLabel(assetType),
+                imageUrl,
+                width,
+                height,
+                format: "PNG",
+              },
+            ],
+          }));
+        }
+      } catch {
+        if (!cancelled) {
+          setAssetHealth({
+            success: false,
+            orderStatus: "failed",
+            hasR2Object: false,
+            message:
+              "We could not verify your generated wallpaper. Please retry generation.",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCheckingAsset(false);
+        }
+      }
+    }
+
+    void verifyAsset();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLoading,
+    orderToken,
+    result.meta,
+    result.wallpaperType,
+    result.dimensions?.width,
+    result.dimensions?.height,
+  ]);
+
+  if (isLoading || isCheckingAsset) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-4">
-        <LoadingGeneration label="Creating your wallpaper..." />
+        <LoadingGeneration
+          label={isLoading ? "Loading your wallpaper..." : "Checking your final wallpaper..."}
+        />
       </div>
     );
   }
 
-  if (!result.imageUrl || !result.meta) {
+  if (!result.meta) {
     return (
       <section className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-[1.75rem] border border-white/70 bg-white/60 p-6 shadow-soft">
@@ -98,33 +199,45 @@ export function ResultPreview() {
   const meta = result.meta;
   const orderIdShort = orderId ? orderId.slice(0, 8) : "final";
   const dimensions = result.dimensions || dimensionsFromMeta(meta);
-  const actualDimensionsLabel = `${dimensions.width} \u00d7 ${dimensions.height} px`;
+  const actualDimensionsLabel = `${dimensions.width} × ${dimensions.height} px`;
   const targetDimensionsLabel = result.input
     ? getTargetDimensionsLabel(result.input)
     : `${meta.imageSize.replace("x", " × ")} px`;
-  const rawAssets = result.finalAssets.length
-    ? result.finalAssets
-    : [
-        {
-          id: "legacy-single",
-          assetType: "single",
-          label: "Wallpaper",
-          imageUrl: result.imageUrl,
-          width: dimensions.width,
-          height: dimensions.height,
-          format: "PNG" as const,
-        },
-      ];
-  const preferredAsset =
-    rawAssets.find((asset) => asset.assetType === result.wallpaperType) ||
-    rawAssets.find((asset) => asset.assetType === "single") ||
-    rawAssets[0];
-  const assets = preferredAsset ? [preferredAsset] : [];
-  const primaryAsset = assets[0];
-  const heading = "Ready to download.";
-  const wallpaperTypeLabel = labelForWallpaperType(
-    result.wallpaperType || meta.device,
-  );
+  const asset = result.finalAssets[0];
+  const wallpaperTypeLabel = labelForWallpaperType(result.wallpaperType || meta.device);
+  const missingFinalAsset =
+    !orderToken ||
+    imageLoadFailed ||
+    assetHealth?.hasR2Object === false ||
+    assetHealth?.orderStatus === "failed" ||
+    !asset;
+  const retryHref = sessionId ? `/success?session_id=${encodeURIComponent(sessionId)}` : "/create";
+
+  if (missingFinalAsset) {
+    return (
+      <section className="mx-auto max-w-3xl px-4 py-10">
+        <div className="rounded-[1.75rem] border border-white/70 bg-white/60 p-6 shadow-soft">
+          <Sparkles aria-hidden className="mb-4 h-6 w-6 text-gold" />
+          <h1 className="text-3xl font-semibold text-ink">
+            We could not find your generated wallpaper.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-taupe">
+            {assetHealth?.message ||
+              "Your payment is verified, but the final file is missing. Please retry generation."}
+          </p>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href={retryHref}
+              className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-medium text-pearl"
+            >
+              Retry Generation
+            </Link>
+            <StartOverButton className="min-h-11 px-5 text-sm font-medium" />
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[0.42fr_0.58fr]">
@@ -133,7 +246,7 @@ export function ResultPreview() {
           Your wallpaper
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.02em] text-ink">
-          {heading}
+          Ready to download.
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
@@ -141,9 +254,7 @@ export function ResultPreview() {
           <DetailRow
             label="Ratio"
             value={
-              result.input
-                ? getAspectRatioLabel(result.input)
-                : labels.ratios[meta.ratio]
+              result.input ? getAspectRatioLabel(result.input) : labels.ratios[meta.ratio]
             }
           />
           <DetailRow label="Target dimensions" value={targetDimensionsLabel} />
@@ -154,19 +265,20 @@ export function ResultPreview() {
         </div>
 
         <div className="mt-6 grid gap-3">
-          {assets.length === 1 ? (
-            <DownloadButton
-              asset={assets[0]}
-              orderToken={orderToken}
-              filename={filenameForAsset(assets[0], orderIdShort)}
-              label="Download Wallpaper"
-            />
+          <DownloadButton
+            asset={asset}
+            orderToken={orderToken}
+            filename={filenameForAsset(asset, orderIdShort)}
+            label="Download Wallpaper"
+            onError={setDownloadError}
+          />
+          {downloadError ? (
+            <p className="-mt-1 text-center text-xs font-medium text-rose-700">
+              {downloadError}
+            </p>
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            Optimized for {labels.ratios[meta.ratio]} {"\u00b7"}{" "}
-            {assets.length === 1
-              ? `${assets[0].width} \u00d7 ${assets[0].height} px`
-              : `${primaryAsset.width} \u00d7 ${primaryAsset.height} px`}
+            Optimized for {labels.ratios[meta.ratio]} {"·"} {asset.width} × {asset.height} px
           </p>
           <Link
             href="/create"
@@ -186,28 +298,18 @@ export function ResultPreview() {
       </div>
 
       <div className="rounded-[1.75rem] border border-white/70 bg-white/45 p-4 shadow-soft backdrop-blur-xl">
-        <div
-          className={
-            "flex justify-center"
-          }
-        >
-          {assets.map((asset) => (
-            <AssetPreviewCard
-              key={`${asset.assetType}-${asset.imageUrl}`}
-              asset={asset}
-              orderToken={orderToken}
-              orderIdShort={orderIdShort}
-              single
-              aspectRatio={meta.aspectRatio}
-            />
-          ))}
+        <div className="flex justify-center">
+          <AssetPreviewCard
+            asset={asset}
+            orderToken={orderToken}
+            single
+            aspectRatio={meta.aspectRatio}
+            onImageError={() => setImageLoadFailed(true)}
+          />
         </div>
-        {assets.length === 1 && primaryAsset ? (
-          <p className="mt-3 text-center text-xs font-medium text-taupe">
-            Final PNG {"\u00b7"} {primaryAsset.width} {"\u00d7"}{" "}
-            {primaryAsset.height} px
-          </p>
-        ) : null}
+        <p className="mt-3 text-center text-xs font-medium text-taupe">
+          Final PNG · {asset.width} × {asset.height} px
+        </p>
       </div>
     </section>
   );
@@ -216,18 +318,18 @@ export function ResultPreview() {
 function AssetPreviewCard({
   asset,
   orderToken,
-  orderIdShort,
   single,
   aspectRatio,
+  onImageError,
 }: {
   asset: FinalAssetResult;
   orderToken: string;
-  orderIdShort: string;
   single: boolean;
   aspectRatio?: string;
+  onImageError: () => void;
 }) {
   const protectedImageUrl = withDownloadToken(asset.imageUrl, orderToken);
-  const dimensionsLabel = `${asset.width} \u00d7 ${asset.height} px`;
+  const dimensionsLabel = `${asset.width} × ${asset.height} px`;
 
   return (
     <div className={single ? "w-full max-w-md" : "rounded-2xl bg-white/35 p-3"}>
@@ -242,6 +344,7 @@ function AssetPreviewCard({
           src={protectedImageUrl}
           alt={`${asset.label} generated wallpaper`}
           className="h-full w-full object-cover"
+          onError={onImageError}
         />
       </div>
       <div className="mt-3 grid gap-2">
@@ -249,14 +352,6 @@ function AssetPreviewCard({
           <p className="font-medium text-ink">{asset.label}</p>
           <p className="text-xs text-taupe">{dimensionsLabel}</p>
         </div>
-        {!single ? (
-          <DownloadButton
-            asset={asset}
-            orderToken={orderToken}
-            filename={filenameForAsset(asset, orderIdShort)}
-            label={`Download ${asset.label.replace(" wallpaper", "")}`}
-          />
-        ) : null}
       </div>
     </div>
   );
@@ -267,21 +362,71 @@ function DownloadButton({
   orderToken,
   filename,
   label,
+  onError,
 }: {
   asset: FinalAssetResult;
   orderToken: string;
   filename: string;
   label: string;
+  onError: (message: string) => void;
 }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  async function handleDownload() {
+    setIsDownloading(true);
+    onError("");
+
+    try {
+      const response = await fetch(
+        withDownloadMode(withDownloadToken(asset.imageUrl, orderToken)),
+      );
+      const payload = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as { code?: string; message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.code === "FINAL_ASSET_NOT_FOUND"
+            ? "Your wallpaper file is missing. Please retry generation."
+            : payload?.message || "Unable to download your wallpaper right now.",
+        );
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Unable to download your wallpaper right now.",
+      );
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
-    <a
-      href={withDownloadMode(withDownloadToken(asset.imageUrl, orderToken))}
-      download={filename}
-      className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa"
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={isDownloading}
+      className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-pearl shadow-sm transition hover:bg-cocoa disabled:cursor-not-allowed disabled:opacity-70"
     >
-      <Download aria-hidden className="h-4 w-4" />
-      {label}
-    </a>
+      {isDownloading ? (
+        <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+      ) : (
+        <Download aria-hidden className="h-4 w-4" />
+      )}
+      {isDownloading ? "Preparing download..." : label}
+    </button>
   );
 }
 
@@ -351,4 +496,12 @@ function dimensionsFromMeta(meta: WallpaperMeta) {
     width: Number.isFinite(width) ? width : 0,
     height: Number.isFinite(height) ? height : 0,
   };
+}
+
+function assetDisplayLabel(assetType: string) {
+  if (assetType === "mobile") return "Mobile wallpaper";
+  if (assetType === "tablet") return "Tablet wallpaper";
+  if (assetType === "desktop") return "Desktop wallpaper";
+  if (assetType === "custom") return "Custom size wallpaper";
+  return "Wallpaper";
 }

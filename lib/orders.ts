@@ -267,11 +267,21 @@ export async function insertFinalAsset(input: {
 
   await getDb()
     .prepare(
-      `INSERT OR IGNORE INTO final_assets (
+      `INSERT INTO final_assets (
         id, order_id, asset_type, width, height, r2_key, format,
         file_size_bytes, generation_status, generation_attempt, prompt_hash,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(order_id, asset_type) DO UPDATE SET
+        width = excluded.width,
+        height = excluded.height,
+        r2_key = excluded.r2_key,
+        format = excluded.format,
+        file_size_bytes = excluded.file_size_bytes,
+        generation_status = excluded.generation_status,
+        generation_attempt = COALESCE(final_assets.generation_attempt, 0) + 1,
+        prompt_hash = excluded.prompt_hash,
+        updated_at = excluded.updated_at`,
     )
     .bind(
       id,
@@ -456,6 +466,25 @@ export async function markFinalGenerated(orderId: string, finalR2Key: string) {
     .run();
 
   return getOrder(orderId);
+}
+
+export async function reopenPaidFinalOrder(orderId: string) {
+  const now = Date.now();
+  const result = await getDb()
+    .prepare(
+      `UPDATE orders
+       SET status = 'paid',
+           final_r2_key = NULL,
+           updated_at = ?
+       WHERE id = ?
+         AND status IN ('final_generated', 'failed')
+         AND stripe_payment_status = 'paid'
+         AND final_generation_attempts < 3`,
+    )
+    .bind(now, orderId)
+    .run();
+
+  return (result.meta.changes || 0) === 1;
 }
 
 export async function markFinalFailed(orderId: string, message: string) {

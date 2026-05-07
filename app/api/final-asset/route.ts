@@ -11,22 +11,33 @@ import {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const requestId = crypto.randomUUID();
   const requestMetadata = await getRequestMetadata(request);
   const assetId = url.searchParams.get("assetId") || "";
   const tokenValue = url.searchParams.get("token") || "";
 
   if (!assetId || !tokenValue) {
-    return assetError("Missing wallpaper access details.", 400);
+    return assetError("Missing wallpaper access details.", 400, "FINAL_ASSET_BAD_REQUEST");
   }
 
   const token = await verifyFinalGenerationToken(tokenValue);
   if (!token) {
-    return assetError("This wallpaper link is expired or invalid.", 403);
+    return assetError(
+      "This wallpaper link is expired or invalid.",
+      403,
+      "FINAL_ASSET_UNAUTHORIZED",
+    );
   }
 
   const order = await getOrder(token.orderId);
   if (!order) {
-    return assetError("Wallpaper order was not found.", 404);
+    console.warn("[final-asset]", {
+      requestId,
+      orderId: token.orderId,
+      assetId,
+      failureReason: "Order not found",
+    });
+    return assetError("Wallpaper order was not found.", 404, "FINAL_ASSET_ORDER_NOT_FOUND");
   }
 
   if (
@@ -34,17 +45,39 @@ export async function GET(request: Request) {
     order.stripe_session_id !== token.sessionId ||
     order.status !== "final_generated"
   ) {
-    return assetError("Unable to verify this wallpaper.", 403);
+    console.warn("[final-asset]", {
+      requestId,
+      orderId: order.id,
+      assetId,
+      failureReason: "Token verification failed for order",
+    });
+    return assetError("Unable to verify this wallpaper.", 403, "FINAL_ASSET_UNAUTHORIZED");
   }
 
   const asset = await getFinalAssetById(order.id, assetId);
   if (!asset) {
-    return assetError("Wallpaper file was not found.", 404);
+    console.warn("[final-asset]", {
+      requestId,
+      orderId: order.id,
+      assetId,
+      failureReason: "Asset row missing",
+      hasAssetRow: false,
+      hasR2Object: false,
+    });
+    return assetError("The wallpaper file is not available.", 404, "FINAL_ASSET_NOT_FOUND");
   }
 
   const response = await getImageResponse(asset.r2_key);
   if (!response || response.status === 404) {
-    return assetError("Wallpaper file was not found.", 404);
+    console.warn("[final-asset]", {
+      requestId,
+      orderId: order.id,
+      assetId,
+      failureReason: "R2 object missing",
+      hasAssetRow: true,
+      hasR2Object: false,
+    });
+    return assetError("The wallpaper file is not available.", 404, "FINAL_ASSET_NOT_FOUND");
   }
 
   if (url.searchParams.get("download") === "1") {
@@ -90,10 +123,11 @@ function filenameForAsset(assetType: string, orderId: string) {
   return `dream-on-the-paper-wallpaper-${shortId}.png`;
 }
 
-function assetError(message: string, status: number) {
+function assetError(message: string, status: number, code: string) {
   return NextResponse.json(
     {
       success: false,
+      code,
       message,
     },
     { status },

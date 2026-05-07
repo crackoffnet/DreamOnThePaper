@@ -17,7 +17,7 @@ import {
 } from "@/lib/orderEvents";
 
 const unavailableMessage =
-  "Email delivery is not available yet. Please download your wallpaper.";
+  "Email delivery is temporarily unavailable. Please use Download Wallpaper.";
 const maxTotalAttachmentBytes = 8 * 1024 * 1024;
 
 export async function POST(request: Request) {
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         orderId,
         failureReason: "Invalid final generation token or order state",
       });
-      return emailError("Please confirm payment before emailing.", 402);
+      return emailError("Email delivery is only available after your wallpaper is ready.", 409);
     }
     void trackOrderEvent({
       orderId: order.id,

@@ -3,8 +3,8 @@ import { Lock, Mail, ShieldCheck, Sparkles } from "lucide-react";
 const badges = [
   { icon: Lock, label: "Secure Stripe checkout" },
   { icon: ShieldCheck, label: "Server-side AI generation" },
-  { icon: Mail, label: "Email delivery option" },
-  { icon: Sparkles, label: "No frontend API keys" },
+  { icon: Mail, label: "Email delivery optional" },
+  { icon: Sparkles, label: "Private by design" },
 ];
 
 export function TrustBadges() {
