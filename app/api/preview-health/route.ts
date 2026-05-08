@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
-import { getOrdersColumns, hasTable } from "@/lib/dbSchema";
+import {
+  getFinalAssetsSchemaSupport,
+  getOrdersSchemaSupport,
+  hasTable,
+} from "@/lib/dbSchema";
 import { getRuntimeEnv } from "@/lib/env";
 
 export async function GET() {
@@ -15,7 +19,37 @@ export async function GET() {
   const hasPreviewAttemptsTable = bindings.DB
     ? await hasTable(bindings.DB, "preview_attempts")
     : false;
-  const ordersColumns = bindings.DB ? await getOrdersColumns(bindings.DB) : new Set<string>();
+  const ordersSchema = bindings.DB
+    ? await getOrdersSchemaSupport(bindings.DB)
+    : {
+        hasPresetId: false,
+        hasRatioLabel: false,
+        hasSourceWidth: false,
+        hasSourceHeight: false,
+        hasFinalWidth: false,
+        hasFinalHeight: false,
+        hasOutputFormat: false,
+        hasGenerationStatus: false,
+        hasFinalAssetKey: false,
+        hasPreviewAssetKey: false,
+        hasPreviewInputHash: false,
+        hasPreviewStale: false,
+      };
+  const finalAssetsSchema = bindings.DB
+    ? await getFinalAssetsSchemaSupport(bindings.DB)
+    : {
+        exists: false,
+        hasR2Key: false,
+        hasGenerationStatus: false,
+        hasFileSizeBytes: false,
+        hasGenerationAttempt: false,
+        hasPromptHash: false,
+        hasUpdatedAt: false,
+        hasSourceWidth: false,
+        hasSourceHeight: false,
+        hasFinalWidth: false,
+        hasFinalHeight: false,
+      };
 
   return NextResponse.json(
     {
@@ -34,9 +68,14 @@ export async function GET() {
       ),
       abuseRateLimitEnabled: Boolean(bindings.DREAM_RATE_LIMITS),
       ordersColumns: {
-        hasPresetId: ordersColumns.has("preset_id"),
-        hasPreviewAssetKey: ordersColumns.has("preview_asset_key"),
-        hasPreviewInputHash: ordersColumns.has("preview_input_hash"),
+        hasPresetId: ordersSchema.hasPresetId,
+        hasPreviewAssetKey: ordersSchema.hasPreviewAssetKey,
+        hasPreviewInputHash: ordersSchema.hasPreviewInputHash,
+      },
+      finalAssets: {
+        exists: finalAssetsSchema.exists,
+        hasGenerationStatus: finalAssetsSchema.hasGenerationStatus,
+        hasR2Key: finalAssetsSchema.hasR2Key,
       },
       supportedImageSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"],
     },

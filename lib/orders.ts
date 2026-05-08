@@ -11,7 +11,11 @@ import type {
   WallpaperStyle,
 } from "@/lib/types";
 import { getDb } from "@/lib/cloudflare";
-import { getOrdersColumns } from "@/lib/dbSchema";
+import {
+  getFinalAssetsSchemaSupport,
+  getOrdersColumns,
+  getOrdersSchemaSupport,
+} from "@/lib/dbSchema";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type FinalAssetType =
@@ -37,6 +41,10 @@ export type FinalAsset = {
   generation_attempt?: number | null;
   openai_image_id?: string | null;
   prompt_hash?: string | null;
+  source_width?: number | null;
+  source_height?: number | null;
+  final_width?: number | null;
+  final_height?: number | null;
   created_at: number;
   updated_at?: number | null;
 };
@@ -295,43 +303,112 @@ export async function insertFinalAsset(input: {
   r2Key: string;
   fileSizeBytes?: number;
   promptHash?: string;
+  sourceWidth?: number | null;
+  sourceHeight?: number | null;
+  finalWidth?: number | null;
+  finalHeight?: number | null;
 }) {
   const now = Date.now();
   const id = crypto.randomUUID();
+  const db = getDb();
+  const schema = await getFinalAssetsSchemaSupport(db);
 
-  await getDb()
+  if (!schema.exists || !schema.hasR2Key) {
+    throw new Error("final_assets table is not configured for final asset storage");
+  }
+
+  const insertColumns = [
+    "id",
+    "order_id",
+    "asset_type",
+    "width",
+    "height",
+    "r2_key",
+    "format",
+  ];
+  const insertValues: D1Value[] = [
+    id,
+    input.orderId,
+    input.assetType,
+    input.width,
+    input.height,
+    input.r2Key,
+    "png",
+  ];
+  const updateClauses = [
+    "width = excluded.width",
+    "height = excluded.height",
+    "r2_key = excluded.r2_key",
+    "format = excluded.format",
+  ];
+
+  if (schema.hasFileSizeBytes) {
+    insertColumns.push("file_size_bytes");
+    insertValues.push(input.fileSizeBytes ?? null);
+    updateClauses.push("file_size_bytes = excluded.file_size_bytes");
+  }
+
+  if (schema.hasGenerationStatus) {
+    insertColumns.push("generation_status");
+    insertValues.push("generated");
+    updateClauses.push("generation_status = excluded.generation_status");
+  }
+
+  if (schema.hasGenerationAttempt) {
+    insertColumns.push("generation_attempt");
+    insertValues.push(1);
+    updateClauses.push(
+      "generation_attempt = COALESCE(final_assets.generation_attempt, 0) + 1",
+    );
+  }
+
+  if (schema.hasPromptHash) {
+    insertColumns.push("prompt_hash");
+    insertValues.push(input.promptHash || null);
+    updateClauses.push("prompt_hash = excluded.prompt_hash");
+  }
+
+  if (schema.hasSourceWidth) {
+    insertColumns.push("source_width");
+    insertValues.push(input.sourceWidth ?? null);
+    updateClauses.push("source_width = excluded.source_width");
+  }
+
+  if (schema.hasSourceHeight) {
+    insertColumns.push("source_height");
+    insertValues.push(input.sourceHeight ?? null);
+    updateClauses.push("source_height = excluded.source_height");
+  }
+
+  if (schema.hasFinalWidth) {
+    insertColumns.push("final_width");
+    insertValues.push(input.finalWidth ?? input.width);
+    updateClauses.push("final_width = excluded.final_width");
+  }
+
+  if (schema.hasFinalHeight) {
+    insertColumns.push("final_height");
+    insertValues.push(input.finalHeight ?? input.height);
+    updateClauses.push("final_height = excluded.final_height");
+  }
+
+  if (schema.hasUpdatedAt) {
+    insertColumns.push("updated_at");
+    insertValues.push(now);
+    updateClauses.push("updated_at = excluded.updated_at");
+  }
+
+  insertColumns.push("created_at");
+  insertValues.push(now);
+
+  await db
     .prepare(
-      `INSERT INTO final_assets (
-        id, order_id, asset_type, width, height, r2_key, format,
-        file_size_bytes, generation_status, generation_attempt, prompt_hash,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO final_assets (${insertColumns.join(", ")})
+      VALUES (${insertColumns.map(() => "?").join(", ")})
       ON CONFLICT(order_id, asset_type) DO UPDATE SET
-        width = excluded.width,
-        height = excluded.height,
-        r2_key = excluded.r2_key,
-        format = excluded.format,
-        file_size_bytes = excluded.file_size_bytes,
-        generation_status = excluded.generation_status,
-        generation_attempt = COALESCE(final_assets.generation_attempt, 0) + 1,
-        prompt_hash = excluded.prompt_hash,
-        updated_at = excluded.updated_at`,
+        ${updateClauses.join(", ")}`,
     )
-    .bind(
-      id,
-      input.orderId,
-      input.assetType,
-      input.width,
-      input.height,
-      input.r2Key,
-      "png",
-      input.fileSizeBytes ?? null,
-      "generated",
-      1,
-      input.promptHash || null,
-      now,
-      now,
-    )
+    .bind(...insertValues)
     .run();
 
   return getFinalAssets(input.orderId);
@@ -552,14 +629,51 @@ export async function resetFailedFinalGeneration(orderId: string) {
 
 export async function markFinalGenerated(orderId: string, finalR2Key: string) {
   const now = Date.now();
-  await getDb()
-    .prepare(
-      `UPDATE orders
-       SET status = ?, generation_status = ?, final_r2_key = ?, final_asset_key = ?,
-           output_format = 'png', final_generated_at = ?, updated_at = ?
-       WHERE id = ?`,
-    )
-    .bind("final_generated", "generated", finalR2Key, finalR2Key, now, now, orderId)
+  const db = getDb();
+  const schema = await getOrdersSchemaSupport(db);
+  const setClauses = [
+    "status = ?",
+    "final_r2_key = ?",
+    "final_generated_at = ?",
+    "updated_at = ?",
+  ];
+  const values: D1Value[] = ["final_generated", finalR2Key, now, now];
+  const missingColumns: string[] = [];
+
+  if (schema.hasGenerationStatus) {
+    setClauses.splice(1, 0, "generation_status = ?");
+    values.splice(1, 0, "generated");
+  } else {
+    missingColumns.push("generation_status");
+  }
+
+  if (schema.hasFinalAssetKey) {
+    setClauses.splice(setClauses.length - 2, 0, "final_asset_key = ?");
+    values.splice(values.length - 2, 0, finalR2Key);
+  } else {
+    missingColumns.push("final_asset_key");
+  }
+
+  if (schema.hasOutputFormat) {
+    setClauses.splice(setClauses.length - 2, 0, "output_format = ?");
+    values.splice(values.length - 2, 0, "png");
+  } else {
+    missingColumns.push("output_format");
+  }
+
+  if (missingColumns.length > 0) {
+    console.warn("[orders]", {
+      orderId,
+      failureReason: "Optional order columns missing, falling back to legacy final-generated update",
+      missingColumns,
+    });
+  }
+
+  values.push(orderId);
+
+  await db
+    .prepare(`UPDATE orders SET ${setClauses.join(", ")} WHERE id = ?`)
+    .bind(...values)
     .run();
 
   return getOrder(orderId);
@@ -588,23 +702,47 @@ export async function markFinalFailed(orderId: string, message: string) {
   const now = Date.now();
   const eventId = crypto.randomUUID();
   const db = getDb();
+  const columns = await getOrdersColumns(db);
+  const setClauses = ["status = ?", "updated_at = ?"];
+  const values: D1Value[] = ["failed", now];
 
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE orders
-         SET status = ?, final_failed_at = ?, final_failure_reason = ?,
-             updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind("failed", new Date(now).toISOString(), message.slice(0, 500), now, orderId),
-    db
+  if (columns.has("final_failed_at")) {
+    setClauses.splice(1, 0, "final_failed_at = ?");
+    values.splice(1, 0, new Date(now).toISOString());
+  }
+
+  if (columns.has("final_failure_reason")) {
+    setClauses.splice(setClauses.length - 1, 0, "final_failure_reason = ?");
+    values.splice(values.length - 1, 0, message.slice(0, 500));
+  }
+
+  if (columns.has("generation_status")) {
+    setClauses.splice(1, 0, "generation_status = ?");
+    values.splice(1, 0, "failed");
+  }
+
+  values.push(orderId);
+
+  await db
+    .prepare(`UPDATE orders SET ${setClauses.join(", ")} WHERE id = ?`)
+    .bind(...values)
+    .run();
+
+  try {
+    await db
       .prepare(
         `INSERT INTO generation_events (id, order_id, type, status, message, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(eventId, orderId, "final_generation", "failed", message.slice(0, 500), now),
-  ]);
+      .bind(eventId, orderId, "final_generation", "failed", message.slice(0, 500), now)
+      .run();
+  } catch (error) {
+    console.warn("[orders]", {
+      orderId,
+      failureReason: "Generation event insert failed",
+      errorMessage: error instanceof Error ? error.message : "Unknown generation event error",
+    });
+  }
 
   return getOrder(orderId);
 }

@@ -724,6 +724,10 @@ async function generateFinalAsset(input: {
     r2Key: savedFinal.key,
     fileSizeBytes: savedFinal.size,
     promptHash,
+    sourceWidth: sourceDimensions?.width || null,
+    sourceHeight: sourceDimensions?.height || null,
+    finalWidth: resolvedDimensions.width,
+    finalHeight: resolvedDimensions.height,
   });
   await patchOrderTracking(orderId, {
     wallpaper_type: item.wallpaperType,

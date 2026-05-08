@@ -39,8 +39,7 @@ ADMIN_DASHBOARD_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
 ORDER_TOKEN_SECRET=
-IP_HASH_SECRET=
-ADMIN_DASHBOARD_TOKEN=
+RESULT_TOKEN_SECRET=
 BREVO_API_KEY=
 FROM_EMAIL=hello@dreamonthepaper.com
 FROM_NAME=Dream On The Paper
@@ -184,30 +183,27 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 
 Production checkout requires `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`,
 `ORDER_TOKEN_SECRET`, and `STRIPE_SINGLE_PRICE_ID`. Add `STRIPE_WEBHOOK_SECRET`
-when webhooks are enabled.
+when webhooks are enabled. `RESULT_TOKEN_SECRET` is optional; if omitted, paid
+result-access tokens fall back to `ORDER_TOKEN_SECRET`.
 `CHECKOUT_RATE_LIMIT_BYPASS_TOKEN` is optional for manual testing only; never
 send it from customer-facing browser code.
 
 Checkout creation is limited to 20 attempts per IP/hour. Preview generation
-uses a fair preview policy: 10 preview attempts per IP/hour for abuse
-protection, 3 successful previews per IP/day, and one successful free preview
-per browser session. Failed OpenAI/R2/D1 preview generations count toward the
-attempt limit but do not consume successful preview quota. Rate-limit KV keys
-are bucketed for easier testing cleanup:
+allows multiple low-resolution previews and only uses quiet abuse throttles:
+10 preview requests per browser/hour and 30 preview requests per IP/hour.
+Failed OpenAI/R2/D1 preview generations do not consume any product-facing quota.
+Rate-limit KV keys are bucketed for easier testing cleanup:
 
 - Checkout: `checkout:{ip}:{YYYY-MM-DDTHH}`
-- Preview attempts: `preview:attempt:ip:{ip}:{YYYY-MM-DDTHH}`
-- Preview IP successes: `preview:success:ip:{ip}:{YYYY-MM-DD}`
-- Preview session successes: `preview:success:session:{sessionId}`
+- Preview browser requests: `preview:browser:{browserId}:{YYYY-MM-DDTHH}`
+- Preview IP requests: `preview:ip:{ip}:{YYYY-MM-DDTHH}`
 
 During testing, use the Cloudflare KV dashboard for `DREAM_RATE_LIMITS` to
 delete the current checkout key for your IP/hour bucket if you need to unblock
-manual retries. You can also delete the relevant preview attempt/success keys
-for your current IP bucket. `PREVIEW_RATE_LIMIT_BYPASS_TOKEN` is optional for
+manual retries. You can also delete the relevant preview browser/IP keys for
+your current buckets. `PREVIEW_RATE_LIMIT_BYPASS_TOKEN` is optional for
 manual curl/Postman testing only and must not be sent from customer-facing
 browser code.
-
-The free preview limit uses one browser-session token plus an IP/day limit. The paid final generation token is signed server-side and tied to the Stripe Session metadata for one paid fulfillment job.
 
 ## Customer and Order Tracking
 
@@ -250,7 +246,8 @@ Production helper modules are available for Cloudflare bindings:
   Stale `final_generating` orders older than 10 minutes can retry once without
   another payment.
 - `lib/storage.ts` stores image bytes in R2. Preview keys use
-  `previews/{orderId}.webp`; final keys use `finals/{orderId}.png`.
+  `previews/{orderId}/{previewId}.png|jpg|webp`; final keys use
+  `finals/{orderId}/{assetType}.png`.
 - `lib/rateLimit.ts` stores rate-limit counters and generation locks in KV.
 
 ## Cloudflare Deploy Settings
@@ -337,6 +334,7 @@ answers are not stored in browser storage.
 - `/api/final-asset`
 - `/api/order-status`
 - `/api/order-health`
+- `/api/schema-health`
 - `/api/order-abandon`
 - `/api/tracking-health`
 - `/api/admin/orders`

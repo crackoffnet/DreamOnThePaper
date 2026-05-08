@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder, inputFromDbOrder } from "@/lib/orders";
+import { getOrder, inputFromDbOrder, markFinalGenerated } from "@/lib/orders";
 import { assertSameOrigin } from "@/lib/security";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 import { resolveServableFinalAssets } from "@/lib/finalAssetState";
@@ -62,6 +62,17 @@ export async function POST(request: Request) {
 
     const packageType: PackageId = "single";
     const resolved = await resolveServableFinalAssets(order, packageType);
+    if (resolved.primaryAsset?.r2_key && resolved.hasR2Object && order.status !== "final_generated") {
+      await markFinalGenerated(order.id, resolved.primaryAsset.r2_key).catch((error) => {
+        console.warn("[order-status]", {
+          requestId,
+          orderId: order.id,
+          failureReason: "Recover final_generated status failed",
+          errorMessage: error instanceof Error ? error.message : "Unknown recovery error",
+        });
+      });
+    }
+
     const finalAssets = resolved.finalAssets;
     const finalImageUrl = resolved.finalImageUrl;
     const effectiveStatus =

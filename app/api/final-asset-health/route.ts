@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrder } from "@/lib/orders";
+import { getOrder, markFinalGenerated } from "@/lib/orders";
 import { assertSameOrigin } from "@/lib/security";
 import { resolveServableFinalAssets } from "@/lib/finalAssetState";
 import type { PackageId } from "@/lib/packages";
@@ -86,6 +86,17 @@ export async function POST(request: Request) {
 
     const packageType: PackageId = "single";
     const resolved = await resolveServableFinalAssets(order, packageType);
+    if (resolved.primaryAsset?.r2_key && resolved.hasR2Object && order.status !== "final_generated") {
+      await markFinalGenerated(order.id, resolved.primaryAsset.r2_key).catch((error) => {
+        console.warn("[final-asset-health]", {
+          requestId,
+          orderId: order.id,
+          failureReason: "Recover final_generated status failed",
+          errorMessage: error instanceof Error ? error.message : "Unknown recovery error",
+        });
+      });
+    }
+
     const primary = resolved.primaryAsset;
     const effectiveStatus =
       order.status === "final_generated" && !resolved.hasR2Object
