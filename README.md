@@ -30,6 +30,7 @@ OPENAI_API_KEY=
 OPENAI_PREVIEW_IMAGE_MODEL=gpt-image-1-mini
 OPENAI_FINAL_IMAGE_MODEL=gpt-image-1
 OPENAI_FINAL_IMAGE_QUALITY=medium
+USE_SHORT_IMAGE_PROMPT=false
 STRIPE_SECRET_KEY=
 STRIPE_SINGLE_PRICE_ID=
 CHECKOUT_RATE_LIMIT_BYPASS_TOKEN=
@@ -55,6 +56,7 @@ Image generation speed is controlled by optional server-side variables:
 - `OPENAI_PREVIEW_IMAGE_MODEL` defaults to `gpt-image-1-mini`
 - `OPENAI_FINAL_IMAGE_MODEL` defaults to `gpt-image-1`
 - `OPENAI_FINAL_IMAGE_QUALITY` defaults to `medium`
+- `USE_SHORT_IMAGE_PROMPT` defaults to `false`
 
 Final generation uses launch-friendly normalized sizes (`1024x1024`,
 `1024x1536`, or `1536x1024`) and stores those actual output dimensions with the

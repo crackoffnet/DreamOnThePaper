@@ -16,6 +16,12 @@ import {
   getOrdersColumns,
   getOrdersSchemaSupport,
 } from "@/lib/dbSchema";
+import {
+  buildLegacyWallpaperFields,
+  emptyVisualOnlyDreamProfile,
+  profileFromStoredAnswers,
+  sanitizeDreamProfile,
+} from "@/lib/visualDreamProfile";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type FinalAssetType =
@@ -748,35 +754,28 @@ export async function markFinalFailed(orderId: string, message: string) {
 }
 
 function sanitizeAnswers(input: WallpaperInput) {
-  return {
-    goals: sanitizeText(input.goals),
-    lifestyle: sanitizeText(input.lifestyle),
-    career: sanitizeText(input.career),
-    personalLife: sanitizeText(input.personalLife),
-    health: sanitizeText(input.health),
-    place: sanitizeText(input.place),
-    feelingWords: sanitizeText(input.feelingWords),
-    reminder: sanitizeText(input.reminder),
-  };
+  return sanitizeDreamProfile(input.dreamProfile);
 }
 
 export function inputFromDbOrder(order: DbOrder): WallpaperInput {
-  const answers = parseAnswers(order.sanitized_answers_json);
+  const dreamProfile = parseAnswers(order.sanitized_answers_json);
+  const legacyFields = buildLegacyWallpaperFields(dreamProfile);
 
   return {
     device: order.device as DeviceType,
     ratio: order.ratio as RatioType,
     theme: order.theme as ThemeType,
     style: order.style as WallpaperStyle,
-    goals: answers.goals,
-    lifestyle: answers.lifestyle,
-    career: answers.career,
-    personalLife: answers.personalLife,
-    health: answers.health,
-    place: answers.place,
-    feelingWords: answers.feelingWords,
-    reminder: answers.reminder,
-    quoteTone: order.quote_tone as QuoteTone,
+    dreamProfile,
+    goals: legacyFields.goals,
+    lifestyle: legacyFields.lifestyle,
+    career: legacyFields.career,
+    personalLife: legacyFields.personalLife,
+    health: legacyFields.health,
+    place: legacyFields.place,
+    feelingWords: legacyFields.feelingWords,
+    reminder: legacyFields.reminder,
+    quoteTone: (order.quote_tone as QuoteTone) || "none",
     customWidth: order.device === "custom" ? order.width : undefined,
     customHeight: order.device === "custom" ? order.height : undefined,
   };
@@ -784,34 +783,11 @@ export function inputFromDbOrder(order: DbOrder): WallpaperInput {
 
 function parseAnswers(value: string) {
   try {
-    const parsed = JSON.parse(value) as Partial<Record<keyof WallpaperInput, unknown>>;
-
-    return {
-      goals: stringValue(parsed.goals),
-      lifestyle: stringValue(parsed.lifestyle),
-      career: stringValue(parsed.career),
-      personalLife: stringValue(parsed.personalLife),
-      health: stringValue(parsed.health),
-      place: stringValue(parsed.place),
-      feelingWords: stringValue(parsed.feelingWords),
-      reminder: stringValue(parsed.reminder),
-    };
+    const parsed = JSON.parse(value) as unknown;
+    return profileFromStoredAnswers(parsed);
   } catch {
-    return {
-      goals: "",
-      lifestyle: "",
-      career: "",
-      personalLife: "",
-      health: "",
-      place: "",
-      feelingWords: "",
-      reminder: "",
-    };
+    return { ...emptyVisualOnlyDreamProfile };
   }
-}
-
-function stringValue(value: unknown) {
-  return typeof value === "string" ? value.slice(0, 300) : "";
 }
 
 function sanitizeText(value: string) {

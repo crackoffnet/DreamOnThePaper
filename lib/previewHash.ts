@@ -1,5 +1,6 @@
 import { wallpaperTypeFromDevice } from "@/lib/wallpaperProducts";
 import type { WallpaperInput } from "@/lib/types";
+import { sanitizeDreamProfile } from "@/lib/visualDreamProfile";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 type PreviewHashOptions = {
@@ -28,17 +29,7 @@ export function normalizePreviewInput(
     theme: input.theme,
     style: input.style,
     mood: stringValue(options.mood),
-    quoteTone: input.quoteTone,
-    answers: {
-      goals: stringValue(input.goals),
-      lifestyle: stringValue(input.lifestyle),
-      career: stringValue(input.career),
-      personalLife: stringValue(input.personalLife),
-      health: stringValue(input.health),
-      place: stringValue(input.place),
-      feelingWords: stringValue(input.feelingWords),
-      reminder: stringValue(input.reminder),
-    },
+    dreamProfile: sanitizeDreamProfile(input.dreamProfile),
   };
 }
 

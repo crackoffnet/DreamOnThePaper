@@ -2,6 +2,7 @@ import type { PackageId } from "@/lib/plans";
 import type { WallpaperInput } from "@/lib/types";
 import { getRuntimeEnv } from "@/lib/env";
 import { fromBase64Url, timingSafeStringEqual, toBase64Url } from "@/lib/security";
+import { buildLegacyWallpaperFields } from "@/lib/visualDreamProfile";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type OrderStatus =
@@ -51,7 +52,7 @@ export type CheckoutOrderToken = {
   height: string;
   theme: string;
   style: string;
-  quoteTone: string;
+  quoteTone?: string;
   promptHash: string;
   createdAt: string;
   expiresAt: string;
@@ -194,7 +195,7 @@ export function checkoutPayloadToMeta(payload: CheckoutOrderToken) {
     height: payload.height,
     theme: payload.theme,
     style: payload.style,
-    quoteTone: payload.quoteTone,
+    quoteTone: payload.quoteTone || "none",
     promptHash: payload.promptHash,
   };
 }
@@ -209,7 +210,7 @@ function getOrderMeta(input: WallpaperInput) {
     height,
     theme: input.theme,
     style: input.style,
-    quoteTone: input.quoteTone,
+    quoteTone: input.quoteTone || "none",
   };
 }
 
@@ -234,7 +235,7 @@ function createCheckoutTokenPayload(order: OrderSnapshot): CheckoutOrderToken {
     height: order.height || "",
     theme: order.theme || order.input.theme,
     style: order.style || order.input.style,
-    quoteTone: order.quoteTone || order.input.quoteTone,
+    quoteTone: order.quoteTone || order.input.quoteTone || "none",
     promptHash: order.promptHash,
     createdAt,
     expiresAt,
@@ -253,6 +254,7 @@ export async function verifyOrderSnapshotToken(token: string) {
 }
 
 export async function hashOrderInput(input: WallpaperInput) {
+  const profileSummary = buildLegacyWallpaperFields(input.dreamProfile);
   const encoded = new TextEncoder().encode(
     JSON.stringify({
       device: input.device,
@@ -261,15 +263,16 @@ export async function hashOrderInput(input: WallpaperInput) {
       customHeight: input.customHeight || null,
       theme: input.theme,
       style: input.style,
-      quoteTone: input.quoteTone,
-      goals: input.goals,
-      lifestyle: input.lifestyle,
-      career: input.career,
-      personalLife: input.personalLife,
-      health: input.health,
-      place: input.place,
-      feelingWords: input.feelingWords,
-      reminder: input.reminder,
+      dreamProfile: input.dreamProfile,
+      quoteTone: input.quoteTone || "none",
+      goals: input.goals || profileSummary.goals,
+      lifestyle: input.lifestyle || profileSummary.lifestyle,
+      career: input.career || profileSummary.career,
+      personalLife: input.personalLife || profileSummary.personalLife,
+      health: input.health || profileSummary.health,
+      place: input.place || profileSummary.place,
+      feelingWords: input.feelingWords || profileSummary.feelingWords,
+      reminder: input.reminder || profileSummary.reminder,
     }),
   );
   const digest = await crypto.subtle.digest("SHA-256", encoded);

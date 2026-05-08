@@ -231,13 +231,16 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
     <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[0.48fr_0.52fr]">
       <section className="rounded-[1.75rem] border border-white/70 bg-white/50 p-4 shadow-soft backdrop-blur-xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
-          Low-quality preview
+          Low-resolution visual preview
         </p>
         <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-ink">
           Your wallpaper concept is ready.
         </h2>
         <p className="mt-2 text-sm leading-6 text-taupe">
           Unlock the full wallpaper to download, email, and share.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-cocoa">
+          Your preview shows the visual direction, mood, and composition. After payment, we generate a clean high-resolution PNG without preview watermark.
         </p>
         <div className="mt-4 flex justify-center rounded-[1.5rem] border border-white/70 bg-white/45 p-4">
           <div
@@ -258,7 +261,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
           <p>Selected format: {state.meta.ratioLabel}</p>
-          <p>Paid file: Clean high-resolution PNG generated for this format</p>
+          <p>Paid file: Clean high-resolution visual-only PNG for this format</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>
@@ -331,7 +334,7 @@ function metaFromCheckoutOrder(order: CheckoutOrderToken): WallpaperMeta {
     ratio: order.ratio as RatioType,
     theme: order.theme as ThemeType,
     style: order.style as WallpaperStyle,
-    quoteTone: order.quoteTone as QuoteTone,
+    quoteTone: (order.quoteTone || "none") as QuoteTone,
     presetId: preset.id,
     selectedLabel: preset.label,
     ratioLabel: preset.ratioLabel,

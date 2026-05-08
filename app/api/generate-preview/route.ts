@@ -60,12 +60,17 @@ import {
 import type {
   DeviceType,
   GenerateResponse,
-  QuoteTone,
   RatioType,
   ThemeType,
   WallpaperInput,
   WallpaperStyle,
 } from "@/lib/types";
+import {
+  buildLegacyWallpaperFields,
+  emptyVisualOnlyDreamProfile,
+  profileFromStoredAnswers,
+  sanitizeDreamProfile,
+} from "@/lib/visualDreamProfile";
 import {
   isWallpaperProductId,
   wallpaperProducts,
@@ -233,7 +238,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const joined = Object.values(parsed.data).join(" ");
+    const joined = JSON.stringify(parsed.data.dreamProfile);
     if (containsAbusiveInput(joined)) {
       return previewError(
         "Please keep the wallpaper request safe and respectful.",
@@ -399,30 +404,12 @@ export async function POST(request: Request) {
       custom_height: input.customHeight || null,
       theme: input.theme,
       style: input.style,
-      quote_tone: input.quoteTone,
+      quote_tone: input.quoteTone || "none",
       mood: normalizedBody.mood || null,
       prompt_hash: previewPromptHash,
-      sanitized_answers_json: JSON.stringify({
-        goals: input.goals,
-        lifestyle: input.lifestyle,
-        career: input.career,
-        personalLife: input.personalLife,
-        health: input.health,
-        place: input.place,
-        feelingWords: input.feelingWords,
-        reminder: input.reminder,
-      }),
+      sanitized_answers_json: JSON.stringify(input.dreamProfile),
       answers_hash: await hashOperationalValue(
-        [
-          input.goals,
-          input.lifestyle,
-          input.career,
-          input.personalLife,
-          input.health,
-          input.place,
-          input.feelingWords,
-          input.reminder,
-        ].join("|"),
+        JSON.stringify(input.dreamProfile),
       ),
     });
 
@@ -715,7 +702,7 @@ function orderSnapshotFromDbOrder(
     height: String(dbOrder.height),
     theme: dbOrder.theme,
     style: dbOrder.style,
-    quoteTone: dbOrder.quote_tone,
+    quoteTone: dbOrder.quote_tone || "none",
     createdAt: new Date(dbOrder.created_at).toISOString(),
     expiresAt: dbOrder.expires_at
       ? new Date(dbOrder.expires_at).toISOString()
@@ -907,7 +894,6 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
   const ratio = normalizeRatio(payload.ratio, device);
   const theme = normalizeTheme(payload.theme);
   const style = normalizeStyle(payload.style);
-  const quoteTone = normalizeQuoteTone(payload.quoteTone);
   const previewSessionId = stringValue(payload.previewSessionId);
   const website = stringValue(payload.website);
   const mood = stringValue(payload.mood);
@@ -915,6 +901,10 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
     payload.answers && typeof payload.answers === "object"
       ? (payload.answers as Record<string, unknown>)
       : {};
+  const dreamProfile = sanitizeDreamProfile(
+    profileFromStoredAnswers(payload.dreamProfile || answers || emptyVisualOnlyDreamProfile),
+  );
+  const legacyFields = buildLegacyWallpaperFields(dreamProfile);
   const width = numberValue(payload.width);
   const height = numberValue(payload.height);
   const customWidth = numberValue(payload.customWidth) ?? width;
@@ -937,17 +927,16 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
     ratio,
     theme,
     style,
-    goals: stringValue(payload.goals) || stringValue(answers.goals),
-    lifestyle: stringValue(payload.lifestyle) || stringValue(answers.lifestyle),
-    career: stringValue(payload.career) || stringValue(answers.career),
-    personalLife:
-      stringValue(payload.personalLife) || stringValue(answers.personalLife),
-    health: stringValue(payload.health) || stringValue(answers.health),
-    place: stringValue(payload.place) || stringValue(answers.place),
-    feelingWords:
-      stringValue(payload.feelingWords) || stringValue(answers.feelingWords),
-    reminder: stringValue(payload.reminder) || stringValue(answers.reminder),
-    quoteTone,
+    dreamProfile,
+    goals: legacyFields.goals,
+    lifestyle: legacyFields.lifestyle,
+    career: legacyFields.career,
+    personalLife: legacyFields.personalLife,
+    health: legacyFields.health,
+    place: legacyFields.place,
+    feelingWords: legacyFields.feelingWords,
+    reminder: legacyFields.reminder,
+    quoteTone: "none",
     customWidth:
       device === "custom" && validatedCustom?.valid ? validatedCustom.width : undefined,
     customHeight:
@@ -1040,19 +1029,6 @@ function normalizeStyle(value: unknown): WallpaperStyle | "" {
   }
 
   return "";
-}
-
-function normalizeQuoteTone(value: unknown): QuoteTone {
-  if (
-    value === "soft-emotional" ||
-    value === "powerful-confident" ||
-    value === "spiritual-calm" ||
-    value === "none"
-  ) {
-    return value;
-  }
-
-  return "soft-emotional";
 }
 
 function stringValue(value: unknown) {

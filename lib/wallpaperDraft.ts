@@ -7,7 +7,7 @@ import {
   saveDreamState,
 } from "@/lib/clientState";
 import { createPreviewInputHash } from "@/lib/previewHash";
-import { defaultWallpaperInput } from "@/lib/wallpaper";
+import { defaultWallpaperInput, normalizeWallpaperInput } from "@/lib/wallpaper";
 
 export type WallpaperDraft = {
   id: string;
@@ -212,8 +212,9 @@ export function getDraftPreviewSessionId(draftId: string) {
 
 function hydrateLegacyDraft(): WallpaperDraft {
   const now = new Date().toISOString();
-  const input =
-    readJson<WallpaperInput>("dreamWallpaperInput") || { ...defaultWallpaperInput };
+  const input = normalizeWallpaperInput(
+    readJson<WallpaperInput>("dreamWallpaperInput") || { ...defaultWallpaperInput },
+  );
   const previewImageUrl = sessionStorage.getItem("previewImageUrl");
   const previewMeta = readJson<WallpaperMeta>("dreamPreviewMeta");
   const hasPreview = Boolean(previewImageUrl && previewMeta);
@@ -316,6 +317,7 @@ function repairDraft(draft: WallpaperDraft): WallpaperDraft {
 
   return {
     ...draft,
+    input: normalizeWallpaperInput(draft.input),
     previewInputHash,
     previewCreatedAt:
       draft.previewCreatedAt ||

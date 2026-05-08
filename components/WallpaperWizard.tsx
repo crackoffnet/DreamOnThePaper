@@ -30,7 +30,6 @@ import {
 } from "@/lib/clientState";
 import type {
   DeviceType,
-  QuoteTone,
   GenerateResponse,
   ThemeType,
   WallpaperInput,
@@ -42,82 +41,32 @@ import {
   getAspectRatioLabel,
   getWallpaperMeta,
   labels,
-  quoteTones,
   ratioOptions,
   styles,
   themes,
 } from "@/lib/wallpaper";
-import {
-  getPreviewOptimizedLabel,
-} from "@/lib/wallpaperDimensions";
+import { getPreviewOptimizedLabel } from "@/lib/wallpaperDimensions";
 import { createPreviewInputHash } from "@/lib/previewHash";
-
-const questions: Array<{
-  key: keyof Pick<
-    WallpaperInput,
-    | "goals"
-    | "lifestyle"
-    | "career"
-    | "personalLife"
-    | "health"
-    | "place"
-    | "feelingWords"
-    | "reminder"
-  >;
-  label: string;
-  placeholder: string;
-}> = [
-  {
-    key: "goals",
-    label: "What are your top 3 dreams or goals?",
-    placeholder: "A calmer home, strong body, creative freedom...",
-  },
-  {
-    key: "lifestyle",
-    label: "What kind of life are you building?",
-    placeholder: "Soft mornings, focused work, beautiful routines...",
-  },
-  {
-    key: "career",
-    label: "What career, business, or financial goal do you want to see?",
-    placeholder: "A profitable studio, paid-off debt, better clients...",
-  },
-  {
-    key: "personalLife",
-    label: "Who or what matters most in your personal life?",
-    placeholder: "Family, partner, friendships, peace, faith...",
-  },
-  {
-    key: "health",
-    label: "What health, body, or energy goal do you have?",
-    placeholder: "Strength, sleep, glow, calm energy...",
-  },
-  {
-    key: "place",
-    label: "What place, home, or travel dream should appear?",
-    placeholder: "A warm kitchen, Paris, ocean air, a garden...",
-  },
-  {
-    key: "feelingWords",
-    label: "What words describe the feeling of your dream life?",
-    placeholder: "Clear, wealthy, loved, light, disciplined...",
-  },
-  {
-    key: "reminder",
-    label: "What should the wallpaper remind you every day?",
-    placeholder: "I am allowed to build a beautiful life.",
-  },
-];
+import {
+  buildLegacyWallpaperFields,
+  emptyVisualOnlyDreamProfile,
+  getLaunchDreamProfileQuestions,
+  type DreamProfileField,
+  type VisualOnlyDreamProfile,
+} from "@/lib/visualDreamProfile";
 
 const stepTitles = [
   "Choose wallpaper",
   "Choose ratio",
   "Choose theme",
   "Choose style",
-  "Answer prompts",
-  "Quote tone",
+  "Dream profile",
   "Generate",
 ];
+
+const profileQuestions = getLaunchDreamProfileQuestions();
+const visualOnlyCopy =
+  "Your wallpaper will be created as a visual-only dream board. No text or quotes will appear inside the image.";
 
 export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) {
   const router = useRouter();
@@ -133,6 +82,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     nextPreviewAt: null as string | null,
     activeOrderId: null as string | null,
   });
+
   const meta = useMemo(() => getWallpaperMeta(form), [form]);
   const currentPreviewInputHash = useMemo(
     () =>
@@ -163,10 +113,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     if (moodPreset && !appliedMoodRef.current) {
       appliedMoodRef.current = true;
       const nextDraft = createNewWallpaperDraft();
-      const nextInput = {
-        ...nextDraft.input,
-        ...moodPreset,
-      };
+      const nextInput = applyFormPatch(nextDraft.input, moodPreset);
       const savedDraft = saveCurrentDraft({
         ...nextDraft,
         input: nextInput,
@@ -226,24 +173,41 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     };
   }, []);
 
-  function update<K extends keyof WallpaperInput>(
-    key: K,
-    value: WallpaperInput[K],
-  ) {
+  function setDevice(device: DeviceType) {
+    setError("");
     setForm((current) => {
-      const next = { ...current, [key]: value };
+      const next = applyFormPatch(current, {
+        device,
+        ratio: ratioOptions[device][0],
+      });
       setDraft(updateDraftInput(next));
       return next;
     });
   }
 
-  function setDevice(device: DeviceType) {
+  function update<K extends keyof WallpaperInput>(key: K, value: WallpaperInput[K]) {
+    setError("");
     setForm((current) => {
-      const next = {
-        ...current,
-        device,
-        ratio: ratioOptions[device][0],
-      };
+      const next = applyFormPatch(current, { [key]: value } as Partial<WallpaperInput>);
+      setDraft(updateDraftInput(next));
+      return next;
+    });
+  }
+
+  function updateDreamProfile(
+    key: DreamProfileField,
+    values: string[],
+    otherKey?: keyof VisualOnlyDreamProfile,
+    otherValue?: string,
+  ) {
+    setError("");
+    setForm((current) => {
+      const nextProfile = {
+        ...current.dreamProfile,
+        [key]: values,
+        ...(otherKey ? { [otherKey]: otherValue ?? current.dreamProfile[otherKey] } : {}),
+      } as VisualOnlyDreamProfile;
+      const next = applyFormPatch(current, { dreamProfile: nextProfile });
       setDraft(updateDraftInput(next));
       return next;
     });
@@ -253,6 +217,14 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     setError("");
     if ((step === 0 || step === 1) && form.device === "custom") {
       const issue = getCustomSizeIssue(form);
+      if (issue) {
+        setError(issue);
+        return;
+      }
+    }
+
+    if (step === 4) {
+      const issue = getDreamProfileIssue(form.dreamProfile);
       if (issue) {
         setError(issue);
         return;
@@ -288,26 +260,10 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     setError("");
     const currentIndex = styles.indexOf(form.style);
     const nextStyle = styles[(currentIndex + 1) % styles.length];
-    const nextInput = {
-      ...form,
-      style: nextStyle,
-    };
+    const nextInput = applyFormPatch(form, { style: nextStyle });
     setForm(nextInput);
     setDraft(updateDraftInput(nextInput));
     await runPreviewGeneration(nextInput);
-  }
-
-  function startNewWallpaper() {
-    const nextDraft = createNewWallpaperDraft();
-    setDraft(nextDraft);
-    setForm(nextDraft.input);
-    setPreviewAvailability((current) => ({
-      ...current,
-      activeOrderId: null,
-    }));
-    setError("");
-    setIsGenerating(false);
-    setStep(0);
   }
 
   async function runPreviewGeneration(nextInput: WallpaperInput) {
@@ -315,6 +271,11 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
     setIsGenerating(true);
 
     try {
+      const profileIssue = getDreamProfileIssue(nextInput.dreamProfile);
+      if (profileIssue) {
+        throw new Error(profileIssue);
+      }
+
       const activeDraft = saveCurrentDraft({
         ...(draft || getCurrentDraft()),
         input: nextInput,
@@ -350,16 +311,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           width,
           height,
           mood: initialMood || nextInput.style,
-          answers: {
-            goals: nextInput.goals,
-            lifestyle: nextInput.lifestyle,
-            career: nextInput.career,
-            personalLife: nextInput.personalLife,
-            health: nextInput.health,
-            place: nextInput.place,
-            feelingWords: nextInput.feelingWords,
-            reminder: nextInput.reminder,
-          },
+          dreamProfile: nextInput.dreamProfile,
+          answers: nextInput.dreamProfile,
           orderId: activeDraft.orderId || undefined,
           orderToken: activeDraft.orderToken || undefined,
           website,
@@ -513,34 +466,36 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         ) : null}
 
         {step === 4 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {questions.map((question) => (
-              <label key={question.key} className="block">
-                <span className="mb-1.5 block text-xs font-semibold text-cocoa">
-                  {question.label}
-                </span>
-                <textarea
-                  className="field min-h-20 resize-y"
-                  maxLength={300}
-                  value={form[question.key]}
-                  placeholder={question.placeholder}
-                  onChange={(event) => update(question.key, event.target.value)}
-                />
-              </label>
+          <div className="grid gap-5">
+            {profileQuestions.map((question) => (
+              <DreamProfileQuestionCard
+                key={question.id}
+                question={question}
+                profile={form.dreamProfile}
+                onChange={updateDreamProfile}
+              />
             ))}
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-cocoa">
+                Is there a specific goal, dream, person, place, or detail you want us to include?
+              </span>
+              <textarea
+                className="field min-h-24 resize-y"
+                maxLength={500}
+                placeholder="I want a peaceful home with a garden and pool. I want family energy but no clear faces. I want business success and travel energy."
+                value={form.dreamProfile.customNotes || ""}
+                onChange={(event) =>
+                  update("dreamProfile", {
+                    ...form.dreamProfile,
+                    customNotes: event.target.value,
+                  })
+                }
+              />
+            </label>
           </div>
         ) : null}
 
         {step === 5 ? (
-          <OptionGrid
-            options={quoteTones}
-            value={form.quoteTone}
-            getLabel={(option) => labels.quoteTones[option]}
-            onChange={(quoteTone) => update("quoteTone", quoteTone)}
-          />
-        ) : null}
-
-        {step === 6 ? (
           <div className="grid gap-4">
             <div className="rounded-2xl border border-cocoa/10 bg-white/60 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
@@ -552,32 +507,33 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                   : "Ready to create preview"}
               </div>
               <div className="grid gap-2 text-sm text-taupe sm:grid-cols-2">
-                <p>Device: {labels.devices[form.device]}</p>
-                <p>Ratio: {getAspectRatioLabel(form)}</p>
+                <p>Wallpaper type: {labels.devices[form.device]}</p>
+                <p>Selected size: {getAspectRatioLabel(form)}</p>
                 <p>Theme: {labels.themes[form.theme]}</p>
                 <p>Style: {labels.styles[form.style]}</p>
               </div>
+              <p className="mt-3 text-sm leading-6 text-taupe">{visualOnlyCopy}</p>
             </div>
             {draft?.previewImageUrl ? (
               <div className="rounded-2xl border border-gold/20 bg-white/70 p-4">
                 <p className="text-sm leading-6 text-taupe">
                   {isPreviewStale
                     ? "Your answers changed. Generate a new preview to see the updated concept."
-                    : "You can review it, edit your answers, or unlock the full wallpaper download."}
+                    : "You can review the visual direction, adjust your selections, or unlock the full wallpaper."}
                 </p>
                 <div className="mt-3 overflow-hidden rounded-2xl border border-white/70 bg-linen">
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={draft.previewImageUrl}
-                      alt="Generated wallpaper preview"
+                      alt="Generated visual wallpaper preview"
                       className="max-h-72 w-full scale-[1.02] object-cover blur-[1.4px] saturate-75"
                     />
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/5 via-transparent to-ink/35" />
                     <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/50 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold backdrop-blur">
                       {isPreviewStale
                         ? "Preview from previous answers"
-                        : "Low-resolution preview"}
+                        : "Low-resolution visual preview"}
                     </div>
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       <span className="-rotate-12 text-4xl font-serif italic tracking-[0.1em] text-white/28">
@@ -641,7 +597,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               </div>
             ) : null}
             {isGenerating || draft?.previewStatus === "generating" ? (
-              <LoadingGeneration label="Creating your preview..." />
+              <LoadingGeneration label="Creating your visual preview..." />
             ) : null}
             {draft?.previewStatus === "failed" && !isGenerating && !error ? (
               <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -719,8 +675,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                 <div className="h-10 rounded-xl bg-[#c9b58e]" />
               </div>
             </div>
-            <p className="font-serif text-lg leading-tight text-ink">
-              {form.reminder || "Your vision, quietly visible."}
+            <p className="text-sm leading-6 text-ink">
+              Visual-only dream board preview. Calm composition, elegant imagery, and no text inside the artwork.
             </p>
           </div>
         </div>
@@ -728,11 +684,89 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           <p className="font-semibold text-cocoa">Preview frame</p>
           <p>{labels.devices[form.device]}</p>
           <p>{getAspectRatioLabel(form)}</p>
-          <p>Preview generated for this format</p>
+          <p>Low-resolution visual preview</p>
           <p className="text-gold">{getPreviewOptimizedLabel(form)}</p>
         </div>
       </aside>
     </form>
+  );
+}
+
+function DreamProfileQuestionCard({
+  question,
+  profile,
+  onChange,
+}: {
+  question: (typeof profileQuestions)[number];
+  profile: VisualOnlyDreamProfile;
+  onChange: (
+    key: DreamProfileField,
+    values: string[],
+    otherKey?: keyof VisualOnlyDreamProfile,
+    otherValue?: string,
+  ) => void;
+}) {
+  const selected = profile[question.id];
+  const otherKey = question.otherKey;
+  const otherValue = (profile[otherKey] as string | undefined) || "";
+
+  function toggleOption(option: string) {
+    const next = selected.includes(option)
+      ? selected.filter((value) => value !== option)
+      : selected.length < question.maxSelections
+        ? [...selected, option]
+        : selected;
+    onChange(question.id, next, otherKey, otherValue);
+  }
+
+  return (
+    <section className="rounded-2xl border border-cocoa/10 bg-white/55 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">{question.title}</p>
+          <p className="mt-1 text-xs text-taupe">
+            Choose {question.minSelections} to {question.maxSelections}.
+          </p>
+        </div>
+        <div className="rounded-full border border-cocoa/10 bg-white px-2.5 py-1 text-[11px] text-taupe">
+          {selected.length}/{question.maxSelections}
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {question.options.map((option) => {
+          const active = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => toggleOption(option)}
+              className={`focus-ring rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
+                active
+                  ? "border-gold bg-white text-ink shadow-sm"
+                  : "border-cocoa/10 bg-white/65 text-cocoa hover:bg-white"
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      {selected.includes("Other") ? (
+        <label className="mt-3 block">
+          <span className="mb-1.5 block text-xs font-semibold text-cocoa">
+            Tell us your specific detail
+          </span>
+          <input
+            className="field"
+            maxLength={180}
+            value={otherValue}
+            onChange={(event) =>
+              onChange(question.id, selected, otherKey, event.target.value)
+            }
+          />
+        </label>
+      ) : null}
+    </section>
   );
 }
 
@@ -745,52 +779,73 @@ function checkoutHref(draft: WallpaperDraft) {
 }
 
 function getMoodPreset(value: string | null):
-  | Pick<WallpaperInput, "style" | "theme" | "quoteTone" | "feelingWords">
+  | {
+      style: WallpaperStyle;
+      theme: ThemeType;
+      dreamProfile: Partial<VisualOnlyDreamProfile>;
+    }
   | null {
   const presets: Record<
     string,
     {
       style: WallpaperStyle;
       theme: ThemeType;
-      quoteTone: QuoteTone;
-      feelingWords: string;
+      dreamProfile: Partial<VisualOnlyDreamProfile>;
     }
   > = {
     "soft-luxury": {
       style: "soft-luxury",
       theme: "light",
-      quoteTone: "soft-emotional",
-      feelingWords: "gentle, elegant, calm, expensive",
+      dreamProfile: {
+        desiredFeelings: ["Calm", "Feminine and soft"],
+        colorMood: ["Soft beige and cream", "Warm golden tones"],
+        visualStyle: ["Soft luxury realism", "Luxury aesthetic"],
+      },
     },
     "wealth-business": {
       style: "wealth-business",
       theme: "dark",
-      quoteTone: "powerful-confident",
-      feelingWords: "confident, focused, calm, abundant",
+      dreamProfile: {
+        desiredFeelings: ["Focused", "Abundant"],
+        successType: ["Profitable business", "Leadership and influence"],
+        visualStyle: ["Modern editorial", "High-end Pinterest style"],
+      },
     },
     "nature-reset": {
       style: "nature",
       theme: "light",
-      quoteTone: "spiritual-calm",
-      feelingWords: "calm, grounded, fresh, growing",
+      dreamProfile: {
+        desiredFeelings: ["Peaceful", "Calm"],
+        dreamScenes: ["Nature and peace", "Travel scenery"],
+        colorMood: ["Earthy green and brown", "Ocean blue and sand"],
+      },
     },
     "fitness-health": {
       style: "fitness-health",
       theme: "light",
-      quoteTone: "powerful-confident",
-      feelingWords: "strong, steady, clear, energized",
+      dreamProfile: {
+        desiredFeelings: ["Motivated", "Strong and unstoppable"],
+        dreamScenes: ["Fitness and wellness", "Healthy lifestyle"],
+        successType: ["Strong discipline", "Becoming the best version of myself"],
+      },
     },
     "family-home": {
       style: "family-home",
       theme: "light",
-      quoteTone: "soft-emotional",
-      feelingWords: "warm, grateful, rooted, lasting",
+      dreamProfile: {
+        desiredFeelings: ["Loved", "Grateful"],
+        dreamScenes: ["Family moments", "Beautiful home"],
+        dreamEnvironment: ["Warm family kitchen", "Cozy house in nature"],
+      },
     },
     "freedom-travel": {
       style: "freedom-travel",
       theme: "light",
-      quoteTone: "soft-emotional",
-      feelingWords: "expansive, free, light, open",
+      dreamProfile: {
+        desiredFeelings: ["Free", "Hopeful"],
+        dreamScenes: ["Travel scenery", "Luxury details"],
+        successType: ["Freedom with my time", "Traveling more"],
+      },
     },
   };
 
@@ -811,7 +866,7 @@ function formatPreviewError(data: GenerateResponse) {
     data.code === "PREVIEW_AI_FAILED" ||
     data.code === "PREVIEW_AI_UNAVAILABLE"
   ) {
-    return "We couldn’t create your preview right now. Please try again.";
+    return "We couldn't create your preview right now. Please try again.";
   }
 
   if (data.code === "PREVIEW_INVALID_INPUT") {
@@ -823,7 +878,7 @@ function formatPreviewError(data: GenerateResponse) {
   }
 
   if (data.code === "PREVIEW_ENTITLEMENT_UNAVAILABLE") {
-    return "We couldn’t create your preview right now. Please try again soon.";
+    return "We couldn't create your preview right now. Please try again soon.";
   }
 
   if (data.code === "PREVIEW_INTERNAL_ERROR") {
@@ -853,7 +908,7 @@ function CustomSizeFields({ form, onChange }: CustomSizeFieldsProps) {
     <div className="rounded-2xl border border-cocoa/10 bg-white/55 p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-ink">Custom size (max 4K)</p>
+          <p className="text-sm font-semibold text-ink">Custom size</p>
           <p className="mt-1 text-xs text-taupe">
             Use this if your device is not listed.
           </p>
@@ -932,6 +987,51 @@ function getCustomSizeIssue(form: WallpaperInput) {
   }
 
   return "";
+}
+
+function getDreamProfileIssue(profile: VisualOnlyDreamProfile) {
+  for (const question of profileQuestions) {
+    const selected = profile[question.id];
+    if (selected.length < question.minSelections || selected.length > question.maxSelections) {
+      return `${question.title} needs ${question.minSelections}-${question.maxSelections} selections.`;
+    }
+    if (
+      selected.includes("Other") &&
+      !String(profile[question.otherKey] || "").trim()
+    ) {
+      return `${question.title} needs a short note for Other.`;
+    }
+  }
+
+  return "";
+}
+
+function applyFormPatch(
+  current: WallpaperInput,
+  patch: Partial<Omit<WallpaperInput, "dreamProfile">> & {
+    dreamProfile?: Partial<VisualOnlyDreamProfile>;
+  },
+): WallpaperInput {
+  const next = {
+    ...current,
+    ...patch,
+    dreamProfile: patch.dreamProfile
+      ? { ...current.dreamProfile, ...patch.dreamProfile }
+      : current.dreamProfile,
+  };
+  const legacyFields = buildLegacyWallpaperFields(next.dreamProfile || emptyVisualOnlyDreamProfile);
+  return {
+    ...next,
+    goals: legacyFields.goals,
+    lifestyle: legacyFields.lifestyle,
+    career: legacyFields.career,
+    personalLife: legacyFields.personalLife,
+    health: legacyFields.health,
+    place: legacyFields.place,
+    feelingWords: legacyFields.feelingWords,
+    reminder: legacyFields.reminder,
+    quoteTone: "none",
+  };
 }
 
 type OptionGridProps<T extends string> = {

@@ -3,6 +3,7 @@ import {
   getOpenAIImageSize,
   type OpenAIImageSize,
 } from "@/lib/openaiImageSize";
+import { emptyVisualOnlyDreamProfile } from "@/lib/visualDreamProfile";
 
 export type WallpaperPresetCategory = "mobile" | "tablet" | "desktop" | "custom";
 
@@ -162,6 +163,7 @@ export function getWallpaperPresetForSelection(selection: {
     customHeight: selection.customHeight || undefined,
     theme: "light",
     style: "soft-luxury",
+    dreamProfile: { ...emptyVisualOnlyDreamProfile },
     goals: "",
     lifestyle: "",
     career: "",
@@ -170,7 +172,7 @@ export function getWallpaperPresetForSelection(selection: {
     place: "",
     feelingWords: "",
     reminder: "",
-    quoteTone: "soft-emotional",
+    quoteTone: "none",
   });
 }
 

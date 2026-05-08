@@ -1,23 +1,73 @@
 import { z } from "zod";
 import { wallpaperProductIds } from "@/lib/wallpaperProducts";
+import { devices, isValidRatioForDevice, ratioOptions, styles, themes } from "@/lib/wallpaper";
 import {
-  devices,
-  isValidRatioForDevice,
-  quoteTones,
-  ratioOptions,
-  styles,
-  themes,
-} from "@/lib/wallpaper";
+  dreamProfileQuestions,
+  emptyVisualOnlyDreamProfile,
+  hasMeaningfulDreamProfile,
+  sanitizeDreamProfile,
+} from "@/lib/visualDreamProfile";
 
 const textField = z
   .string()
-  .max(300)
+  .max(500)
   .transform((value) =>
     value
       .replace(/[\u0000-\u001F\u007F]/g, " ")
       .replace(/\s+/g, " ")
       .trim(),
   );
+
+const stringArrayField = z.array(z.string().max(120)).max(6);
+
+export const dreamProfileSchema = z
+  .object({
+    futureLife: stringArrayField,
+    futureLifeOther: textField.optional().default(""),
+    currentGoals: stringArrayField,
+    currentGoalsOther: textField.optional().default(""),
+    desiredFeelings: stringArrayField,
+    desiredFeelingsOther: textField.optional().default(""),
+    dreamScenes: stringArrayField,
+    dreamScenesOther: textField.optional().default(""),
+    dreamEnvironment: stringArrayField,
+    dreamEnvironmentOther: textField.optional().default(""),
+    successType: stringArrayField,
+    successTypeOther: textField.optional().default(""),
+    colorMood: stringArrayField,
+    colorMoodOther: textField.optional().default(""),
+    visualStyle: stringArrayField,
+    visualStyleOther: textField.optional().default(""),
+    compositionStyle: stringArrayField,
+    compositionStyleOther: textField.optional().default(""),
+    deviceType: z.array(z.string().max(120)).max(3),
+    deviceTypeOther: textField.optional().default(""),
+    customNotes: textField.optional().default(""),
+  })
+  .transform((profile) => sanitizeDreamProfile({ ...emptyVisualOnlyDreamProfile, ...profile }))
+  .superRefine((profile, context) => {
+    for (const question of dreamProfileQuestions) {
+      const values = profile[question.id];
+      if (values.length < question.minSelections || values.length > question.maxSelections) {
+        context.addIssue({
+          code: "custom",
+          message: `Choose ${question.minSelections}-${question.maxSelections} options.`,
+          path: [question.id],
+        });
+      }
+
+      if (
+        values.includes("Other") &&
+        !String(profile[question.otherKey] || "").trim()
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Add a short note for Other.",
+          path: [question.otherKey as string],
+        });
+      }
+    }
+  });
 
 export const wallpaperInputSchema = z
   .object({
@@ -30,36 +80,26 @@ export const wallpaperInputSchema = z
     ]),
     theme: z.enum(themes),
     style: z.enum(styles),
-    goals: textField,
-    lifestyle: textField,
-    career: textField,
-    personalLife: textField,
-    health: textField,
-    place: textField,
-    feelingWords: textField,
-    reminder: textField,
-    quoteTone: z.enum(quoteTones),
+    dreamProfile: dreamProfileSchema,
+    goals: textField.default(""),
+    lifestyle: textField.default(""),
+    career: textField.default(""),
+    personalLife: textField.default(""),
+    health: textField.default(""),
+    place: textField.default(""),
+    feelingWords: textField.default(""),
+    reminder: textField.default(""),
+    quoteTone: z.string().max(40).optional().default("none"),
     customWidth: z.number().int().min(512).max(3840).optional(),
     customHeight: z.number().int().min(512).max(3840).optional(),
     website: z.string().max(0).optional().or(z.literal("")),
   })
   .superRefine((input, context) => {
-    const totalInputLength = [
-      input.goals,
-      input.lifestyle,
-      input.career,
-      input.personalLife,
-      input.health,
-      input.place,
-      input.feelingWords,
-      input.reminder,
-    ].join(" ").length;
-
-    if (totalInputLength > 1800) {
+    if (!hasMeaningfulDreamProfile(input.dreamProfile)) {
       context.addIssue({
         code: "custom",
-        message: "Please shorten your answers before generating.",
-        path: ["goals"],
+        message: "Please complete the dream profile before generating.",
+        path: ["dreamProfile"],
       });
     }
 
@@ -102,17 +142,19 @@ export const previewGenerationSchema = wallpaperInputSchema.extend({
   previewSessionId: z.string().min(16).max(120),
 });
 
-export const checkoutSchema = z.object({
-  wallpaperType: z.enum(wallpaperProductIds).optional(),
-  packageType: z.string().max(40).optional(),
-  orderId: z.string().min(8).max(120).optional(),
-  orderToken: z.string().min(24).max(12000).optional(),
-  orderSnapshotToken: z.string().min(24).max(12000).optional(),
-  website: z.string().max(0).optional().or(z.literal("")),
-}).refine((input) => Boolean(input.orderId || input.orderToken), {
-  message: "Create your preview first.",
-  path: ["orderId"],
-});
+export const checkoutSchema = z
+  .object({
+    wallpaperType: z.enum(wallpaperProductIds).optional(),
+    packageType: z.string().max(40).optional(),
+    orderId: z.string().min(8).max(120).optional(),
+    orderToken: z.string().min(24).max(12000).optional(),
+    orderSnapshotToken: z.string().min(24).max(12000).optional(),
+    website: z.string().max(0).optional().or(z.literal("")),
+  })
+  .refine((input) => Boolean(input.orderId || input.orderToken), {
+    message: "Create your preview first.",
+    path: ["orderId"],
+  });
 
 export const orderTokenSchema = z.object({
   orderToken: z.string().min(24).max(12000),
@@ -137,29 +179,20 @@ export const verifyPaymentSchema = z
     path: ["session_id"],
   });
 
-export const emailWallpaperSchema = z.object({
-  email: z.string().email().max(254),
-  finalGenerationToken: z.string().min(24).max(12000).optional(),
-  resultAccessToken: z.string().min(24).max(12000).optional(),
-  website: z.string().max(0).optional().or(z.literal("")),
-}).refine((input) => Boolean(input.finalGenerationToken || input.resultAccessToken), {
-  message: "Missing paid result access token.",
-  path: ["resultAccessToken"],
-});
+export const emailWallpaperSchema = z
+  .object({
+    email: z.string().email().max(254),
+    finalGenerationToken: z.string().min(24).max(12000).optional(),
+    resultAccessToken: z.string().min(24).max(12000).optional(),
+    website: z.string().max(0).optional().or(z.literal("")),
+  })
+  .refine((input) => Boolean(input.finalGenerationToken || input.resultAccessToken), {
+    message: "Missing paid result access token.",
+    path: ["resultAccessToken"],
+  });
 
 export function hasMeaningfulInput(input: z.infer<typeof wallpaperInputSchema>) {
-  const joined = [
-    input.goals,
-    input.lifestyle,
-    input.career,
-    input.personalLife,
-    input.health,
-    input.place,
-    input.feelingWords,
-    input.reminder,
-  ].join(" ");
-
-  return joined.replace(/\s/g, "").length >= 12;
+  return hasMeaningfulDreamProfile(input.dreamProfile);
 }
 
 export function containsAbusiveInput(value: string) {

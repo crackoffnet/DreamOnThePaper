@@ -338,8 +338,8 @@ export function ResultPreview() {
         </h1>
         <div className="mt-4 grid gap-2 text-sm text-taupe">
           <DetailRow label="Wallpaper type" value={wallpaperTypeLabel} />
-          <DetailRow label="Selected format" value={selectedSizeLabel} />
-          <DetailRow label="Final file" value={`PNG - ${actualDimensionsLabel}`} />
+          <DetailRow label="Selected size" value={selectedSizeLabel} />
+          <DetailRow label="Final file" value={`PNG · ${actualDimensionsLabel}`} />
           <DetailRow label="Style" value={labels.styles[meta.style]} />
           <DetailRow label="Theme" value={labels.themes[meta.theme]} />
           <DetailRow label="Format" value="PNG" />
@@ -359,7 +359,7 @@ export function ResultPreview() {
             </p>
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            {bestFitCopy(result.wallpaperType || meta.device)}
+            Delivered in your selected device size.
           </p>
           <Link
             href="/create"
@@ -432,7 +432,7 @@ function AssetPreviewCard({
         <p className="text-sm font-medium text-ink">{captionLabel}</p>
         <p className="text-xs text-taupe">{dimensionsLabel}</p>
         <p className="text-xs font-medium text-taupe">
-          Final PNG - High-resolution - No preview watermark
+          Final PNG · High-resolution · Visual-only · No preview watermark
         </p>
       </div>
     </div>

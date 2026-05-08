@@ -1,3 +1,5 @@
+import type { VisualOnlyDreamProfile } from "@/lib/visualDreamProfile";
+
 export type DeviceType = "mobile" | "desktop" | "tablet" | "custom";
 export type RatioType =
   | "iphone-17-pro-max"
@@ -27,6 +29,7 @@ export type WallpaperInput = {
   ratio: RatioType;
   theme: ThemeType;
   style: WallpaperStyle;
+  dreamProfile: VisualOnlyDreamProfile;
   goals: string;
   lifestyle: string;
   career: string;
@@ -45,7 +48,7 @@ export type WallpaperMeta = {
   ratio: RatioType;
   theme: ThemeType;
   style: WallpaperStyle;
-  quoteTone: QuoteTone;
+  quoteTone?: QuoteTone;
   presetId: string;
   selectedLabel: string;
   ratioLabel: string;
