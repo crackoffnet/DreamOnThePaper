@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/cloudflare";
+import { getOrdersColumns } from "@/lib/dbSchema";
 import { getRuntimeEnv } from "@/lib/env";
 import type { RequestMetadata } from "@/lib/requestMetadata";
 
@@ -148,9 +149,13 @@ export async function updateOrderStatus(
       .prepare("SELECT status FROM orders WHERE id = ?")
       .bind(orderId)
       .first<{ status: string }>();
+    const supportedColumns = await getOrdersColumns(db);
     const now = Date.now();
     const entries = Object.entries(extraFields).filter(
-      ([key, value]) => orderUpdateColumns.has(key) && value !== undefined,
+      ([key, value]) =>
+        orderUpdateColumns.has(key) &&
+        value !== undefined &&
+        supportedColumns.has(key),
     );
     const setColumns = ["status = ?", "updated_at = ?"];
     const values: D1Value[] = [statusAfter, now];
@@ -191,8 +196,27 @@ export async function patchOrderTracking(
   fields: Record<string, D1Value | undefined | null>,
 ) {
   try {
+    const db = getDb();
+    const supportedColumns = await getOrdersColumns(db);
+    const missingColumns = Object.keys(fields).filter(
+      (key) =>
+        orderUpdateColumns.has(key) &&
+        fields[key] !== undefined &&
+        !supportedColumns.has(key),
+    );
+    if (missingColumns.length > 0) {
+      console.warn("[orders]", {
+        orderId,
+        failureReason: "Optional order columns missing, falling back to legacy update",
+        missingColumns,
+      });
+    }
+
     const entries = Object.entries(fields).filter(
-      ([key, value]) => orderUpdateColumns.has(key) && value !== undefined,
+      ([key, value]) =>
+        orderUpdateColumns.has(key) &&
+        value !== undefined &&
+        supportedColumns.has(key),
     );
 
     if (entries.length === 0) {
@@ -209,7 +233,7 @@ export async function patchOrderTracking(
     }
 
     values.push(orderId);
-    await getDb()
+    await db
       .prepare(`UPDATE orders SET ${setColumns.join(", ")} WHERE id = ?`)
       .bind(...values)
       .run();

@@ -11,6 +11,7 @@ import type {
   WallpaperStyle,
 } from "@/lib/types";
 import { getDb } from "@/lib/cloudflare";
+import { getOrdersColumns } from "@/lib/dbSchema";
 import { getWallpaperMeta } from "@/lib/wallpaper";
 
 export type FinalAssetType =
@@ -109,7 +110,17 @@ export async function createOrder(input: WallpaperInput) {
   const meta = getWallpaperMeta(input);
   const [width, height] = meta.imageSize.split("x").map(Number);
 
-  try {
+  const orderColumns = await getOrdersColumns(db);
+  const hasExactSizingColumns =
+    orderColumns.has("wallpaper_type") &&
+    orderColumns.has("preset_id") &&
+    orderColumns.has("ratio_label") &&
+    orderColumns.has("final_width") &&
+    orderColumns.has("final_height") &&
+    orderColumns.has("output_format") &&
+    orderColumns.has("generation_status");
+
+  if (hasExactSizingColumns) {
     await db
       .prepare(
         `INSERT INTO orders (
@@ -144,14 +155,18 @@ export async function createOrder(input: WallpaperInput) {
         now + ORDER_TTL_SECONDS * 1000,
       )
       .run();
-  } catch (error) {
-    if (!isLegacyOrderColumnError(error)) {
-      throw error;
-    }
-
+  } else {
     console.warn("[orders]", {
       failureReason: "orders exact sizing columns missing, using legacy insert",
-      errorMessage: error instanceof Error ? error.message : "Unknown D1 error",
+      missingColumns: [
+        "wallpaper_type",
+        "preset_id",
+        "ratio_label",
+        "final_width",
+        "final_height",
+        "output_format",
+        "generation_status",
+      ].filter((column) => !orderColumns.has(column)),
     });
 
     await db
@@ -334,13 +349,33 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
 
 export async function attachPreviewImage(orderId: string, previewR2Key: string) {
   const now = Date.now();
-  await getDb()
+  const db = getDb();
+  const columns = await getOrdersColumns(db);
+  const hasPreviewAssetKey = columns.has("preview_asset_key");
+
+  if (!hasPreviewAssetKey) {
+    console.warn("[orders]", {
+      orderId,
+      failureReason: "Optional order columns missing, falling back to legacy update",
+      missingColumn: "preview_asset_key",
+    });
+  }
+
+  await db
     .prepare(
-      `UPDATE orders
-       SET preview_r2_key = ?, preview_asset_key = ?, preview_generated_at = ?, updated_at = ?
-       WHERE id = ?`,
+      hasPreviewAssetKey
+        ? `UPDATE orders
+           SET preview_r2_key = ?, preview_asset_key = ?, preview_generated_at = ?, updated_at = ?
+           WHERE id = ?`
+        : `UPDATE orders
+           SET preview_r2_key = ?, preview_generated_at = ?, updated_at = ?
+           WHERE id = ?`,
     )
-    .bind(previewR2Key, previewR2Key, now, now, orderId)
+    .bind(
+      ...(hasPreviewAssetKey
+        ? [previewR2Key, previewR2Key, now, now, orderId]
+        : [previewR2Key, now, now, orderId]),
+    )
     .run();
 
   return getOrder(orderId);
@@ -352,54 +387,38 @@ export async function replacePreviewImage(input: {
   previewInputHash: string;
 }) {
   const now = Date.now();
-  try {
-    await getDb()
-      .prepare(
-        `UPDATE orders
-         SET preview_r2_key = ?,
-             preview_asset_key = ?,
-             preview_input_hash = ?,
-             preview_stale = 0,
-             preview_generated_at = ?,
-             updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(
-        input.previewR2Key,
-        input.previewR2Key,
-        input.previewInputHash,
-        now,
-        now,
-        input.orderId,
-      )
-      .run();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (
-      !message.includes("no such column: preview_input_hash") &&
-      !message.includes("no such column: preview_stale")
-    ) {
-      throw error;
-    }
+  const db = getDb();
+  const columns = await getOrdersColumns(db);
+  const setClauses = ["preview_r2_key = ?", "preview_generated_at = ?", "updated_at = ?"];
+  const values: D1Value[] = [input.previewR2Key, now, now];
 
-    await getDb()
-      .prepare(
-        `UPDATE orders
-         SET preview_r2_key = ?,
-             preview_asset_key = ?,
-             preview_generated_at = ?,
-             updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(
-        input.previewR2Key,
-        input.previewR2Key,
-        now,
-        now,
-        input.orderId,
-      )
-      .run();
+  if (columns.has("preview_asset_key")) {
+    setClauses.splice(1, 0, "preview_asset_key = ?");
+    values.splice(1, 0, input.previewR2Key);
+  } else {
+    console.warn("[orders]", {
+      orderId: input.orderId,
+      failureReason: "Optional order columns missing, falling back to legacy update",
+      missingColumn: "preview_asset_key",
+    });
   }
+
+  if (columns.has("preview_input_hash")) {
+    setClauses.splice(setClauses.length - 2, 0, "preview_input_hash = ?");
+    values.splice(values.length - 2, 0, input.previewInputHash);
+  }
+
+  if (columns.has("preview_stale")) {
+    setClauses.splice(setClauses.length - 2, 0, "preview_stale = ?");
+    values.splice(values.length - 2, 0, 0);
+  }
+
+  values.push(input.orderId);
+
+  await db
+    .prepare(`UPDATE orders SET ${setClauses.join(", ")} WHERE id = ?`)
+    .bind(...values)
+    .run();
 
   return getOrder(input.orderId);
 }

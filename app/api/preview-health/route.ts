@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { getOptionalCloudflareBindings } from "@/lib/cloudflare";
+import { getOrdersColumns, hasTable } from "@/lib/dbSchema";
 import { getRuntimeEnv } from "@/lib/env";
 
 export async function GET() {
   const env = getRuntimeEnv();
   const bindings = getOptionalCloudflareBindings();
-  const hasPreviewEntitlementsTable = await hasTable(
-    bindings.DB,
-    "preview_entitlements",
-  );
-  const hasBrowserSessionsTable = await hasTable(bindings.DB, "browser_sessions");
-  const hasPreviewAttemptsTable = await hasTable(bindings.DB, "preview_attempts");
+  const hasPreviewEntitlementsTable = bindings.DB
+    ? await hasTable(bindings.DB, "preview_entitlements")
+    : false;
+  const hasBrowserSessionsTable = bindings.DB
+    ? await hasTable(bindings.DB, "browser_sessions")
+    : false;
+  const hasPreviewAttemptsTable = bindings.DB
+    ? await hasTable(bindings.DB, "preview_attempts")
+    : false;
+  const ordersColumns = bindings.DB ? await getOrdersColumns(bindings.DB) : new Set<string>();
 
   return NextResponse.json(
     {
@@ -28,6 +33,11 @@ export async function GET() {
         bindings.DB && hasPreviewEntitlementsTable && hasBrowserSessionsTable && hasPreviewAttemptsTable,
       ),
       abuseRateLimitEnabled: Boolean(bindings.DREAM_RATE_LIMITS),
+      ordersColumns: {
+        hasPresetId: ordersColumns.has("preset_id"),
+        hasPreviewAssetKey: ordersColumns.has("preview_asset_key"),
+        hasPreviewInputHash: ordersColumns.has("preview_input_hash"),
+      },
       supportedImageSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"],
     },
     {
@@ -37,28 +47,4 @@ export async function GET() {
       },
     },
   );
-}
-
-async function hasTable(
-  db: D1Database | undefined,
-  tableName: string,
-) {
-  if (!db) {
-    return false;
-  }
-
-  try {
-    const statement = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .bind(tableName);
-    const result = await statement.first<{ name?: string }>();
-    return result?.name === tableName;
-  } catch (error) {
-    console.warn("[preview-health]", {
-      failureReason: "Unable to inspect table",
-      tableName,
-      errorMessage: error instanceof Error ? error.message : "Unknown schema error",
-    });
-    return false;
-  }
 }
