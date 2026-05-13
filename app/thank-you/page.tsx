@@ -1,7 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { ResultPreview } from "@/components/ResultPreview";
+
+export const metadata: Metadata = {
+  title: "Wallpaper Result | Dream On The Paper",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function ThankYouPage() {
   return (

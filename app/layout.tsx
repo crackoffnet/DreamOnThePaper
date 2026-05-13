@@ -18,9 +18,9 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Dream On The Paper | AI Vision Board Wallpapers",
+  title: "Dream On The Paper | Personalized Dream Visualization Wallpapers",
   description:
-    "Create personalized AI-generated phone, desktop, and tablet wallpapers based on your goals, dreams, and vision.",
+    "Create a personalized visual-only dream visualization wallpaper based on your goals, dreams, mood, style, and device. Preview your concept, then download a clean high-resolution PNG.",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.PUBLIC_SITE_URL ||
@@ -38,9 +38,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
-    title: "Dream On The Paper | AI Vision Board Wallpapers",
+    title: "Dream On The Paper | Personalized Dream Visualization Wallpapers",
     description:
-      "Create personalized AI-generated phone, desktop, and tablet wallpapers based on your goals, dreams, and vision.",
+      "Create a personalized visual-only dream visualization wallpaper based on your goals, dreams, mood, style, and device. Preview your concept, then download a clean high-resolution PNG.",
     url: "/",
     siteName: "Dream On The Paper",
     images: [
@@ -48,16 +48,16 @@ export const metadata: Metadata = {
         url: "/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "Dream On The Paper AI vision board wallpaper preview",
+        alt: "Dream On The Paper personalized dream visualization wallpaper preview",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dream On The Paper | AI Vision Board Wallpapers",
+    title: "Dream On The Paper | Personalized Dream Visualization Wallpapers",
     description:
-      "Create personalized AI-generated phone, desktop, and tablet wallpapers based on your goals, dreams, and vision.",
+      "Create a personalized visual-only dream visualization wallpaper based on your goals, dreams, mood, style, and device. Preview your concept, then download a clean high-resolution PNG.",
     images: ["/og-image.jpg"],
   },
 };

@@ -1,8 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Pricing } from "@/components/Pricing";
 import { StartOverButton } from "@/components/StartOverButton";
 import { verifyCheckoutOrderToken } from "@/lib/order-state";
+
+export const metadata: Metadata = {
+  title: "Checkout | Dream On The Paper",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 type CheckoutPageProps = {
   searchParams: Promise<{ orderId?: string; orderToken?: string }>;

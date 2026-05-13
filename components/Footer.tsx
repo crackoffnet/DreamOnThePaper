@@ -24,13 +24,13 @@ export function Footer() {
         <Link href="/create" className="transition hover:text-ink">
           Create
         </Link>
-        <Link href="/#examples" className="transition hover:text-ink">
+        <Link href="/examples" className="transition hover:text-ink">
           Examples
         </Link>
         <Link href="/about" className="transition hover:text-ink">
           About
         </Link>
-        <Link href="/privacy-policy" className="transition hover:text-ink">
+        <Link href="/privacy" className="transition hover:text-ink">
           Privacy
         </Link>
         <Link href="/terms" className="transition hover:text-ink">

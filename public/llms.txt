@@ -1,0 +1,60 @@
+# Dream On The Paper
+
+Dream On The Paper creates personalized visual-only dream visualization wallpapers based on a customer's goals, dreams, emotions, color preferences, visual style, and device format.
+
+The product generates calm, premium, eye-friendly visual wallpapers for phones, tablets, desktops, laptops, and custom sizes.
+
+Important product behavior:
+- The wallpaper is visual-only.
+- Generated wallpapers do not include quotes, affirmations, typography, logos, watermarks, or text inside the image.
+- Customers answer guided questions about their future life, goals, emotions, scenes, colors, style, and device.
+- A low-resolution preview may be shown before purchase.
+- Paid customers receive a clean high-resolution PNG download.
+
+## Public pages
+
+- Home: https://www.dreamonthepaper.com/
+- Create wallpaper: https://www.dreamonthepaper.com/create
+- Examples: https://www.dreamonthepaper.com/examples
+- About: https://www.dreamonthepaper.com/about
+- Contact: https://www.dreamonthepaper.com/contact
+- Privacy Policy: https://www.dreamonthepaper.com/privacy
+- Terms: https://www.dreamonthepaper.com/terms
+- Refund Policy: https://www.dreamonthepaper.com/refund-policy
+
+## Product summary
+
+Dream On The Paper is a digital wallpaper generation service. It helps customers create a personalized visual reminder of the life they are building.
+
+Common customer goals include:
+- peaceful home
+- financial freedom
+- successful business
+- loving family life
+- travel
+- healthy lifestyle
+- calm mind
+- creative freedom
+- romantic life
+- powerful career
+- spiritual alignment
+
+Common visual styles include:
+- minimal and clean
+- luxury aesthetic
+- soft feminine
+- cinematic realistic
+- cozy warm lifestyle
+- dreamy and magical
+- modern editorial
+- nature-inspired
+- elegant vision board collage
+- calm spiritual aesthetic
+- high-end Pinterest style
+- soft luxury realism
+
+## Important restrictions
+
+Generated images should not contain text, quotes, affirmations, typography, logos, watermarks, readable symbols, or brand names.
+
+Private pages, API routes, checkout sessions, customer orders, and generated wallpaper files are not intended for indexing.

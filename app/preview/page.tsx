@@ -1,7 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { PreviewUnlock } from "@/components/PreviewUnlock";
+
+export const metadata: Metadata = {
+  title: "Preview | Dream On The Paper",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function PreviewPage() {
   return (

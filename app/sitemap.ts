@@ -5,8 +5,9 @@ const siteUrl = "https://www.dreamonthepaper.com";
 const routes = [
   "",
   "/create",
+  "/examples",
   "/about",
-  "/privacy-policy",
+  "/privacy",
   "/terms",
   "/refund-policy",
   "/contact",
@@ -15,10 +16,33 @@ const routes = [
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
-  return routes.map((route) => ({
-    url: `${siteUrl}${route}`,
-    lastModified: now,
-    changeFrequency: route === "" ? "weekly" : "monthly",
-    priority: route === "" ? 1 : route === "/create" ? 0.9 : 0.5,
-  }));
+  return routes.map((route) => {
+    let changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] = "monthly";
+    let priority = 0.5;
+
+    if (route === "") {
+      changeFrequency = "weekly";
+      priority = 1;
+    } else if (route === "/create") {
+      changeFrequency = "weekly";
+      priority = 0.9;
+    } else if (route === "/examples") {
+      changeFrequency = "weekly";
+      priority = 0.8;
+    } else if (
+      route === "/privacy" ||
+      route === "/terms" ||
+      route === "/refund-policy"
+    ) {
+      changeFrequency = "yearly";
+      priority = 0.3;
+    }
+
+    return {
+      url: `${siteUrl}${route}`,
+      lastModified: now,
+      changeFrequency,
+      priority,
+    };
+  });
 }

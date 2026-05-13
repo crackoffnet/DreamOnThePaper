@@ -12,7 +12,7 @@ const structuredData = {
       operatingSystem: "Web",
       url: "https://www.dreamonthepaper.com",
       description:
-        "Create personalized AI-generated phone, desktop, and tablet wallpapers based on your goals, dreams, and vision.",
+        "Create personalized visual-only dream visualization wallpapers based on your goals, dream life, mood, style, and device.",
       offers: [
         {
           "@type": "Offer",
@@ -76,7 +76,7 @@ export default function Home() {
           >
             GAX Global
           </a>
-          <a href="/privacy-policy" className="transition hover:text-ink">
+          <a href="/privacy" className="transition hover:text-ink">
             Privacy
           </a>
           <a href="/terms" className="transition hover:text-ink">

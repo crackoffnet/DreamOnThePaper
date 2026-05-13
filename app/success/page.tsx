@@ -1,8 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { StartOverButton } from "@/components/StartOverButton";
 import { SuccessExperience } from "@/components/SuccessExperience";
+
+export const metadata: Metadata = {
+  title: "Success | Dream On The Paper",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 type SuccessPageProps = {
   searchParams: Promise<{ session_id?: string }>;
