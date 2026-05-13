@@ -43,18 +43,18 @@ export default function ExamplesPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={example.image}
-                    alt={`${example.title} dream wallpaper example`}
+                    alt={example.alt}
                     width={768}
                     height={1152}
                     className="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-[1.015]"
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),transparent_38%),linear-gradient(to_top,rgba(30,26,22,0.45),rgba(30,26,22,0.05)_48%,transparent)]" />
-                  <span className="absolute left-3 top-3 rounded-full border border-white/40 bg-pearl/78 px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.13em] text-cocoa backdrop-blur-md">
-                    {example.title}
-                  </span>
-                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] font-display text-[1.38rem] font-normal italic leading-[1.03] tracking-[-0.035em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)] sm:text-[1.42rem]">
-                    {example.mood}
-                  </p>
+                  <div className="absolute inset-x-4 bottom-4">
+                    <p className="max-w-[86%] font-display text-[1.45rem] font-normal leading-none tracking-[0] text-[#fffaf0]/90 drop-shadow-[0_1px_12px_rgba(30,24,18,0.28)] sm:text-[1.55rem]">
+                      {example.phrase}
+                    </p>
+                    <span className="mt-2 block h-px w-14 bg-[#fffaf0]/60" />
+                  </div>
                 </article>
               </Link>
             ))}

@@ -60,34 +60,34 @@ export function Hero() {
           </div>
         </div>
 
-        <div id="examples" className="scroll-mt-20 overflow-hidden">
-          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div id="examples" className="scroll-mt-20">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-3.5">
             {exampleWallpapers.map((example) => (
               <Link
                 key={example.id}
                 href={`/create?mood=${encodeURIComponent(example.id)}`}
-                className="focus-ring group block min-w-[78vw] snap-start rounded-[22px] sm:min-w-0"
-                aria-label={`Start with ${example.title} mood`}
+                className="focus-ring group block rounded-[18px]"
+                aria-label={`Start with ${example.phrase}`}
               >
                 <article
-                  className="relative aspect-[0.68/1] overflow-hidden rounded-[20px] border border-[rgba(180,160,130,0.22)] bg-[#ddd3c2] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:border-gold/45 sm:aspect-auto sm:h-[clamp(190px,25svh,232px)]"
+                  className="relative aspect-[1.08/1] overflow-hidden rounded-[18px] border border-white/60 bg-[#ddd3c2] shadow-[0_18px_48px_rgba(75,62,48,0.12)] transition duration-300 ease-out group-hover:-translate-y-0.5 group-hover:border-gold/35 group-hover:shadow-[0_22px_58px_rgba(75,62,48,0.16)] sm:aspect-[1.05/1] lg:h-[clamp(142px,20svh,188px)] lg:aspect-auto"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={example.image}
-                    alt={`${example.title} wallpaper example`}
+                    alt={example.alt}
                     width={768}
                     height={1152}
-                    className="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-[1.015]"
+                    className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.018]"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),transparent_38%),linear-gradient(to_top,rgba(30,26,22,0.45),rgba(30,26,22,0.05)_48%,transparent)]" />
-                  <span className="absolute left-3 top-3 rounded-full border border-white/40 bg-pearl/78 px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.13em] text-cocoa backdrop-blur-md">
-                    {example.title}
-                  </span>
-                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] text-[12px] font-medium uppercase tracking-[0.13em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)]">
-                    {example.mood}
-                  </p>
+                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22),transparent_42%),linear-gradient(to_top,rgba(38,31,25,0.38),rgba(38,31,25,0.08)_46%,transparent_72%)]" />
+                  <div className="absolute inset-x-4 bottom-4">
+                    <p className="font-display text-[1.28rem] font-normal leading-none tracking-[0] text-[#fffaf0]/90 drop-shadow-[0_1px_12px_rgba(30,24,18,0.28)] sm:text-[1.18rem] lg:text-[clamp(1rem,1.28vw,1.22rem)]">
+                      {example.phrase}
+                    </p>
+                    <span className="mt-2 block h-px w-12 bg-[#fffaf0]/60" />
+                  </div>
                 </article>
               </Link>
             ))}
