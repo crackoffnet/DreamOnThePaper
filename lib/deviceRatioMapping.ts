@@ -7,7 +7,8 @@ export const deviceRatioMapping = {
   "Lock screen wallpaper": "9:19.5",
   "Home screen wallpaper": "9:19.5",
   "Wide monitor wallpaper": "21:9",
-  "Square printable vision board": "1:1",
+  "Square wallpaper": "1:1",
+  "Story wallpaper": "9:16",
   "I want both phone and desktop": ["9:19.5", "16:9"],
   "I want custom size": "custom",
 } as const;

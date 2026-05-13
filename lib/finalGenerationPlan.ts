@@ -47,7 +47,7 @@ export function buildFinalGenerationPlan(
       modelSize: preset.modelSize,
       input: baseInput,
       variationPrompt:
-        "Single final PNG wallpaper: polished, refined, premium, and fully visual-only.",
+        "Single final PNG wallpaper: cinematic, realistic, premium, no text, no visible faces, no collage blocks.",
     },
   ];
 }

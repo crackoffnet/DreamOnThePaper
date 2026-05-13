@@ -226,7 +226,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
       sessionStorage.getItem("dreamFinalSessionId") === sessionId
     ) {
       setStep("done");
-      setMessage("Your full-resolution wallpaper is ready.");
+      setMessage("Your high-resolution wallpaper is ready.");
       return;
     }
 
@@ -309,7 +309,7 @@ export function SuccessExperience({ sessionId }: { sessionId: string }) {
 
         persistGeneratedWallpaper(generated);
         setStep("done");
-        setMessage("Your full-resolution wallpaper is ready.");
+        setMessage("Your high-resolution wallpaper is ready.");
         console.info("[success] final ready");
       } catch (successError) {
         if (signal.aborted) {

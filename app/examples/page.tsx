@@ -8,7 +8,7 @@ import { exampleWallpapers } from "@/lib/exampleWallpapers";
 export const metadata: Metadata = {
   title: "Examples | Dream On The Paper",
   description:
-    "Browse example Dream On The Paper wallpapers to explore premium visual styles, moods, and dream-life directions before creating your own.",
+    "Browse cinematic wallpaper examples for premium future-self moods and visual atmospheres.",
   alternates: {
     canonical: "/examples",
   },
@@ -24,10 +24,10 @@ export default function ExamplesPage() {
             Examples
           </p>
           <h1 className="mt-3 max-w-3xl font-display text-[2.45rem] font-normal leading-none tracking-[-0.04em] text-ink sm:text-[3rem]">
-            Explore visual directions for your dream wallpaper.
+            Explore cinematic directions for your future-life wallpaper.
           </h1>
           <p className="mt-4 max-w-2xl text-sm font-light leading-7 text-taupe sm:text-base">
-            These public examples show the mood, color, and composition direction of
+            These public examples show the mood, light, and cinematic composition of
             Dream On The Paper. Every paid wallpaper is generated privately for the
             customer and delivered as a clean high-resolution PNG.
           </p>
@@ -53,7 +53,7 @@ export default function ExamplesPage() {
                     {example.title}
                   </span>
                   <p className="absolute inset-x-3 bottom-3 max-w-[86%] font-display text-[1.38rem] font-normal italic leading-[1.03] tracking-[-0.035em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)] sm:text-[1.42rem]">
-                    {example.quote}
+                    {example.mood}
                   </p>
                 </article>
               </Link>

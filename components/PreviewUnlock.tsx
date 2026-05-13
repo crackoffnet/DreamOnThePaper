@@ -98,13 +98,13 @@ export function PreviewUnlock() {
         </div>
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
-            Low-resolution preview
+            Low-resolution cinematic preview
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-ink">
             Your wallpaper concept is ready.
           </h1>
           <p className="mt-2 text-sm leading-6 text-taupe">
-            Free preview is low-resolution and watermarked. Your paid download is a clean high-resolution PNG.
+            Free preview is low-resolution. Your paid download is a clean high-resolution PNG.
           </p>
         </div>
 
@@ -122,17 +122,12 @@ export function PreviewUnlock() {
               className="h-full w-full scale-[1.03] object-cover blur-[1.75px] saturate-75"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink/40" />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <p className="-rotate-12 text-4xl font-serif italic tracking-[0.12em] text-white/32 sm:text-5xl">
-                Preview
-              </p>
-            </div>
             <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/50 bg-white/70 p-3 text-center shadow-sm backdrop-blur-md">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
-                Low-resolution preview
+                Low-resolution cinematic preview
               </p>
               <p className="mt-1 text-sm font-medium text-ink">
-                Paid download removes the preview watermark.
+                Paid download generates a clean high-resolution wallpaper.
               </p>
             </div>
           </div>

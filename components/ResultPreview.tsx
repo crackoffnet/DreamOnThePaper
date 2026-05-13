@@ -359,7 +359,7 @@ export function ResultPreview() {
             </p>
           ) : null}
           <p className="-mt-1 text-center text-xs font-medium text-taupe">
-            Delivered in your selected device size.
+            High-resolution final wallpaper optimized for your selected format.
           </p>
           <Link
             href="/create"
@@ -432,7 +432,7 @@ function AssetPreviewCard({
         <p className="text-sm font-medium text-ink">{captionLabel}</p>
         <p className="text-xs text-taupe">{dimensionsLabel}</p>
         <p className="text-xs font-medium text-taupe">
-          Final PNG · High-resolution · Visual-only · No preview watermark
+          Final PNG · High-resolution · Cinematic visual wallpaper · No preview watermark
         </p>
       </div>
     </div>

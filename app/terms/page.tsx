@@ -14,7 +14,7 @@ export default function TermsPage() {
         </h1>
         <div className="mt-6 space-y-4 text-sm leading-7 text-taupe">
           <p>
-            Dream On The Paper creates personalized AI-generated wallpapers from
+            Dream On The Paper creates personalized cinematic wallpapers from
             the information you provide. You agree not to submit abusive,
             unlawful, or infringing requests.
           </p>

@@ -12,7 +12,7 @@ const structuredData = {
       operatingSystem: "Web",
       url: "https://www.dreamonthepaper.com",
       description:
-        "Create personalized visual-only dream visualization wallpapers based on your goals, dream life, mood, style, and device.",
+        "Create a personalized cinematic visualization wallpaper for the future you are creating.",
       offers: [
         {
           "@type": "Offer",

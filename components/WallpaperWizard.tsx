@@ -54,6 +54,7 @@ import {
   type DreamProfileField,
   type VisualOnlyDreamProfile,
 } from "@/lib/visualDreamProfile";
+import { getStyleMood } from "@/lib/prompting/applyStyleTheme";
 
 const stepTitles = [
   "Choose wallpaper",
@@ -66,7 +67,7 @@ const stepTitles = [
 
 const profileQuestions = getLaunchDreamProfileQuestions();
 const visualOnlyCopy =
-  "Your wallpaper will be created as a visual-only dream board. No text or quotes will appear inside the image.";
+  "Your wallpaper will be created as a cinematic visual scene. No text or faces will appear inside the image.";
 
 export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) {
   const router = useRouter();
@@ -215,7 +216,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
 
   function next() {
     setError("");
-    if ((step === 0 || step === 1) && form.device === "custom") {
+    if (step === 1 && form.device === "custom" && form.ratio === "custom") {
       const issue = getCustomSizeIssue(form);
       if (issue) {
         setError(issue);
@@ -426,25 +427,21 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
         />
 
         {step === 0 ? (
-          <div className="grid gap-3">
-            <DeviceSelector value={form.device} onChange={setDevice} />
-            {form.device === "custom" ? (
-              <CustomSizeFields form={form} onChange={update} />
-            ) : null}
-          </div>
+          <DeviceSelector value={form.device} onChange={setDevice} />
         ) : null}
 
         {step === 1 ? (
-          form.device === "custom" ? (
-            <CustomSizeFields form={form} onChange={update} />
-          ) : (
+          <div className="grid gap-3">
             <OptionGrid
               options={ratioOptions[form.device]}
               value={form.ratio}
               getLabel={(option) => labels.ratios[option]}
               onChange={(ratio) => update("ratio", ratio)}
             />
-          )
+            {form.device === "custom" && form.ratio === "custom" ? (
+              <CustomSizeFields form={form} onChange={update} />
+            ) : null}
+          </div>
         ) : null}
 
         {step === 2 ? (
@@ -477,17 +474,17 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
             ))}
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-cocoa">
-                Is there a specific goal, dream, person, place, or detail you want us to include?
+                What personal dream, goal, place, person, or detail would make this feel truly yours?
               </span>
               <textarea
                 className="field min-h-24 resize-y"
-                maxLength={500}
-                placeholder="I want a peaceful home with a garden and pool. I want family energy but no clear faces. I want business success and travel energy."
-                value={form.dreamProfile.customNotes || ""}
+                maxLength={260}
+                placeholder="Example: peaceful home with garden, family warmth, business success, travel energy"
+                value={form.dreamProfile.finalCustomDetail || ""}
                 onChange={(event) =>
                   update("dreamProfile", {
                     ...form.dreamProfile,
-                    customNotes: event.target.value,
+                    finalCustomDetail: event.target.value,
                   })
                 }
               />
@@ -518,8 +515,8 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               <div className="rounded-2xl border border-gold/20 bg-white/70 p-4">
                 <p className="text-sm leading-6 text-taupe">
                   {isPreviewStale
-                    ? "Your answers changed. Generate a new preview to see the updated concept."
-                    : "You can review the visual direction, adjust your selections, or unlock the full wallpaper."}
+                    ? "Your answers changed. Generate a new preview to see the updated cinematic direction."
+                    : "You can review the visual direction, mood, and cinematic composition, then unlock the final wallpaper."}
                 </p>
                 <div className="mt-3 overflow-hidden rounded-2xl border border-white/70 bg-linen">
                   <div className="relative">
@@ -533,12 +530,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
                     <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/50 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold backdrop-blur">
                       {isPreviewStale
                         ? "Preview from previous answers"
-                        : "Low-resolution visual preview"}
-                    </div>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <span className="-rotate-12 text-4xl font-serif italic tracking-[0.1em] text-white/28">
-                        Preview
-                      </span>
+                        : "Low-resolution cinematic preview"}
                     </div>
                   </div>
                 </div>
@@ -634,12 +626,12 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
             </button>
           ) : hasPreview ? (
             <div className="text-right text-[11px] leading-5 text-taupe">
-              Free previews are low-resolution and watermarked. Your paid download is a clean high-resolution PNG.
+              Free previews are low-resolution. Your paid download is a clean high-resolution PNG.
             </div>
           ) : (
             <div className="flex flex-col items-end gap-2">
               <p className="max-w-xs text-right text-[11px] leading-5 text-taupe">
-                Free previews are low-resolution and watermarked. Your paid download is a clean high-resolution PNG.
+                Free previews are low-resolution. Your paid download is a clean high-resolution PNG.
               </p>
               <button
                 type="submit"
@@ -676,7 +668,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
               </div>
             </div>
             <p className="text-sm leading-6 text-ink">
-              Visual-only dream board preview. Calm composition, elegant imagery, and no text inside the artwork.
+              Cinematic future-life preview. One calming environment, no text or faces inside the image.
             </p>
           </div>
         </div>
@@ -684,7 +676,7 @@ export function WallpaperWizard({ initialMood = "" }: { initialMood?: string }) 
           <p className="font-semibold text-cocoa">Preview frame</p>
           <p>{labels.devices[form.device]}</p>
           <p>{getAspectRatioLabel(form)}</p>
-          <p>Low-resolution visual preview</p>
+          <p>Low-resolution cinematic preview</p>
           <p className="text-gold">{getPreviewOptimizedLabel(form)}</p>
         </div>
       </aside>
@@ -754,16 +746,22 @@ function DreamProfileQuestionCard({
       {selected.includes("Other") ? (
         <label className="mt-3 block">
           <span className="mb-1.5 block text-xs font-semibold text-cocoa">
-            Tell us your specific detail
+            Add your own detail
           </span>
           <input
             className="field"
-            maxLength={180}
+            maxLength={90}
+            placeholder={question.otherPlaceholder}
             value={otherValue}
             onChange={(event) =>
               onChange(question.id, selected, otherKey, event.target.value)
             }
           />
+          {otherValue.trim().split(/\s+/).filter(Boolean).length > 10 ? (
+            <span className="mt-1.5 block text-xs text-red-700">
+              Keep it short — up to 10 words works best.
+            </span>
+          ) : null}
         </label>
       ) : null}
     </section>
@@ -798,8 +796,8 @@ function getMoodPreset(value: string | null):
       theme: "light",
       dreamProfile: {
         desiredFeelings: ["Calm", "Feminine and soft"],
-        colorMood: ["Soft beige and cream", "Warm golden tones"],
-        visualStyle: ["Soft luxury realism", "Luxury aesthetic"],
+        futureEnvironment: ["Modern luxury house", "Peaceful bedroom"],
+        dreamScenes: ["Luxury details", "Calm morning routine"],
       },
     },
     "wealth-business": {
@@ -807,8 +805,8 @@ function getMoodPreset(value: string | null):
       theme: "dark",
       dreamProfile: {
         desiredFeelings: ["Focused", "Abundant"],
-        successType: ["Profitable business", "Leadership and influence"],
-        visualStyle: ["Modern editorial", "High-end Pinterest style"],
+        currentCreation: ["Building my own business", "Growing my income"],
+        dreamScenes: ["Business success", "Financial abundance"],
       },
     },
     "nature-reset": {
@@ -817,7 +815,7 @@ function getMoodPreset(value: string | null):
       dreamProfile: {
         desiredFeelings: ["Peaceful", "Calm"],
         dreamScenes: ["Nature and peace", "Travel scenery"],
-        colorMood: ["Earthy green and brown", "Ocean blue and sand"],
+        futureEnvironment: ["Cozy house in nature", "Forest or mountain retreat"],
       },
     },
     "fitness-health": {
@@ -826,7 +824,7 @@ function getMoodPreset(value: string | null):
       dreamProfile: {
         desiredFeelings: ["Motivated", "Strong and unstoppable"],
         dreamScenes: ["Fitness and wellness", "Healthy lifestyle"],
-        successType: ["Strong discipline", "Becoming the best version of myself"],
+        currentCreation: ["Becoming healthier and stronger", "Becoming disciplined"],
       },
     },
     "family-home": {
@@ -835,7 +833,7 @@ function getMoodPreset(value: string | null):
       dreamProfile: {
         desiredFeelings: ["Loved", "Grateful"],
         dreamScenes: ["Family moments", "Beautiful home"],
-        dreamEnvironment: ["Warm family kitchen", "Cozy house in nature"],
+        futureEnvironment: ["Warm family kitchen", "Cozy house in nature"],
       },
     },
     "freedom-travel": {
@@ -844,7 +842,7 @@ function getMoodPreset(value: string | null):
       dreamProfile: {
         desiredFeelings: ["Free", "Hopeful"],
         dreamScenes: ["Travel scenery", "Luxury details"],
-        successType: ["Freedom with my time", "Traveling more"],
+        currentCreation: ["Traveling more", "Creating more time freedom"],
       },
     },
   };
@@ -958,7 +956,7 @@ function CustomSizeFields({ form, onChange }: CustomSizeFieldsProps) {
 }
 
 function getCustomSizeIssue(form: WallpaperInput) {
-  if (form.device !== "custom") {
+  if (form.device !== "custom" || form.ratio !== "custom") {
     return "";
   }
 
@@ -1000,6 +998,13 @@ function getDreamProfileIssue(profile: VisualOnlyDreamProfile) {
       !String(profile[question.otherKey] || "").trim()
     ) {
       return `${question.title} needs a short note for Other.`;
+    }
+    if (
+      selected.includes("Other") &&
+      String(profile[question.otherKey] || "").trim().split(/\s+/).filter(Boolean)
+        .length > 10
+    ) {
+      return "Keep it short — up to 10 words works best.";
     }
   }
 
@@ -1051,6 +1056,7 @@ function OptionGrid<T extends string>({
     <div className="grid gap-2 sm:grid-cols-2">
       {options.map((option) => {
         const active = value === option;
+        const helper = getOptionHelper(option);
 
         return (
           <button
@@ -1063,10 +1069,25 @@ function OptionGrid<T extends string>({
                 : "border-cocoa/10 bg-white/55 text-cocoa hover:bg-white"
             }`}
           >
-            {getLabel(option)}
+            <span className="block">{getLabel(option)}</span>
+            {helper ? (
+              <span className="mt-1 block text-xs font-normal text-taupe">
+                {helper}
+              </span>
+            ) : null}
           </button>
         );
       })}
     </div>
   );
+}
+
+function getOptionHelper(option: string) {
+  if (styles.includes(option as WallpaperStyle)) {
+    return getStyleMood(option as WallpaperStyle);
+  }
+
+  if (option === "light") return "airy, warm, soft sunlight";
+  if (option === "dark") return "cinematic, espresso, warm highlights";
+  return "";
 }

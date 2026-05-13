@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 export const metadata: Metadata = {
   title: "About | Dream On The Paper",
   description:
-    "Learn about Dream On The Paper, a privacy-minded AI wallpaper generator created by GAX Global.",
+    "Learn about Dream On The Paper, a privacy-minded cinematic wallpaper experience created by GAX Global.",
   alternates: {
     canonical: "/about",
   },
@@ -26,13 +26,13 @@ export default function AboutPage() {
           <div className="mt-5 space-y-4 text-sm font-light leading-7 text-taupe sm:text-base">
             <p>
               Dream On The Paper turns your goals, mood, and future-self vision
-              into personalized AI wallpapers for phone, desktop, tablet, and
-              custom sizes.
+              into personalized cinematic wallpapers for phone, desktop,
+              tablet, and custom sizes.
             </p>
             <p>
               The product is designed to feel calm and intentional: answer a
-              few thoughtful prompts, preview your concept, then unlock a final
-              PNG wallpaper when it feels right.
+              few thoughtful prompts, preview the visual atmosphere, then unlock
+              a final PNG wallpaper when it feels right.
             </p>
             <p>
               Privacy is part of the product. Paid wallpapers are treated as

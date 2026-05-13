@@ -18,6 +18,7 @@ export function normalizePreviewInput(
   const meta = getWallpaperMeta(input);
 
   return {
+    visualSystemVersion: "cinematic-v1",
     wallpaperType: options.wallpaperType || wallpaperTypeFromDevice(input.device),
     presetId: options.presetId || meta.presetId,
     device: input.device,

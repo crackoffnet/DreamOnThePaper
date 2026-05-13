@@ -15,7 +15,7 @@ export function SharePanel() {
     if (navigator.share) {
       await navigator.share({
         title: "Dream On The Paper",
-        text: "Create your own personalized AI wallpaper.",
+        text: "Create your own personalized cinematic wallpaper.",
         url: shareUrl,
       });
       return;

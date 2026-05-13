@@ -22,7 +22,7 @@ export const wallpaperPackages: Record<PackageId, PackageConfig> = {
     priceLabel: "$4.99",
     amount: 499,
     stripePriceEnv: "STRIPE_SINGLE_PRICE_ID",
-    description: "One polished AI wallpaper for your selected size.",
+    description: "One polished cinematic wallpaper for your selected format.",
     deliverables: [
       "One final PNG",
       "Selected size/device",

@@ -201,7 +201,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         <p className="mt-3 text-sm leading-6 text-taupe">
           {tokenExpired
             ? "This preview expired or can't be restored. Please create a new preview before checkout."
-            : "Generate a low-quality preview before starting secure checkout."}
+            : "Generate a low-resolution preview before starting secure checkout."}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <StartOverButton />
@@ -231,7 +231,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
     <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[0.48fr_0.52fr]">
       <section className="rounded-[1.75rem] border border-white/70 bg-white/50 p-4 shadow-soft backdrop-blur-xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
-          Low-resolution visual preview
+          Low-resolution cinematic preview
         </p>
         <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-ink">
           Your wallpaper concept is ready.
@@ -240,7 +240,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
           Unlock the full wallpaper to download, email, and share.
         </p>
         <p className="mt-2 text-sm leading-6 text-cocoa">
-          Your preview shows the visual direction, mood, and composition. After payment, we generate a clean high-resolution PNG without preview watermark.
+          Your preview shows the visual direction, mood, and cinematic composition. After payment, we generate a clean high-resolution wallpaper.
         </p>
         <div className="mt-4 flex justify-center rounded-[1.5rem] border border-white/70 bg-white/45 p-4">
           <div
@@ -261,7 +261,7 @@ export function Pricing({ orderId, orderToken, initialOrder, tokenExpired }: Pri
         <div className="mt-4 grid gap-2 text-sm text-taupe sm:grid-cols-2">
           <p>Wallpaper type: {labels.devices[state.meta.device]}</p>
           <p>Selected format: {state.meta.ratioLabel}</p>
-          <p>Paid file: Clean high-resolution visual-only PNG for this format</p>
+          <p>Paid file: High-resolution cinematic PNG for this format</p>
           <p>Style: {labels.styles[state.meta.style]}</p>
           <p>Theme: {labels.themes[state.meta.theme]}</p>
         </div>

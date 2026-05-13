@@ -41,9 +41,9 @@ export const quoteTones = [
 
 export const ratioOptions = {
   mobile: ["iphone-17-pro-max", "iphone", "android"],
-  desktop: ["desktop-16-9", "desktop-16-10", "desktop-4k"],
+  desktop: ["desktop-16-9", "desktop-ultrawide"],
   tablet: ["ipad", "tablet-vertical"],
-  custom: ["custom"],
+  custom: ["custom", "story", "square"],
 } as const satisfies Record<DeviceType, readonly RatioType[]>;
 
 export const labels = {
@@ -57,11 +57,14 @@ export const labels = {
     "iphone-17-pro-max": "iPhone / 9:19.5",
     iphone: "iPhone / 9:16",
     android: "Android / 9:16",
-    "desktop-16-9": "Desktop / 16:9",
+    "desktop-16-9": "16:9",
     "desktop-16-10": "Laptop / 16:10",
     "desktop-4k": "Wide desktop / 16:9",
+    "desktop-ultrawide": "Ultrawide",
     ipad: "iPad / 4:3",
     "tablet-vertical": "Vertical tablet / 3:4",
+    story: "Story",
+    square: "Square",
     custom: "Custom size",
   },
   themes: {

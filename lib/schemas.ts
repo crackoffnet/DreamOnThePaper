@@ -19,30 +19,39 @@ const textField = z
   );
 
 const stringArrayField = z.array(z.string().max(120)).max(6);
+const requiredProfileArrayField = stringArrayField.optional().default([]);
+const optionalLegacyArrayField = z.array(z.string().max(120)).max(6).optional();
 
 export const dreamProfileSchema = z
   .object({
-    futureLife: stringArrayField,
+    futureLife: requiredProfileArrayField,
     futureLifeOther: textField.optional().default(""),
-    currentGoals: stringArrayField,
-    currentGoalsOther: textField.optional().default(""),
-    desiredFeelings: stringArrayField,
+    currentCreation: requiredProfileArrayField,
+    currentCreationOther: textField.optional().default(""),
+    desiredFeelings: requiredProfileArrayField,
     desiredFeelingsOther: textField.optional().default(""),
-    dreamScenes: stringArrayField,
+    dreamScenes: requiredProfileArrayField,
     dreamScenesOther: textField.optional().default(""),
-    dreamEnvironment: stringArrayField,
-    dreamEnvironmentOther: textField.optional().default(""),
-    successType: stringArrayField,
-    successTypeOther: textField.optional().default(""),
-    colorMood: stringArrayField,
-    colorMoodOther: textField.optional().default(""),
-    visualStyle: stringArrayField,
-    visualStyleOther: textField.optional().default(""),
-    compositionStyle: stringArrayField,
-    compositionStyleOther: textField.optional().default(""),
-    deviceType: z.array(z.string().max(120)).max(3),
-    deviceTypeOther: textField.optional().default(""),
-    customNotes: textField.optional().default(""),
+    futureEnvironment: requiredProfileArrayField,
+    futureEnvironmentOther: textField.optional().default(""),
+    personalDetails: requiredProfileArrayField,
+    personalDetailsOther: textField.optional().default(""),
+    finalCustomDetail: textField.optional().default(""),
+    currentGoals: optionalLegacyArrayField,
+    currentGoalsOther: textField.optional(),
+    dreamEnvironment: optionalLegacyArrayField,
+    dreamEnvironmentOther: textField.optional(),
+    successType: optionalLegacyArrayField,
+    successTypeOther: textField.optional(),
+    colorMood: optionalLegacyArrayField,
+    colorMoodOther: textField.optional(),
+    visualStyle: optionalLegacyArrayField,
+    visualStyleOther: textField.optional(),
+    compositionStyle: optionalLegacyArrayField,
+    compositionStyleOther: textField.optional(),
+    deviceType: z.array(z.string().max(120)).max(3).optional(),
+    deviceTypeOther: textField.optional(),
+    customNotes: textField.optional(),
   })
   .transform((profile) => sanitizeDreamProfile({ ...emptyVisualOnlyDreamProfile, ...profile }))
   .superRefine((profile, context) => {
@@ -111,12 +120,11 @@ export const wallpaperInputSchema = z
       });
     }
 
-    if (input.device !== "custom") {
+    if (input.device !== "custom" || input.ratio !== "custom") {
       return;
     }
 
     if (
-      input.ratio !== "custom" ||
       typeof input.customWidth !== "number" ||
       typeof input.customHeight !== "number"
     ) {

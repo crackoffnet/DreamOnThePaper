@@ -1,38 +1,44 @@
-export type VisualOnlyDreamProfile = {
+export type CinematicDreamProfile = {
   futureLife: string[];
   futureLifeOther?: string;
-  currentGoals: string[];
-  currentGoalsOther?: string;
+  currentCreation: string[];
+  currentCreationOther?: string;
   desiredFeelings: string[];
   desiredFeelingsOther?: string;
   dreamScenes: string[];
   dreamScenesOther?: string;
-  dreamEnvironment: string[];
+  futureEnvironment: string[];
+  futureEnvironmentOther?: string;
+  personalDetails: string[];
+  personalDetailsOther?: string;
+  finalCustomDetail?: string;
+};
+
+export type VisualOnlyDreamProfile = CinematicDreamProfile & {
+  currentGoals?: string[];
+  currentGoalsOther?: string;
+  dreamEnvironment?: string[];
   dreamEnvironmentOther?: string;
-  successType: string[];
+  successType?: string[];
   successTypeOther?: string;
-  colorMood: string[];
+  colorMood?: string[];
   colorMoodOther?: string;
-  visualStyle: string[];
+  visualStyle?: string[];
   visualStyleOther?: string;
-  compositionStyle: string[];
+  compositionStyle?: string[];
   compositionStyleOther?: string;
-  deviceType: string[];
+  deviceType?: string[];
   deviceTypeOther?: string;
   customNotes?: string;
 };
 
 export type DreamProfileField =
   | "futureLife"
-  | "currentGoals"
+  | "currentCreation"
   | "desiredFeelings"
   | "dreamScenes"
-  | "dreamEnvironment"
-  | "successType"
-  | "colorMood"
-  | "visualStyle"
-  | "compositionStyle"
-  | "deviceType";
+  | "futureEnvironment"
+  | "personalDetails";
 
 export type DreamProfileQuestion = {
   id: DreamProfileField;
@@ -40,7 +46,8 @@ export type DreamProfileQuestion = {
   minSelections: number;
   maxSelections: number;
   options: string[];
-  otherKey: keyof VisualOnlyDreamProfile;
+  otherKey: keyof CinematicDreamProfile;
+  otherPlaceholder: string;
 };
 
 const otherOption = "Other";
@@ -48,10 +55,11 @@ const otherOption = "Other";
 export const dreamProfileQuestions: DreamProfileQuestion[] = [
   {
     id: "futureLife",
-    title: "What future life are you visualizing for yourself?",
+    title: "What future life are you building?",
     minSelections: 2,
     maxSelections: 6,
     otherKey: "futureLifeOther",
+    otherPlaceholder: "Example: peaceful farm, CEO, calm motherhood",
     options: [
       "A peaceful home in nature",
       "A luxury modern home",
@@ -69,11 +77,12 @@ export const dreamProfileQuestions: DreamProfileQuestion[] = [
     ],
   },
   {
-    id: "currentGoals",
-    title: "What are you working toward right now?",
+    id: "currentCreation",
+    title: "What are you creating in your life right now?",
     minSelections: 2,
     maxSelections: 6,
-    otherKey: "currentGoalsOther",
+    otherKey: "currentCreationOther",
+    otherPlaceholder: "Example: bakery, Etsy shop, law career",
     options: [
       "Building my own business",
       "Growing my income",
@@ -96,6 +105,7 @@ export const dreamProfileQuestions: DreamProfileQuestion[] = [
     minSelections: 2,
     maxSelections: 6,
     otherKey: "desiredFeelingsOther",
+    otherPlaceholder: "Example: safe, unstoppable, soft",
     options: [
       "Calm",
       "Motivated",
@@ -118,6 +128,7 @@ export const dreamProfileQuestions: DreamProfileQuestion[] = [
     minSelections: 2,
     maxSelections: 6,
     otherKey: "dreamScenesOther",
+    otherPlaceholder: "Example: garden, ocean balcony, cozy library",
     options: [
       "Beautiful home",
       "Family moments",
@@ -135,11 +146,12 @@ export const dreamProfileQuestions: DreamProfileQuestion[] = [
     ],
   },
   {
-    id: "dreamEnvironment",
-    title: "What kind of home or environment feels like your dream?",
+    id: "futureEnvironment",
+    title: "Which environment feels most like your future?",
     minSelections: 2,
     maxSelections: 6,
-    otherKey: "dreamEnvironmentOther",
+    otherKey: "futureEnvironmentOther",
+    otherPlaceholder: "Example: ranch house, Armenia, lake cabin",
     options: [
       "Cozy house in nature",
       "Modern luxury house",
@@ -157,177 +169,88 @@ export const dreamProfileQuestions: DreamProfileQuestion[] = [
     ],
   },
   {
-    id: "successType",
-    title: "What kind of success do you want to attract?",
+    id: "personalDetails",
+    title: "What personal detail should we reflect?",
     minSelections: 2,
     maxSelections: 6,
-    otherKey: "successTypeOther",
+    otherKey: "personalDetailsOther",
+    otherPlaceholder: "Example: my sons, husband, faith",
     options: [
-      "More money",
-      "Profitable business",
-      "Dream career",
-      "Freedom with my time",
-      "Recognition and respect",
-      "Passive income",
-      "Confidence in myself",
-      "Strong discipline",
-      "Creative success",
-      "Stability and security",
-      "Leadership and influence",
-      "A life I do not need to escape from",
-      otherOption,
-    ],
-  },
-  {
-    id: "colorMood",
-    title: "What color mood do you prefer?",
-    minSelections: 2,
-    maxSelections: 6,
-    otherKey: "colorMoodOther",
-    options: [
-      "Soft beige and cream",
-      "Warm golden tones",
-      "Blush pink and nude",
-      "White and minimal",
-      "Earthy green and brown",
-      "Ocean blue and sand",
-      "Dark elegant luxury",
-      "Lavender and soft purple",
-      "Black, gold, and champagne",
-      "Pastel dreamy colors",
-      "Neutral aesthetic tones",
-      "Warm sunset colors",
-      otherOption,
-    ],
-  },
-  {
-    id: "visualStyle",
-    title: "What visual style do you want?",
-    minSelections: 2,
-    maxSelections: 6,
-    otherKey: "visualStyleOther",
-    options: [
-      "Minimal and clean",
-      "Luxury aesthetic",
-      "Soft feminine",
-      "Cinematic realistic",
-      "Cozy warm lifestyle",
-      "Dreamy and magical",
-      "Modern editorial",
-      "Nature-inspired",
-      "Elegant vision board collage",
-      "Calm spiritual aesthetic",
-      "High-end Pinterest style",
-      "Soft luxury realism",
-      otherOption,
-    ],
-  },
-  {
-    id: "compositionStyle",
-    title: "How should the wallpaper be composed?",
-    minSelections: 2,
-    maxSelections: 6,
-    otherKey: "compositionStyleOther",
-    options: [
-      "Soft blended scenes",
-      "Clean and spacious",
-      "Dreamy collage style",
-      "Realistic lifestyle scene",
-      "Minimal with few elements",
-      "Rich but not crowded",
-      "Nature-focused composition",
-      "Home and lifestyle focused",
-      "Success and business focused",
-      "Travel and freedom focused",
-      "Balanced mix of everything",
-      otherOption,
-    ],
-  },
-  {
-    id: "deviceType",
-    title: "What device is this wallpaper for?",
-    minSelections: 1,
-    maxSelections: 3,
-    otherKey: "deviceTypeOther",
-    options: [
-      "iPhone wallpaper",
-      "Android phone wallpaper",
-      "Desktop wallpaper",
-      "Laptop wallpaper",
-      "iPad or tablet wallpaper",
-      "Lock screen wallpaper",
-      "Home screen wallpaper",
-      "Wide monitor wallpaper",
-      "Square printable vision board",
-      "I want both phone and desktop",
-      "I want custom size",
+      "My family",
+      "My partner",
+      "My children",
+      "My business",
+      "My future home",
+      "My health journey",
+      "My travels",
+      "My creativity",
+      "My peace",
+      "My confidence",
+      "My spiritual side",
+      "My independence",
       otherOption,
     ],
   },
 ];
 
-export const launchHiddenDreamProfileOptions: Partial<Record<DreamProfileField, string[]>> = {
-  deviceType: ["I want both phone and desktop"],
-};
-
 export const emptyVisualOnlyDreamProfile: VisualOnlyDreamProfile = {
   futureLife: [],
   futureLifeOther: "",
-  currentGoals: [],
-  currentGoalsOther: "",
+  currentCreation: [],
+  currentCreationOther: "",
   desiredFeelings: [],
   desiredFeelingsOther: "",
   dreamScenes: [],
   dreamScenesOther: "",
-  dreamEnvironment: [],
-  dreamEnvironmentOther: "",
-  successType: [],
-  successTypeOther: "",
-  colorMood: [],
-  colorMoodOther: "",
-  visualStyle: [],
-  visualStyleOther: "",
-  compositionStyle: [],
-  compositionStyleOther: "",
-  deviceType: [],
-  deviceTypeOther: "",
-  customNotes: "",
+  futureEnvironment: [],
+  futureEnvironmentOther: "",
+  personalDetails: [],
+  personalDetailsOther: "",
+  finalCustomDetail: "",
 };
 
+export const emptyCinematicDreamProfile = emptyVisualOnlyDreamProfile;
+
 export function getLaunchDreamProfileQuestions() {
-  return dreamProfileQuestions.map((question) => ({
-    ...question,
-    options: question.options.filter(
-      (option) => !launchHiddenDreamProfileOptions[question.id]?.includes(option),
-    ),
-  }));
+  return dreamProfileQuestions;
 }
 
 export function sanitizeDreamProfile(
-  profile: VisualOnlyDreamProfile,
+  profile: Partial<VisualOnlyDreamProfile>,
 ): VisualOnlyDreamProfile {
+  const currentCreation = sanitizeStringArray(
+    profile.currentCreation || profile.currentGoals,
+  );
+  const futureEnvironment = sanitizeStringArray(
+    profile.futureEnvironment || profile.dreamEnvironment,
+  );
+  const personalDetails = sanitizeStringArray(
+    profile.personalDetails || profile.successType,
+  );
+
   return {
     futureLife: sanitizeStringArray(profile.futureLife),
-    futureLifeOther: sanitizeText(profile.futureLifeOther),
-    currentGoals: sanitizeStringArray(profile.currentGoals),
-    currentGoalsOther: sanitizeText(profile.currentGoalsOther),
+    futureLifeOther: sanitizeShortCustom(profile.futureLifeOther),
+    currentCreation,
+    currentCreationOther: sanitizeShortCustom(
+      profile.currentCreationOther || profile.currentGoalsOther,
+    ),
     desiredFeelings: sanitizeStringArray(profile.desiredFeelings),
-    desiredFeelingsOther: sanitizeText(profile.desiredFeelingsOther),
+    desiredFeelingsOther: sanitizeShortCustom(profile.desiredFeelingsOther),
     dreamScenes: sanitizeStringArray(profile.dreamScenes),
-    dreamScenesOther: sanitizeText(profile.dreamScenesOther),
-    dreamEnvironment: sanitizeStringArray(profile.dreamEnvironment),
-    dreamEnvironmentOther: sanitizeText(profile.dreamEnvironmentOther),
-    successType: sanitizeStringArray(profile.successType),
-    successTypeOther: sanitizeText(profile.successTypeOther),
-    colorMood: sanitizeStringArray(profile.colorMood),
-    colorMoodOther: sanitizeText(profile.colorMoodOther),
-    visualStyle: sanitizeStringArray(profile.visualStyle),
-    visualStyleOther: sanitizeText(profile.visualStyleOther),
-    compositionStyle: sanitizeStringArray(profile.compositionStyle),
-    compositionStyleOther: sanitizeText(profile.compositionStyleOther),
-    deviceType: sanitizeStringArray(profile.deviceType),
-    deviceTypeOther: sanitizeText(profile.deviceTypeOther),
-    customNotes: sanitizeText(profile.customNotes, 500),
+    dreamScenesOther: sanitizeShortCustom(profile.dreamScenesOther),
+    futureEnvironment,
+    futureEnvironmentOther: sanitizeShortCustom(
+      profile.futureEnvironmentOther || profile.dreamEnvironmentOther,
+    ),
+    personalDetails,
+    personalDetailsOther: sanitizeShortCustom(
+      profile.personalDetailsOther || profile.successTypeOther,
+    ),
+    finalCustomDetail: sanitizeText(
+      profile.finalCustomDetail || profile.customNotes,
+      260,
+    ),
   };
 }
 
@@ -367,28 +290,24 @@ export function getDreamProfileSections(profile: VisualOnlyDreamProfile) {
   const sanitized = sanitizeDreamProfile(profile);
   return {
     futureLife: formatSection(sanitized.futureLife, sanitized.futureLifeOther),
-    currentGoals: formatSection(
-      sanitized.currentGoals,
-      sanitized.currentGoalsOther,
+    currentCreation: formatSection(
+      sanitized.currentCreation,
+      sanitized.currentCreationOther,
     ),
     desiredFeelings: formatSection(
       sanitized.desiredFeelings,
       sanitized.desiredFeelingsOther,
     ),
     dreamScenes: formatSection(sanitized.dreamScenes, sanitized.dreamScenesOther),
-    dreamEnvironment: formatSection(
-      sanitized.dreamEnvironment,
-      sanitized.dreamEnvironmentOther,
+    futureEnvironment: formatSection(
+      sanitized.futureEnvironment,
+      sanitized.futureEnvironmentOther,
     ),
-    successType: formatSection(sanitized.successType, sanitized.successTypeOther),
-    colorMood: formatSection(sanitized.colorMood, sanitized.colorMoodOther),
-    visualStyle: formatSection(sanitized.visualStyle, sanitized.visualStyleOther),
-    compositionStyle: formatSection(
-      sanitized.compositionStyle,
-      sanitized.compositionStyleOther,
+    personalDetails: formatSection(
+      sanitized.personalDetails,
+      sanitized.personalDetailsOther,
     ),
-    deviceType: formatSection(sanitized.deviceType, sanitized.deviceTypeOther),
-    customNotes: stringValue(sanitized.customNotes),
+    finalCustomDetail: stringValue(sanitized.finalCustomDetail),
   };
 }
 
@@ -396,17 +315,13 @@ export function buildLegacyWallpaperFields(profile: VisualOnlyDreamProfile) {
   const sections = getDreamProfileSections(profile);
   return {
     goals: sections.futureLife,
-    lifestyle: [sections.currentGoals, sections.dreamScenes].filter(Boolean).join(" · "),
-    career: [sections.currentGoals, sections.successType].filter(Boolean).join(" · "),
-    personalLife: sections.dreamScenes,
+    lifestyle: [sections.currentCreation, sections.dreamScenes].filter(Boolean).join(" | "),
+    career: sections.currentCreation,
+    personalLife: sections.personalDetails,
     health: sections.desiredFeelings,
-    place: sections.dreamEnvironment,
-    feelingWords: [sections.desiredFeelings, sections.colorMood].filter(Boolean).join(" · "),
-    reminder:
-      sections.customNotes ||
-      [sections.visualStyle, sections.compositionStyle, sections.deviceType]
-        .filter(Boolean)
-        .join(" · "),
+    place: sections.futureEnvironment,
+    feelingWords: sections.desiredFeelings,
+    reminder: sections.finalCustomDetail || sections.personalDetails,
   };
 }
 
@@ -428,18 +343,13 @@ export function profileFromStoredAnswers(value: unknown): VisualOnlyDreamProfile
 
   if (!Array.isArray(profile.futureLife) && typeof profile.goals === "string") {
     return sanitizeDreamProfile({
-      ...emptyVisualOnlyDreamProfile,
       futureLife: splitLegacyText(profile.goals),
-      currentGoals: splitLegacyText(profile.lifestyle),
-      desiredFeelings: splitLegacyText(profile.feelingWords),
+      currentCreation: splitLegacyText(profile.lifestyle || profile.career),
+      desiredFeelings: splitLegacyText(profile.feelingWords || profile.health),
       dreamScenes: splitLegacyText(profile.personalLife),
-      dreamEnvironment: splitLegacyText(profile.place),
-      successType: splitLegacyText(profile.career),
-      colorMood: [],
-      visualStyle: [],
-      compositionStyle: [],
-      deviceType: [],
-      customNotes: stringValue(profile.reminder),
+      futureEnvironment: splitLegacyText(profile.place),
+      personalDetails: splitLegacyText(profile.personalLife || profile.reminder),
+      finalCustomDetail: stringValue(profile.reminder),
     });
   }
 
@@ -468,9 +378,14 @@ function sanitizeStringArray(values: string[] | undefined) {
     result.push(cleaned.slice(0, 120));
   }
 
-  return result
-    .slice(0, 6)
-    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+  return result.slice(0, 6);
+}
+
+function sanitizeShortCustom(value: string | undefined) {
+  return sanitizeText(value, 90)
+    .split(/\s+/)
+    .slice(0, 10)
+    .join(" ");
 }
 
 function sanitizeText(value: string | undefined, maxLength = 180) {

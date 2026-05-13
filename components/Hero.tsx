@@ -23,17 +23,16 @@ export function Hero() {
         <div className="max-w-xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold">
             <Sparkles aria-hidden className="h-3 w-3" />
-            AI vision board wallpapers
+            Cinematic visualization wallpaper
           </div>
 
-          <h1 className="max-w-[9.5ch] font-display text-[3.15rem] font-normal leading-[0.92] tracking-[-0.04em] text-ink sm:text-[4rem] lg:text-[4.95rem]">
-            Create a wallpaper for the life you&apos;re{" "}
-            <em className="font-display italic text-cocoa">becoming.</em>
+          <h1 className="max-w-[11ch] font-display text-[3.15rem] font-normal leading-[0.92] tracking-[-0.04em] text-ink sm:text-[4rem] lg:text-[4.95rem]">
+            Create a wallpaper for the future you&apos;re{" "}
+            <em className="font-display italic text-cocoa">creating.</em>
           </h1>
 
           <p className="mt-3 max-w-sm text-[13px] font-light leading-6 text-taupe sm:text-[14px]">
-            Answer a few thoughtful prompts and generate a personalized phone,
-            desktop, or custom wallpaper around your goals and future self.
+            A cinematic daily reminder of why you&apos;re working so hard.
           </p>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -86,8 +85,8 @@ export function Hero() {
                   <span className="absolute left-3 top-3 rounded-full border border-white/40 bg-pearl/78 px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.13em] text-cocoa backdrop-blur-md">
                     {example.title}
                   </span>
-                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] font-display text-[1.38rem] font-normal italic leading-[1.03] tracking-[-0.035em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)] sm:text-[1.42rem] lg:text-[1.5rem]">
-                    {example.quote}
+                  <p className="absolute inset-x-3 bottom-3 max-w-[86%] text-[12px] font-medium uppercase tracking-[0.13em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,26,22,0.36)]">
+                    {example.mood}
                   </p>
                 </article>
               </Link>

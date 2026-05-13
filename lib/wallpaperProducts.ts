@@ -29,7 +29,7 @@ export const wallpaperProducts: Record<
     priceLabel: "$4.99",
     amount: 499,
     description:
-      "One polished phone wallpaper sized for your selected mobile ratio.",
+      "One cinematic future-self wallpaper optimized for your selected mobile ratio.",
     deliverables: [
       "One final PNG",
       "Mobile format",
@@ -38,8 +38,8 @@ export const wallpaperProducts: Record<
     ],
     checkoutBullets: [
       "One final PNG wallpaper",
-      "Selected mobile size",
-      "High-resolution download",
+      "Selected mobile format",
+      "High-resolution final PNG",
       "Email delivery optional",
     ],
   },
@@ -49,7 +49,7 @@ export const wallpaperProducts: Record<
     priceLabel: "$4.99",
     amount: 499,
     description:
-      "One polished tablet wallpaper sized for your selected tablet ratio.",
+      "One cinematic future-self wallpaper optimized for your selected tablet ratio.",
     deliverables: [
       "One final PNG",
       "Tablet format",
@@ -58,8 +58,8 @@ export const wallpaperProducts: Record<
     ],
     checkoutBullets: [
       "One final PNG wallpaper",
-      "Selected tablet size",
-      "High-resolution download",
+      "Selected tablet format",
+      "High-resolution final PNG",
       "Email delivery optional",
     ],
   },
@@ -69,7 +69,7 @@ export const wallpaperProducts: Record<
     priceLabel: "$4.99",
     amount: 499,
     description:
-      "One polished desktop wallpaper sized for your selected desktop ratio.",
+      "One cinematic future-self wallpaper optimized for your selected desktop ratio.",
     deliverables: [
       "One final PNG",
       "Desktop format",
@@ -78,8 +78,8 @@ export const wallpaperProducts: Record<
     ],
     checkoutBullets: [
       "One final PNG wallpaper",
-      "Selected desktop size",
-      "High-resolution download",
+      "Selected desktop format",
+      "High-resolution final PNG",
       "Email delivery optional",
     ],
   },
@@ -88,7 +88,7 @@ export const wallpaperProducts: Record<
     label: "Custom size wallpaper",
     priceLabel: "$4.99",
     amount: 499,
-    description: "One polished wallpaper created for your custom dimensions.",
+    description: "One cinematic future-self wallpaper created for your custom format.",
     deliverables: [
       "One final PNG",
       "Custom dimensions",
@@ -97,8 +97,8 @@ export const wallpaperProducts: Record<
     ],
     checkoutBullets: [
       "One final PNG wallpaper",
-      "Selected custom dimensions",
-      "High-resolution download",
+      "Selected custom format",
+      "High-resolution final PNG",
       "Email delivery optional",
     ],
   },

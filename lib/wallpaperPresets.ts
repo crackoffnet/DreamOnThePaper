@@ -14,7 +14,10 @@ export type WallpaperPresetId =
   | "tablet_portrait"
   | "desktop_standard"
   | "desktop_wide"
+  | "desktop_ultrawide"
   | "desktop_4k"
+  | "social_story"
+  | "square_wallpaper"
   | "custom";
 
 export type WallpaperPreset = {
@@ -52,8 +55,8 @@ const presetDefinitions: Record<Exclude<WallpaperPresetId, "custom">, Omit<Wallp
       category: "mobile",
       label: "Mobile wallpaper",
       ratioLabel: "9:16",
-      width: 1170,
-      height: 2080,
+      width: 1440,
+      height: 2560,
       aspect: "9 / 16",
     },
     tablet_landscape: {
@@ -88,8 +91,8 @@ const presetDefinitions: Record<Exclude<WallpaperPresetId, "custom">, Omit<Wallp
       category: "desktop",
       label: "Wide desktop",
       ratioLabel: "16:9",
-      width: 1920,
-      height: 1080,
+      width: 3840,
+      height: 2160,
       aspect: "16 / 9",
     },
     desktop_4k: {
@@ -100,6 +103,33 @@ const presetDefinitions: Record<Exclude<WallpaperPresetId, "custom">, Omit<Wallp
       width: 3840,
       height: 2160,
       aspect: "16 / 9",
+    },
+    desktop_ultrawide: {
+      id: "desktop_ultrawide",
+      category: "desktop",
+      label: "Ultrawide desktop",
+      ratioLabel: "21:9",
+      width: 2560,
+      height: 1080,
+      aspect: "21 / 9",
+    },
+    social_story: {
+      id: "social_story",
+      category: "custom",
+      label: "Story wallpaper",
+      ratioLabel: "9:16",
+      width: 1080,
+      height: 1920,
+      aspect: "9 / 16",
+    },
+    square_wallpaper: {
+      id: "square_wallpaper",
+      category: "custom",
+      label: "Square wallpaper",
+      ratioLabel: "1:1",
+      width: 2048,
+      height: 2048,
+      aspect: "1 / 1",
     },
   };
 
@@ -112,6 +142,9 @@ const ratioToPresetId: Record<Exclude<RatioType, "custom">, Exclude<WallpaperPre
   "desktop-16-10": "desktop_standard",
   "desktop-16-9": "desktop_wide",
   "desktop-4k": "desktop_4k",
+  "desktop-ultrawide": "desktop_ultrawide",
+  story: "social_story",
+  square: "square_wallpaper",
 };
 
 export function getWallpaperPresetById(
@@ -140,7 +173,7 @@ export function getWallpaperPresetById(
 }
 
 export function getWallpaperPresetForInput(input: WallpaperInput): WallpaperPreset {
-  if (input.device === "custom" || input.ratio === "custom") {
+  if (input.ratio === "custom") {
     return getWallpaperPresetById("custom", {
       width: input.customWidth || 0,
       height: input.customHeight || 0,
@@ -180,7 +213,7 @@ export function getPresetIdForRatio(
   ratio: RatioType,
   device: DeviceType,
 ): WallpaperPresetId {
-  if (device === "custom" || ratio === "custom") {
+  if (ratio === "custom") {
     return "custom";
   }
 

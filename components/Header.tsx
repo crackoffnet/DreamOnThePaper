@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { HowItWorksPopover } from "@/components/HowItWorksPopover";
 
 export function Header() {
@@ -11,7 +11,25 @@ export function Header() {
           className="focus-ring flex items-center gap-2 rounded-full"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(180,160,130,0.22)] bg-white text-gold">
-            <Sparkles aria-hidden className="h-3.5 w-3.5" />
+            <svg
+              aria-hidden
+              viewBox="0 0 32 20"
+              className="h-4 w-5"
+              fill="none"
+            >
+              <path
+                d="M1.8 10C5.5 4.4 10.1 1.6 15.6 1.6c5.8 0 10.6 2.8 14.6 8.4-4 5.6-8.8 8.4-14.6 8.4C10.1 18.4 5.5 15.6 1.8 10Z"
+                stroke="currentColor"
+                strokeWidth="1.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M11.4 7.1h4.2v3.6h-4.2zM16.9 5.8h3.5v4.9h-3.5zM13.9 11.9h3.1v2.7h-3.1zM18.3 11.6h2.5v2.2h-2.5z"
+                fill="currentColor"
+                opacity="0.78"
+              />
+            </svg>
           </span>
           <span className="text-[13px] font-medium tracking-[-0.01em] text-ink">
             Dream On The Paper

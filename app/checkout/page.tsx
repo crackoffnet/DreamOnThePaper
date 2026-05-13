@@ -57,7 +57,7 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
             Pay once to generate and download your high-resolution final PNG wallpaper.
           </p>
           <p className="mt-2 text-sm leading-6 text-cocoa">
-            Your preview shows the visual direction, mood, and composition. After payment, we generate a clean high-resolution PNG without the preview watermark.
+            Your preview shows the visual direction, mood, and cinematic composition. After payment, we generate a clean high-resolution wallpaper.
           </p>
         </div>
         <Pricing

@@ -8,8 +8,11 @@ export type RatioType =
   | "desktop-16-9"
   | "desktop-16-10"
   | "desktop-4k"
+  | "desktop-ultrawide"
   | "ipad"
   | "tablet-vertical"
+  | "story"
+  | "square"
   | "custom";
 export type ThemeType = "light" | "dark";
 export type WallpaperStyle =
