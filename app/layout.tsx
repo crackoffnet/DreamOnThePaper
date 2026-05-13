@@ -18,24 +18,22 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Dream On The Paper | Cinematic Future-Self Wallpapers",
+  title: "Dream On The Paper",
   description:
     "Create a personalized cinematic visualization wallpaper for the future you are creating. Preview the mood, then download a clean high-resolution PNG.",
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.PUBLIC_SITE_URL ||
-      "https://www.dreamonthepaper.com",
-  ),
+  metadataBase: new URL("https://www.dreamonthepaper.com"),
   alternates: {
     canonical: "/",
   },
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
       { url: "/favicon.ico" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png" }],
   },
   openGraph: {
     title: "Dream On The Paper | Cinematic Future-Self Wallpapers",

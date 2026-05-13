@@ -1,6 +1,7 @@
 import { Header } from "@/components/Header";
 import { HomepageStateReset } from "@/components/HomepageStateReset";
 import { Hero } from "@/components/Hero";
+import { BrandMark } from "@/components/BrandMark";
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -63,9 +64,12 @@ export default function Home() {
       <HomepageStateReset />
       <Hero />
       <footer className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 pb-2 pt-1 text-[10.5px] font-light text-taupe sm:px-6 lg:px-8">
-        <span>
-          Dream On The Paper <span aria-hidden>&middot;</span> Created by GAX
-          Global
+        <span className="flex items-center gap-2">
+          <BrandMark className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[rgba(180,160,130,0.22)] bg-white" imageClassName="h-4 w-4 object-contain" />
+          <span>
+            Dream On The Paper <span aria-hidden>&middot;</span> Created by GAX
+            Global
+          </span>
         </span>
         <nav className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Footer">
           <a
