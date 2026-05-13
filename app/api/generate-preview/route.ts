@@ -64,8 +64,8 @@ import type {
   ThemeType,
   WallpaperInput,
   WallpaperStyle,
-  isRatioType,
 } from "@/lib/types";
+import { isRatioType } from "@/lib/types";
 import {
   buildLegacyWallpaperFields,
   emptyVisualOnlyDreamProfile,
