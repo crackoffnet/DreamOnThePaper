@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { wallpaperProductIds } from "@/lib/wallpaperProducts";
-import { devices, isValidRatioForDevice, ratioOptions, styles, themes } from "@/lib/wallpaper";
+import type { WallpaperInput } from "@/lib/types";
+import { RATIO_VALUES } from "@/lib/types";
+import { devices, isValidRatioForDevice, styles, themes } from "@/lib/wallpaper";
 import {
   dreamProfileQuestions,
   emptyVisualOnlyDreamProfile,
@@ -81,12 +83,7 @@ export const dreamProfileSchema = z
 export const wallpaperInputSchema = z
   .object({
     device: z.enum(devices),
-    ratio: z.union([
-      z.enum(ratioOptions.mobile),
-      z.enum(ratioOptions.desktop),
-      z.enum(ratioOptions.tablet),
-      z.enum(ratioOptions.custom),
-    ]),
+    ratio: z.enum(RATIO_VALUES),
     theme: z.enum(themes),
     style: z.enum(styles),
     dreamProfile: dreamProfileSchema,
@@ -199,7 +196,9 @@ export const emailWallpaperSchema = z
     path: ["resultAccessToken"],
   });
 
-export function hasMeaningfulInput(input: z.infer<typeof wallpaperInputSchema>) {
+export function hasMeaningfulInput(
+  input: Pick<WallpaperInput, "dreamProfile" | "ratio">,
+) {
   return hasMeaningfulDreamProfile(input.dreamProfile);
 }
 

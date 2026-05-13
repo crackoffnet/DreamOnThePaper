@@ -15,7 +15,6 @@ export type WallpaperPresetId =
   | "desktop_standard"
   | "desktop_wide"
   | "desktop_ultrawide"
-  | "desktop_4k"
   | "social_story"
   | "square_wallpaper"
   | "custom";
@@ -95,15 +94,6 @@ const presetDefinitions: Record<Exclude<WallpaperPresetId, "custom">, Omit<Wallp
       height: 2160,
       aspect: "16 / 9",
     },
-    desktop_4k: {
-      id: "desktop_4k",
-      category: "desktop",
-      label: "4K desktop",
-      ratioLabel: "16:9",
-      width: 3840,
-      height: 2160,
-      aspect: "16 / 9",
-    },
     desktop_ultrawide: {
       id: "desktop_ultrawide",
       category: "desktop",
@@ -141,7 +131,6 @@ const ratioToPresetId: Record<Exclude<RatioType, "custom">, Exclude<WallpaperPre
   "tablet-vertical": "tablet_portrait",
   "desktop-16-10": "desktop_standard",
   "desktop-16-9": "desktop_wide",
-  "desktop-4k": "desktop_4k",
   "desktop-ultrawide": "desktop_ultrawide",
   story: "social_story",
   square: "square_wallpaper",

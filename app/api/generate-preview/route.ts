@@ -64,6 +64,7 @@ import type {
   ThemeType,
   WallpaperInput,
   WallpaperStyle,
+  isRatioType,
 } from "@/lib/types";
 import {
   buildLegacyWallpaperFields,
@@ -910,13 +911,15 @@ function normalizePreviewRequestBody(body: unknown): NormalizedPreviewBody | nul
   const customWidth = numberValue(payload.customWidth) ?? width;
   const customHeight = numberValue(payload.customHeight) ?? height;
   const validatedCustom =
-    device === "custom" ? validateCustomSize(customWidth, customHeight) : null;
+    device === "custom" && ratio === "custom"
+      ? validateCustomSize(customWidth, customHeight)
+      : null;
 
   if (!ratio || !theme || !style || !previewSessionId) {
     return null;
   }
 
-  if (device === "custom") {
+  if (device === "custom" && ratio === "custom") {
     if (!validatedCustom || !validatedCustom.valid) {
       return null;
     }
@@ -1002,7 +1005,7 @@ function normalizeRatio(value: unknown, device: DeviceType): RatioType | "" {
     return device === "custom" ? "custom" : "";
   }
 
-  return value as RatioType;
+  return isRatioType(value) ? value : "";
 }
 
 function normalizeTheme(value: unknown): ThemeType | "" {

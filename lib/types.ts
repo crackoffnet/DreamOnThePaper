@@ -1,19 +1,27 @@
 import type { VisualOnlyDreamProfile } from "@/lib/visualDreamProfile";
 
 export type DeviceType = "mobile" | "desktop" | "tablet" | "custom";
-export type RatioType =
-  | "iphone-17-pro-max"
-  | "iphone"
-  | "android"
-  | "desktop-16-9"
-  | "desktop-16-10"
-  | "desktop-4k"
-  | "desktop-ultrawide"
-  | "ipad"
-  | "tablet-vertical"
-  | "story"
-  | "square"
-  | "custom";
+export const RATIO_VALUES = [
+  "custom",
+  "iphone-17-pro-max",
+  "iphone",
+  "android",
+  "desktop-16-9",
+  "desktop-16-10",
+  "desktop-ultrawide",
+  "ipad",
+  "tablet-vertical",
+  "story",
+  "square",
+] as const;
+export type RatioType = (typeof RATIO_VALUES)[number];
+
+export function isRatioType(value: unknown): value is RatioType {
+  return (
+    typeof value === "string" &&
+    (RATIO_VALUES as readonly string[]).includes(value)
+  );
+}
 export type ThemeType = "light" | "dark";
 export type WallpaperStyle =
   | "soft-luxury"
