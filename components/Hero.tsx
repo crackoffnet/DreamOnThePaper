@@ -1,5 +1,6 @@
 import { BadgeCheck, CreditCard, MonitorSmartphone, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 const trustItems = [
   { icon: BadgeCheck, label: "Free preview" },
@@ -48,16 +49,34 @@ const HERO_LIFESTYLE_CARDS = [
   },
 ];
 
+const HERO_CARD_MOTION = [
+  { duration: "18s", delay: "-4s", variant: "a", origin: "46% 52%" },
+  { duration: "22s", delay: "-8s", variant: "b", origin: "54% 50%" },
+  { duration: "20s", delay: "-6s", variant: "a", origin: "50% 44%" },
+  { duration: "24s", delay: "-11s", variant: "b", origin: "48% 56%" },
+  { duration: "21s", delay: "-9s", variant: "a", origin: "52% 48%" },
+  { duration: "19s", delay: "-5s", variant: "b", origin: "50% 54%" },
+] as const;
+
+const entranceStyle = (delay: string) =>
+  ({ "--hero-delay": delay }) as CSSProperties;
+
 export function Hero() {
   return (
     <section className="px-4 pb-3 pt-4 sm:px-6 lg:px-8 lg:pb-4 lg:pt-6">
       <div className="mx-auto grid max-w-7xl items-center gap-7 lg:min-h-[calc(100svh-88px)] lg:grid-cols-[0.78fr_1.22fr] xl:gap-10">
         <div className="max-w-xl">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold">
+          <div
+            className="hero-entrance mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold"
+            style={entranceStyle("80ms")}
+          >
             &#10022; CINEMATIC VISUALIZATION WALLPAPER
           </div>
 
-          <h1 className="font-display text-[3.15rem] font-normal leading-[0.92] tracking-[-0.04em] text-ink sm:text-[4rem] lg:text-[5rem]">
+          <h1
+            className="hero-entrance font-display text-[3.15rem] font-normal leading-[0.92] tracking-[-0.04em] text-ink sm:text-[4rem] lg:text-[5rem]"
+            style={entranceStyle("180ms")}
+          >
             <span className="block">Create a</span>
             <span className="block">wallpaper for</span>
             <span className="block">the future</span>
@@ -66,11 +85,17 @@ export function Hero() {
             </span>
           </h1>
 
-          <p className="mt-3 max-w-sm text-[13px] font-light leading-6 text-taupe sm:text-[14px]">
+          <p
+            className="hero-entrance mt-3 max-w-sm text-[13px] font-light leading-6 text-taupe sm:text-[14px]"
+            style={entranceStyle("300ms")}
+          >
             A cinematic daily reminder of why you&rsquo;re working so hard.
           </p>
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div
+            className="hero-entrance mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
+            style={entranceStyle("390ms")}
+          >
             <Link
               href="/create"
               className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 text-[12.5px] font-medium text-pearl transition hover:-translate-y-px hover:bg-cocoa sm:w-auto"
@@ -79,7 +104,10 @@ export function Hero() {
             </Link>
           </div>
 
-          <div className="mt-3 grid max-w-md grid-cols-2 gap-x-3 gap-y-2">
+          <div
+            className="hero-entrance mt-3 grid max-w-md grid-cols-2 gap-x-3 gap-y-2"
+            style={entranceStyle("500ms")}
+          >
             {trustItems.map((item) => (
               <div
                 key={item.label}
@@ -94,30 +122,44 @@ export function Hero() {
           </div>
         </div>
 
-        <div id="examples" className="scroll-mt-20">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-3.5">
-            {HERO_LIFESTYLE_CARDS.map((card) => (
-              <article
-                key={card.id}
-                className="relative aspect-[1.55/1] overflow-hidden rounded-[20px] border border-[rgba(180,160,130,0.18)] bg-[#ddd3c2] shadow-[0_18px_45px_rgba(75,62,48,0.12)]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={card.imageSrc}
-                  alt={card.alt}
-                  width={1200}
-                  height={780}
-                  className="h-full w-full object-cover object-center"
-                  loading={card.id === "wealth-business" ? "eager" : "lazy"}
-                />
-                <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(31,25,18,0.42),rgba(31,25,18,0.10)_40%,transparent_68%)]" />
-                <div className="absolute inset-x-3.5 bottom-3.5">
-                  <p className="text-[12px] font-medium leading-none tracking-[-0.01em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,24,18,0.46)] sm:text-[13px]">
-                    {card.label}
-                  </p>
-                </div>
-              </article>
-            ))}
+        <div id="examples" className="relative isolate scroll-mt-20">
+          <div aria-hidden className="hero-grid-glow" />
+          <div className="relative grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-3.5">
+            {HERO_LIFESTYLE_CARDS.map((card, index) => {
+              const motion = HERO_CARD_MOTION[index];
+              const style = {
+                "--hero-delay": `${420 + index * 90}ms`,
+                "--card-duration": motion.duration,
+                "--card-delay": motion.delay,
+                "--card-origin": motion.origin,
+              } as CSSProperties;
+
+              return (
+                <article
+                  key={card.id}
+                  className="hero-card hero-entrance relative aspect-[1.55/1] overflow-hidden rounded-[20px] border border-[rgba(180,160,130,0.18)] bg-[#ddd3c2] shadow-[0_18px_45px_rgba(75,62,48,0.12)]"
+                  style={style}
+                >
+                  <div className="hero-card-zoom absolute inset-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={card.imageSrc}
+                      alt={card.alt}
+                      width={1200}
+                      height={780}
+                      className={`hero-card-image hero-card-kenburns-${motion.variant} h-full w-full object-cover object-center`}
+                      loading={card.id === "wealth-business" ? "eager" : "lazy"}
+                    />
+                  </div>
+                  <div className="hero-card-gradient" />
+                  <div className="absolute inset-x-3.5 bottom-3.5">
+                    <p className="hero-card-label text-[12px] font-medium leading-none tracking-[-0.01em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,24,18,0.46)] sm:text-[13px]">
+                      {card.label}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </div>

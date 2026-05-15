@@ -54,3 +54,137 @@ body {
 .glass {
   @apply border border-white/70 bg-white/55 shadow-soft backdrop-blur-xl;
 }
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-card-kenburns-a {
+  0% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.08) translate3d(-1.5%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes hero-card-kenburns-b {
+  0% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.075) translate3d(1.5%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+}
+
+.hero-entrance {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: hero-fade-up 780ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+.hero-grid-glow {
+  position: absolute;
+  inset: 8% -4% 2% -6%;
+  z-index: -1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(184, 144, 42, 0.12), transparent 62%);
+  filter: blur(40px);
+  opacity: 0.62;
+}
+
+.hero-card {
+  transition:
+    transform 320ms ease,
+    box-shadow 320ms ease,
+    border-color 320ms ease;
+  will-change: transform;
+}
+
+.hero-card-zoom {
+  transform: scale(1);
+  transition: transform 320ms ease;
+}
+
+.hero-card-image {
+  display: block;
+  transform-origin: var(--card-origin, center);
+  animation-duration: var(--card-duration, 20s);
+  animation-delay: var(--card-delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.hero-card-kenburns-a {
+  animation-name: hero-card-kenburns-a;
+}
+
+.hero-card-kenburns-b {
+  animation-name: hero-card-kenburns-b;
+}
+
+.hero-card-gradient {
+  pointer-events: none;
+  position: absolute;
+  inset: auto 0 0;
+  height: 58%;
+  background: linear-gradient(
+    to top,
+    rgba(30, 26, 22, 0.45),
+    rgba(30, 26, 22, 0.16) 44%,
+    transparent 100%
+  );
+}
+
+.hero-card-label {
+  transition:
+    color 280ms ease,
+    text-shadow 280ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hero-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(184, 144, 42, 0.28);
+    box-shadow: 0 24px 58px rgba(75, 62, 48, 0.18);
+  }
+
+  .hero-card:hover .hero-card-zoom {
+    transform: scale(1.02);
+  }
+
+  .hero-card:hover .hero-card-label {
+    color: #fffdf6;
+    text-shadow: 0 1px 14px rgba(30, 24, 18, 0.56);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .hero-entrance {
+    opacity: 1;
+  }
+}
