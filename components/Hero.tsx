@@ -8,67 +8,50 @@ const trustItems = [
   { icon: ShieldCheck, label: "Private by design" },
 ];
 
-const heroLifestyleCards = [
+// TODO: Replace these temporary no-text hero images with final editorial photo assets before launch.
+const HERO_LIFESTYLE_CARDS = [
   {
     id: "wealth-business",
-    overlayLabel: "Create your future",
-    imageSrc: "/examples/wealth-business.jpg",
-    alt: "Sunlit luxury home workspace with laptop and notebook",
-    // TODO: Replace with /examples/hero-wealth-business.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "Bright luxury home workspace with laptop, notebook, pen, elegant lamp, refined books, and a simple handleless ceramic coffee cup or cup on saucer. No leafy green vase.",
+    label: "Create your future",
+    imageSrc: "/examples/hero-wealth-business.jpg",
+    alt: "Sunlit luxury home workspace with laptop, notebook, and calm city view",
   },
   {
     id: "family-home",
-    overlayLabel: "What truly matters",
-    imageSrc: "/examples/family-home.jpg",
-    alt: "Couple sitting together from behind in a warm living room",
-    // TODO: Replace with /examples/hero-family-home.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "A couple together from behind in a beautiful warm home, close and emotionally safe, no visible faces.",
+    label: "What truly matters",
+    imageSrc: "/examples/hero-family-home.jpg",
+    alt: "Couple sitting together from behind in a warm luxury living room",
   },
   {
     id: "nature",
-    overlayLabel: "Feel the peace",
-    imageSrc: "/examples/nature-reset.jpg",
-    alt: "Peaceful bedroom overlooking mountains and water",
-    // TODO: Replace with /examples/hero-nature.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "Bright peaceful bedroom or calm retreat with soft linen bedding, open window, trees, mountains, lake, or morning sky.",
+    label: "Feel the peace",
+    imageSrc: "/examples/hero-nature.jpg",
+    alt: "Peaceful bedroom with soft linen bedding and a view of nature",
   },
   {
     id: "fitness-health",
-    overlayLabel: "Step into strength",
-    imageSrc: "/examples/fitness-health.jpg",
-    alt: "Minimal wellness space with yoga mat and morning light",
-    // TODO: Replace with /examples/hero-fitness-health.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "Bright luxury wellness scene with yoga mat, folded towel, water bottle, sunlight on stone or linen textures, no visible face.",
+    label: "Step into strength",
+    imageSrc: "/examples/hero-fitness-health.jpg",
+    alt: "Minimal wellness space with yoga mat, towel, and morning sunlight",
   },
   {
     id: "freedom-travel",
-    overlayLabel: "See more of the world",
-    imageSrc: "/examples/freedom-travel.jpg",
-    alt: "Ocean terrace with suitcase and open coastline",
-    // TODO: Replace with /examples/hero-freedom-travel.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "Bright aspirational travel scene with ocean terrace, coastal balcony, mountain-sea horizon, or luxury outdoor lounge.",
+    label: "See more of the world",
+    imageSrc: "/examples/hero-freedom-travel.jpg",
+    alt: "Luxury ocean terrace with suitcase and open coastline view",
   },
   {
     id: "soft-luxury",
-    overlayLabel: "Make it real",
-    imageSrc: "/examples/soft-luxury.jpg",
-    alt: "Modern luxury home entryway with keys on stone counter",
-    // TODO: Replace with /examples/hero-soft-luxury.jpg when final hero-specific asset is generated.
-    visualPrompt:
-      "Bright soft-luxury dream home scene with sunlit entryway, warm architecture, stone counter with house keys, terrace, or refined interior detail.",
+    label: "Make it real",
+    imageSrc: "/examples/hero-soft-luxury.jpg",
+    alt: "Modern luxury home entryway with keys on a stone surface",
   },
 ];
 
 export function Hero() {
   return (
     <section className="px-4 pb-3 pt-4 sm:px-6 lg:px-8 lg:pb-4 lg:pt-6">
-      <div className="mx-auto grid max-w-7xl items-center gap-7 lg:min-h-[calc(100svh-88px)] lg:grid-cols-[0.82fr_1.18fr] xl:gap-10">
+      <div className="mx-auto grid max-w-7xl items-center gap-7 lg:min-h-[calc(100svh-88px)] lg:grid-cols-[0.78fr_1.22fr] xl:gap-10">
         <div className="max-w-xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[rgba(180,150,100,0.25)] bg-white/65 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gold">
             &#10022; CINEMATIC VISUALIZATION WALLPAPER
@@ -113,24 +96,24 @@ export function Hero() {
 
         <div id="examples" className="scroll-mt-20">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-3.5">
-            {heroLifestyleCards.map((card) => (
+            {HERO_LIFESTYLE_CARDS.map((card) => (
               <article
                 key={card.id}
-                className="relative aspect-[1.48/1] overflow-hidden rounded-[22px] border border-white/70 bg-[#ddd3c2] shadow-[0_22px_60px_rgba(75,62,48,0.14)]"
+                className="relative aspect-[1.55/1] overflow-hidden rounded-[20px] border border-[rgba(180,160,130,0.18)] bg-[#ddd3c2] shadow-[0_18px_45px_rgba(75,62,48,0.12)]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={card.imageSrc}
                   alt={card.alt}
-                  width={768}
-                  height={520}
-                  className="h-full w-full object-cover"
+                  width={1200}
+                  height={780}
+                  className="h-full w-full object-cover object-center"
                   loading={card.id === "wealth-business" ? "eager" : "lazy"}
                 />
-                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.18),transparent_42%),linear-gradient(to_top,rgba(31,25,18,0.46),rgba(31,25,18,0.12)_44%,transparent_70%)]" />
-                <div className="absolute inset-x-4 bottom-4">
-                  <p className="text-[12px] font-medium leading-none tracking-[-0.01em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,24,18,0.42)]">
-                    {card.overlayLabel}
+                <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(31,25,18,0.42),rgba(31,25,18,0.10)_40%,transparent_68%)]" />
+                <div className="absolute inset-x-3.5 bottom-3.5">
+                  <p className="text-[12px] font-medium leading-none tracking-[-0.01em] text-[#fffaf0] drop-shadow-[0_1px_10px_rgba(30,24,18,0.46)] sm:text-[13px]">
+                    {card.label}
                   </p>
                 </div>
               </article>
