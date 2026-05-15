@@ -8,7 +8,7 @@ const trustItems = [
   { icon: ShieldCheck, label: "Private by design" },
 ];
 
-// TODO: Replace these temporary no-text hero images with final editorial photo assets before launch.
+// TODO: Add real editorial photo assets at these paths. Do not replace them with illustrated or quote-baked cards.
 const HERO_LIFESTYLE_CARDS = [
   {
     id: "wealth-business",
