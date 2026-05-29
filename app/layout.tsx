@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, DM_Sans } from "next/font/google";
+import { MicrosoftClarity } from "@/components/analytics/MicrosoftClarity";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -71,6 +72,7 @@ export default function RootLayout({
         className={`${dmSans.variable} ${cormorant.variable} font-sans antialiased`}
       >
         {children}
+        <MicrosoftClarity />
       </body>
     </html>
   );

@@ -37,11 +37,11 @@ const nextConfig: NextConfig = {
         value: [
           "default-src 'self'",
           // TODO: Future hardening: replace unsafe-inline with CSP nonce and remove unsafe-eval after verifying Next/OpenNext compatibility.
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com https://www.clarity.ms",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: https:",
+          "img-src 'self' data: blob: https: https://www.clarity.ms https://*.clarity.ms",
           "font-src 'self' data:",
-          "connect-src 'self' https://api.stripe.com https://checkout.stripe.com",
+          "connect-src 'self' https://api.stripe.com https://checkout.stripe.com https://www.clarity.ms https://*.clarity.ms",
           "object-src 'none'",
           "base-uri 'self'",
           "form-action 'self' https://checkout.stripe.com",

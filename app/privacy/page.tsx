@@ -33,6 +33,24 @@ export default function PrivacyPage() {
             full card details. Image generation is handled server-side and secret
             API keys are never exposed to the browser.
           </p>
+          <div>
+            <h2 className="text-base font-medium tracking-[-0.02em] text-ink">
+              Analytics and session insights
+            </h2>
+            <p className="mt-2">
+              We use Microsoft Clarity to understand how visitors interact with
+              our website, improve usability, identify errors, and make the
+              product experience better. Clarity may collect usage data such as
+              clicks, scrolls, page interactions, browser/device information,
+              and approximate location based on IP address. We do not use
+              Clarity to intentionally collect sensitive personal information or
+              payment details.
+            </p>
+            <p className="mt-2">
+              Payment information is processed by Stripe and is not collected by
+              Dream On The Paper through Clarity.
+            </p>
+          </div>
           <p>
             Generated images and temporary order data are currently stored only as
             needed for delivery. Future durable storage should use Cloudflare R2

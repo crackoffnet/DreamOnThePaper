@@ -39,6 +39,7 @@ IP_HASH_SECRET=
 ADMIN_DASHBOARD_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
+NEXT_PUBLIC_MICROSOFT_CLARITY_ID=your_clarity_project_id
 ORDER_TOKEN_SECRET=
 RESULT_TOKEN_SECRET=
 BREVO_API_KEY=
@@ -57,6 +58,10 @@ Image generation speed is controlled by optional server-side variables:
 - `OPENAI_FINAL_IMAGE_MODEL` defaults to `gpt-image-1`
 - `OPENAI_FINAL_IMAGE_QUALITY` defaults to `medium`
 - `USE_SHORT_IMAGE_PROMPT` defaults to `false`
+
+Microsoft Clarity is optional. Set `NEXT_PUBLIC_MICROSOFT_CLARITY_ID` in
+Cloudflare Pages / Workers to load the Clarity script on the production site.
+Leave it unset to skip Clarity entirely.
 
 Final generation uses launch-friendly normalized sizes (`1024x1024`,
 `1024x1536`, or `1536x1024`) and stores those actual output dimensions with the
