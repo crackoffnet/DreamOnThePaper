@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 const siteUrl = "https://www.dreamonthepaper.com";
 
 const routes = [
-  "",
+  "/",
   "/create",
   "/examples",
   "/about",
@@ -20,7 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     let changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] = "monthly";
     let priority = 0.5;
 
-    if (route === "") {
+    if (route === "/") {
       changeFrequency = "weekly";
       priority = 1;
     } else if (route === "/create") {
@@ -39,7 +39,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
 
     return {
-      url: `${siteUrl}${route}`,
+      url: route === "/" ? `${siteUrl}/` : `${siteUrl}${route}`,
       lastModified: now,
       changeFrequency,
       priority,

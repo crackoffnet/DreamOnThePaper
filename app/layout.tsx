@@ -19,9 +19,9 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Dream On The Paper",
+  title: "Dream On The Paper | Cinematic Visualization Wallpapers",
   description:
-    "Create a personalized cinematic visualization wallpaper for the future you are creating. Preview the mood, then download a clean high-resolution PNG.",
+    "Create a personalized cinematic visualization wallpaper for the future you are building. Preview your concept, then download a clean high-resolution wallpaper.",
   metadataBase: new URL("https://www.dreamonthepaper.com"),
   alternates: {
     canonical: "/",
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png" }],
   },
   openGraph: {
-    title: "Dream On The Paper | Cinematic Future-Self Wallpapers",
+    title: "Dream On The Paper | Cinematic Visualization Wallpapers",
     description:
-      "Create a personalized cinematic visualization wallpaper for the future you are creating. Preview the mood, then download a clean high-resolution PNG.",
+      "Create a personalized cinematic visualization wallpaper for the future you are building. Preview your concept, then download a clean high-resolution wallpaper.",
     url: "/",
     siteName: "Dream On The Paper",
     images: [
@@ -54,9 +54,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dream On The Paper | Cinematic Future-Self Wallpapers",
+    title: "Dream On The Paper | Cinematic Visualization Wallpapers",
     description:
-      "Create a personalized cinematic visualization wallpaper for the future you are creating. Preview the mood, then download a clean high-resolution PNG.",
+      "Create a personalized cinematic visualization wallpaper for the future you are building. Preview your concept, then download a clean high-resolution wallpaper.",
     images: ["/og-image.jpg"],
   },
 };

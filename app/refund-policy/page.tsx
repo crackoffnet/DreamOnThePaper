@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+
+export const metadata: Metadata = {
+  title: "Refund Policy | Dream On The Paper",
+  description:
+    "Read the Dream On The Paper refund policy for personalized digital wallpaper purchases and delivery issues.",
+  alternates: {
+    canonical: "/refund-policy",
+  },
+};
 
 export default function RefundPolicyPage() {
   return (

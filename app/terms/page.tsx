@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+
+export const metadata: Metadata = {
+  title: "Terms of Use | Dream On The Paper",
+  description:
+    "Read the Dream On The Paper terms for personalized cinematic wallpaper creation, checkout, delivery, and private downloads.",
+  alternates: {
+    canonical: "/terms",
+  },
+};
 
 export default function TermsPage() {
   return (

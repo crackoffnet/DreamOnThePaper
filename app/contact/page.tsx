@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+
+export const metadata: Metadata = {
+  title: "Contact | Dream On The Paper",
+  description:
+    "Contact Dream On The Paper for support with cinematic visualization wallpapers, checkout, downloads, or delivery.",
+  alternates: {
+    canonical: "/contact",
+  },
+};
 
 export default function ContactPage() {
   return (
