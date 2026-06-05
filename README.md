@@ -39,7 +39,7 @@ IP_HASH_SECRET=
 ADMIN_DASHBOARD_TOKEN=
 STRIPE_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=https://www.dreamonthepaper.com
-NEXT_PUBLIC_MICROSOFT_CLARITY_ID=your_clarity_project_id
+NEXT_PUBLIC_MICROSOFT_CLARITY_ID=wyrrj2k5qq
 ORDER_TOKEN_SECRET=
 RESULT_TOKEN_SECRET=
 BREVO_API_KEY=
@@ -61,7 +61,8 @@ Image generation speed is controlled by optional server-side variables:
 
 Microsoft Clarity is optional. Set `NEXT_PUBLIC_MICROSOFT_CLARITY_ID` in
 Cloudflare Pages / Workers to load the Clarity script on the production site.
-Leave it unset to skip Clarity entirely.
+This value is public and used client-side. Leave it unset to skip Clarity
+entirely.
 
 Final generation uses launch-friendly normalized sizes (`1024x1024`,
 `1024x1536`, or `1536x1024`) and stores those actual output dimensions with the
