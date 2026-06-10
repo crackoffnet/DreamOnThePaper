@@ -7,6 +7,13 @@ export function MicrosoftClarity() {
 
   if (!clarityId) return null;
 
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      "Microsoft Clarity configured:",
+      Boolean(process.env.NEXT_PUBLIC_MICROSOFT_CLARITY_ID),
+    );
+  }
+
   return (
     <Script
       id="microsoft-clarity"
