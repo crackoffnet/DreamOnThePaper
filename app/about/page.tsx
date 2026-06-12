@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About | Dream On The Paper",
   description:
     "Learn about Dream On The Paper, a privacy-minded cinematic wallpaper experience created by GAX Global.",
   alternates: {
-    canonical: "/about",
+    canonical: `${SITE_URL}/about`,
   },
 };
 

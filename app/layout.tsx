@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, DM_Sans } from "next/font/google";
 import { MicrosoftClarity } from "@/components/analytics/MicrosoftClarity";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -22,9 +23,9 @@ export const metadata: Metadata = {
   title: "Dream On The Paper | Cinematic Visualization Wallpapers",
   description:
     "Create a personalized cinematic visualization wallpaper for the future you are building. Preview your concept, then download a clean high-resolution wallpaper.",
-  metadataBase: new URL("https://www.dreamonthepaper.com"),
+  metadataBase: new URL(SITE_URL),
   alternates: {
-    canonical: "/",
+    canonical: SITE_URL,
   },
   manifest: "/manifest.webmanifest",
   icons: {
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
     title: "Dream On The Paper | Cinematic Visualization Wallpapers",
     description:
       "Create a personalized cinematic visualization wallpaper for the future you are building. Preview your concept, then download a clean high-resolution wallpaper.",
-    url: "/",
+    url: SITE_URL,
     siteName: "Dream On The Paper",
     images: [
       {

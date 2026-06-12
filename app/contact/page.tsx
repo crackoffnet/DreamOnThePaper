@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact | Dream On The Paper",
   description:
     "Contact Dream On The Paper for support with cinematic visualization wallpapers, checkout, downloads, or delivery.",
   alternates: {
-    canonical: "/contact",
+    canonical: `${SITE_URL}/contact`,
   },
 };
 

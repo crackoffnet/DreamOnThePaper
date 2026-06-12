@@ -4,13 +4,14 @@ import { ArrowRight } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { exampleWallpapers } from "@/lib/exampleWallpapers";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Examples | Dream On The Paper",
   description:
     "Browse cinematic wallpaper examples for premium future-self moods and visual atmospheres.",
   alternates: {
-    canonical: "/examples",
+    canonical: `${SITE_URL}/examples`,
   },
 };
 

@@ -3,13 +3,14 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { WallpaperWizard } from "@/components/WallpaperWizard";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Create a Wallpaper | Dream On The Paper",
   description:
     "Create a personalized cinematic visualization wallpaper for your phone, desktop, tablet, or custom screen size.",
   alternates: {
-    canonical: "/create",
+    canonical: `${SITE_URL}/create`,
   },
 };
 

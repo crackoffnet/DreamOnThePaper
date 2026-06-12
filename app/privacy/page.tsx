@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Dream On The Paper",
   description:
     "Read the Dream On The Paper privacy policy covering order handling, checkout, and private wallpaper delivery.",
   alternates: {
-    canonical: "/privacy",
+    canonical: `${SITE_URL}/privacy`,
   },
 };
 

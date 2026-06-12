@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SITE_URL } from "@/lib/site";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
@@ -11,7 +12,7 @@ export function getSiteUrl() {
   return (
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.PUBLIC_SITE_URL ||
-    "https://www.dreamonthepaper.com"
+    SITE_URL
   )
     .replace(/\/+$/, "");
 }

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Terms of Use | Dream On The Paper",
   description:
     "Read the Dream On The Paper terms for personalized cinematic wallpaper creation, checkout, delivery, and private downloads.",
   alternates: {
-    canonical: "/terms",
+    canonical: `${SITE_URL}/terms`,
   },
 };
 

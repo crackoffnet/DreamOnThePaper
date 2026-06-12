@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const siteUrl = "https://www.dreamonthepaper.com";
+import { SITE_URL } from "@/lib/site";
 
 const routes = [
   "/",
@@ -39,7 +38,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
 
     return {
-      url: route === "/" ? `${siteUrl}/` : `${siteUrl}${route}`,
+      url: route === "/" ? `${SITE_URL}/` : `${SITE_URL}${route}`,
       lastModified: now,
       changeFrequency,
       priority,
