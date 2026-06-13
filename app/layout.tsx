@@ -69,11 +69,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <MicrosoftClarity />
+      </head>
       <body
         className={`${dmSans.variable} ${cormorant.variable} font-sans antialiased`}
       >
         {children}
-        <MicrosoftClarity />
       </body>
     </html>
   );
